@@ -1,0 +1,52 @@
+# PR/push gate: tests + a real (degraded, no-secret) build + HTML validation.
+# Never touches Pages -- deployment is pages.yml's job, triggered on its own
+# schedule and by workflow_dispatch, never by this workflow.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.12.9"
+
+jobs:
+  test:
+    name: test, build (no secrets), validate HTML
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: pipeline
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv (Python 3.12)
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+          enable-cache: true
+
+      # `make verify` (install -> test -> build -> validate-html) is the
+      # same target a human runs locally, so local and CI can't diverge.
+      # No TICKETMASTER_API_KEY is available to pull_request runs from a
+      # fork by design (GitHub never exposes secrets there), and PR CI has
+      # no business hitting the live Discovery API anyway. This exercises
+      # the degraded-mode path -- the same path a missing repo secret
+      # exercises in production -- and proves the build stays green and
+      # produces valid HTML with it.
+      - name: make verify
+        run: make verify

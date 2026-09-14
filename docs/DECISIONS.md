@@ -33,3 +33,24 @@ event, the site says so; it never guesses a price.
 ## 0005 — Name and domain: undecided
 
 Owner's call. Default hosting is a subdomain of chelseakr.com.
+
+## 0006 — No league schedule source passed licensing; Ticketmaster Discovery is the sole data source (2026-09-13)
+
+Per `docs/LICENSES-AND-ATTRIBUTION.md` §0–1: all seven leagues examined
+(WNBA, PWHL, NWSL, NCAA women's, Unrivaled, LOVB, Athletes Unlimited) fail the
+licence-before-bytes test — six have terms that explicitly ban automated
+and/or commercial reuse of site content (which covers a schedule; a game
+schedule being "facts" is not a licence per the brief), and NWSL's terms page
+is an unreadable JavaScript shell, which DECISIONS 0003 treats as "unknown"
+and therefore not used. There is no "join a league feed to Ticketmaster by
+venue+date" step, because there is no licence-clean league feed to join.
+
+Instead, the pipeline queries the Ticketmaster Discovery API directly per
+tracked team (keyword search, `classificationName=Sports`), and each
+Ticketmaster event *is* the schedule entry: a home game, its venue, its
+start time, and — where published — its price range. This still satisfies
+the README's "per league and per team `.ics`" shape and DECISIONS 0004
+("ticket prices from Ticketmaster Discovery only"); it changes only which
+step produces the game list. Broadcaster is never populated — no licensed
+source carries it — and every league's calendar note says plainly that its
+own schedule was not used and why, rather than silently thinning out.
