@@ -54,3 +54,17 @@ the README's "per league and per team `.ics`" shape and DECISIONS 0004
 step produces the game list. Broadcaster is never populated — no licensed
 source carries it — and every league's calendar note says plainly that its
 own schedule was not used and why, rather than silently thinning out.
+
+## 0007 — Domain: nexthomegame.com (2026-09-14)
+
+[moved to private strategy notes] This resolves the domain
+half of 0005; the product's display name is unchanged (still
+`womens-sports-calendar (working name)`, README.md) and remains open
+separately.
+
+Not registered yet — that is an owner step (registrar, DNS, GitHub Pages
+custom-domain configuration, `SITE_BASE_URL` repo variable), not done here.
+Placeholder `calendar.chelseakr.com` references in the pipeline's default
+`--base-url`, CI, and docs are updated to `https://nexthomegame.com`
+accordingly; production behavior does not change until the repo variable is
+actually set and DNS points at GitHub Pages.

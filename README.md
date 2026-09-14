@@ -33,5 +33,7 @@ from anyone but us on the page. Monetised only by plain affiliate URLs.
 
 ## Not yet decided
 
-The name and the domain. A subdomain of chelseakr.com is the default until
-then.
+The display name is still a working name (`womens-sports-calendar`). The
+domain is decided — `nexthomegame.com`, see `docs/DECISIONS.md` 0007 — but
+not yet registered; hosting configuration (Pages, DNS, `SITE_BASE_URL`) is
+an owner step, not done here.

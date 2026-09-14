@@ -22,7 +22,7 @@ from .coverage import BuildCoverage, LeagueCoverage, compute_league_coverage, re
 from .normalize import Game, normalize_event
 from .ticketmaster import DiscoveryClient, TicketmasterFetchError
 
-DEFAULT_BASE_URL = "https://calendar.chelseakr.com"
+DEFAULT_BASE_URL = "https://nexthomegame.com"
 
 
 def fetch_all_games(api_key: str) -> tuple[list[Game], dict[str, set[str]], int, int]:

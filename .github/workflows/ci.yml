@@ -18,10 +18,11 @@ concurrency:
 
 env:
   UV_VERSION: "0.12.9"
+  NODE_VERSION: "22"
 
 jobs:
   test:
-    name: test, build (no secrets), validate HTML
+    name: test, build (no secrets), validate HTML, a11y
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -40,13 +41,22 @@ jobs:
           python-version: "3.12"
           enable-cache: true
 
-      # `make verify` (install -> test -> build -> validate-html) is the
-      # same target a human runs locally, so local and CI can't diverge.
+      # Node/npx is only needed for `make a11y`'s `npx pa11y` step below --
+      # the pipeline itself has no JS dependency.
+      - name: Set up Node (for pa11y)
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      # `make verify` (install -> test -> build -> validate-html -> a11y) is
+      # the same target a human runs locally, so local and CI can't diverge.
       # No TICKETMASTER_API_KEY is available to pull_request runs from a
       # fork by design (GitHub never exposes secrets there), and PR CI has
       # no business hitting the live Discovery API anyway. This exercises
       # the degraded-mode path -- the same path a missing repo secret
-      # exercises in production -- and proves the build stays green and
-      # produces valid HTML with it.
+      # exercises in production -- and proves the build stays green,
+      # produces valid HTML, and passes a real WCAG2AA pa11y check (both
+      # the degraded-mode dist/ pages and two fixture pages with a
+      # populated games table -- see pipeline/Makefile's `a11y` target).
       - name: make verify
         run: make verify

@@ -15,10 +15,10 @@ uv sync --extra dev
 uv run pytest -q                 # 63 tests, 4 with a recorded negative-control run (see below)
 
 # Degraded mode (no key) -- always safe, always produces a valid site:
-uv run python -m wsc_pipeline.build --out dist --base-url https://calendar.chelseakr.com
+uv run python -m wsc_pipeline.build --out dist --base-url https://nexthomegame.com
 
 # Real build:
-TICKETMASTER_API_KEY=... uv run python -m wsc_pipeline.build --out dist --base-url https://calendar.chelseakr.com
+TICKETMASTER_API_KEY=... uv run python -m wsc_pipeline.build --out dist --base-url https://nexthomegame.com
 ```
 
 Every build prints a coverage report (also written to `dist/COVERAGE.txt`):
@@ -96,7 +96,20 @@ no-`<script>`-tags check, and the RFC 5545 required-property check
 after restoration; this was a one-time verification pass, not something
 CI re-runs.
 
-Also run (not part of `pytest`, but part of verifying this pipeline):
-`html5validator` against every generated page (0 errors across all pages)
-and `pa11y --standard WCAG2AA` against every generated page (0 issues
-across all pages) — see the top-level report for the exact counts.
+Also run (not part of `pytest`, but part of `make verify` and so CI-gated on
+every push/PR, not a one-time manual check):
+
+- `make validate-html` — `html5validator` against every generated page (0
+  errors across all 47 pages in the degraded, no-API-key build CI runs).
+- `make a11y` — `pa11y --standard WCAG2AA` against every generated page (the
+  same 47) **plus** two fixture pages rendered with a populated games table
+  (a priced game, an unpriced game, and a date-TBD game together — the exact
+  shape `tests/test_site_html.py::_pages()` builds and asserts on, reused via
+  `scripts/render_a11y_fixtures.py` rather than duplicated) — these two exist
+  because the degraded build CI runs never has a non-empty games table to
+  check. **49/49 pages pass, 0 issues, as of this pipeline's last run** — see
+  `pipeline/Makefile`'s `a11y` target for exactly what runs.
+
+No human screen-reader walkthrough has been performed (this is a brand-new
+private product, not yet public); that stays a manually-tracked open item,
+separate from the two automated, CI-enforced checks above.

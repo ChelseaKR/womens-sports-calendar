@@ -91,7 +91,7 @@ jobs:
         env:
           TICKETMASTER_API_KEY: ${{ secrets.TICKETMASTER_API_KEY }}
           TICKETMASTER_AFFILIATE_ID: ${{ secrets.TICKETMASTER_AFFILIATE_ID }}
-        run: make build BASE_URL="${{ vars.SITE_BASE_URL || 'https://calendar.chelseakr.com' }}"
+        run: make build BASE_URL="${{ vars.SITE_BASE_URL || 'https://nexthomegame.com' }}"
 
       - name: make validate-html
         run: make validate-html

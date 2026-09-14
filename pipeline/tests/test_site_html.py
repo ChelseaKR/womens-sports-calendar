@@ -24,7 +24,14 @@ def _game(event_id, **kwargs):
 def _pages():
     priced = _game("EVT-P", price_ranges=[{"type": "standard", "currency": "USD", "min": 12.0, "max": 34.0}])
     unpriced = _game("EVT-U", price_ranges=None)
-    games = [priced, unpriced]
+    # Same shape as conftest's event_date_tbd fixture: a placeholder local
+    # date is published but no exact instant yet, so the game is excluded
+    # from the .ics but must still render on the site as "Date TBD" (never
+    # silently disappeared). Exercised here, together with the priced and
+    # unpriced games above, so the populated-games-table pa11y check in
+    # `make a11y` (see pipeline/README.md) covers all three cell shapes.
+    date_tbd = _game("EVT-TBD", date_time=None, local_date="2026-08-01", local_time=None, date_tbd=True)
+    games = [priced, unpriced, date_tbd]
     league_payload = league_data(LEAGUE, games)
     team_payload = team_data(TEAM, LEAGUE, games)
     leagues_summary = [{"slug": lg.slug, "name": lg.name, "games_count": 2} for lg in LEAGUES]
