@@ -125,3 +125,66 @@ def test_index_lists_leagues_not_included_with_reason():
     html = _pages()["index"]
     for item in LEAGUES_EXAMINED_NOT_INCLUDED:
         assert escape(item["name"]) in html
+
+
+def test_favicon_links_present_on_every_page():
+    for html in _pages().values():
+        assert '<link rel="icon" href="/favicon.svg" type="image/svg+xml">' in html
+        assert '<link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">' in html
+        assert '<link rel="apple-touch-icon" href="/apple-touch-icon.png">' in html
+
+
+def test_og_image_tags_present_and_grounded_in_real_dimensions():
+    """The image referenced is the real 1200x630 render (see
+    scripts/render_social_assets.py) -- width/height are declared, not
+    assumed, and the URL is absolute (base_url + filename), which is what
+    every social platform's crawler requires."""
+    for page_name, html in _pages().items():
+        assert 'property="og:image"' in html, page_name
+        assert 'property="og:image:type" content="image/png"' in html, page_name
+        assert 'property="og:image:width" content="1200"' in html, page_name
+        assert 'property="og:image:height" content="630"' in html, page_name
+        assert 'property="og:image:alt" content="' in html, page_name
+        assert 'https://calendar.chelseakr.com/og-image' in html, page_name
+
+
+def test_twitter_card_tags_present():
+    for html in _pages().values():
+        assert '<meta name="twitter:card" content="summary_large_image">' in html
+        assert 'name="twitter:title"' in html
+        assert 'name="twitter:description"' in html
+        assert 'name="twitter:image"' in html
+        assert 'name="twitter:image:alt"' in html
+
+
+def test_index_uses_the_default_site_wide_og_image():
+    html = _pages()["index"]
+    assert 'content="https://calendar.chelseakr.com/og-image.png"' in html
+    assert "og-image-wnba" not in html
+
+
+def test_league_and_team_pages_use_their_own_league_og_image():
+    """A WNBA page should promise a basketball-glyph card, not the
+    generic default or another league's card -- the per-league variant is
+    real (see LEAGUE_OG_IMAGES), not a filename swapped without content
+    to match."""
+    league_html = _pages()["league"]
+    team_html = _pages()["team"]
+    for html in (league_html, team_html):
+        assert 'content="https://calendar.chelseakr.com/og-image-wnba.png"' in html
+        assert "basketball" in html
+        for other in ("nwsl", "pwhl"):
+            assert f"og-image-{other}.png" not in html
+
+
+def test_og_site_name_present():
+    for html in _pages().values():
+        assert '<meta property="og:site_name" content="womens-sports-calendar">' in html
+
+
+def test_team_description_names_the_team_and_the_league():
+    """Brief: a team page's description must name the actual team and
+    league, not a generic template repeated everywhere."""
+    html = _pages()["team"]
+    assert 'name="description" content="Subscribe to the Minnesota Lynx (WNBA) calendar' in html
+    assert 'property="og:description" content="Subscribe to the Minnesota Lynx (WNBA) calendar' in html

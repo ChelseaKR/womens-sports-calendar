@@ -90,3 +90,38 @@ def test_main_returns_zero_in_degraded_mode(tmp_path: Path, monkeypatch):
     rc = build_module.main(["--out", str(out_dir), "--base-url", "https://calendar.chelseakr.com"])
     assert rc == 0
     assert (out_dir / "index.html").exists()
+
+
+def _png_size(path: Path) -> tuple[int, int]:
+    """Width and height read straight from the PNG IHDR chunk -- no
+    decoder dependency, and it proves the file really is a PNG at the
+    size the HTML's og:image:width/height meta tags promise."""
+    header = path.read_bytes()[:24]
+    assert header[:8] == b"\x89PNG\r\n\x1a\n", f"{path} is not a PNG"
+    return int.from_bytes(header[16:20], "big"), int.from_bytes(header[20:24], "big")
+
+
+def test_favicon_and_social_card_assets_are_copied_into_the_build(tmp_path: Path):
+    """The build must not just link to these files (site.py's meta/link
+    tags) -- the bytes have to actually land in --out, or every og:image
+    and favicon promise 404s for a real visitor."""
+    out_dir = tmp_path / "dist"
+    build_module.build(out_dir=out_dir, base_url="https://calendar.chelseakr.com", api_key=None, affiliate_id=None)
+
+    assert (out_dir / "favicon.svg").read_text(encoding="utf-8").startswith("<svg")
+    for name in ("favicon-32.png", "apple-touch-icon.png", "og-image.png", "og-image-wnba.png", "og-image-nwsl.png", "og-image-pwhl.png"):
+        assert (out_dir / name).is_file(), name
+
+    # og:image:width/height in site.py both claim 1200x630 -- verify the
+    # real files, not just the meta tags that promise them.
+    for name in ("og-image.png", "og-image-wnba.png", "og-image-nwsl.png", "og-image-pwhl.png"):
+        assert _png_size(out_dir / name) == (1200, 630), name
+
+
+def test_build_fails_loudly_if_a_static_asset_is_missing(tmp_path: Path, monkeypatch):
+    """A missing committed asset must fail the build, not silently ship a
+    page whose og:image or favicon 404s."""
+    monkeypatch.setattr(build_module, "ASSETS_DIR", tmp_path / "no-such-assets-dir")
+    out_dir = tmp_path / "dist"
+    with pytest.raises(FileNotFoundError):
+        build_module.build(out_dir=out_dir, base_url="https://calendar.chelseakr.com", api_key=None, affiliate_id=None)

@@ -14,6 +14,45 @@ from __future__ import annotations
 from html import escape as e
 
 CSS_PATH = "/style.css"
+SITE_NAME = "womens-sports-calendar"
+
+# The site-wide default social card, and one per tracked league (see
+# wsc_pipeline.config.LEAGUES) -- hand-authored SVG rendered to a 1200x630
+# PNG by scripts/render_social_assets.py, committed under pipeline/assets/
+# and copied into dist/ by build.py::_write_static. Both dimensions are
+# declared below (og:image:width/height) because they are real, not
+# assumed -- see scripts/render_social_assets.py's module docstring for
+# the rendering pipeline and the checked contrast ratios of everything
+# drawn into it.
+DEFAULT_OG_IMAGE = "og-image.png"
+# Raw Unicode curly quotes, not &lsquo;/&rsquo; entities: this string is
+# passed through html.escape() in _base() below, which would mangle a
+# literal "&lsquo;" into "&amp;lsquo;" (escaping its leading "&"). A raw
+# U+2018/U+2019 character isn't one of html.escape()'s special characters,
+# so it passes through untouched and renders correctly under this page's
+# declared UTF-8 charset.
+DEFAULT_OG_IMAGE_ALT = (
+    "A calendar with three highlighted game days, each marked with a "
+    "small ball or puck icon for WNBA, NWSL, and PWHL, next to the text "
+    "‘Your next home game.’"
+)
+LEAGUE_OG_IMAGES: dict[str, tuple[str, str]] = {
+    "wnba": (
+        "og-image-wnba.png",
+        "A calendar with one highlighted game day marked by a basketball "
+        "icon, next to the text ‘Your next WNBA home game.’",
+    ),
+    "nwsl": (
+        "og-image-nwsl.png",
+        "A calendar with one highlighted game day marked by a soccer-ball "
+        "icon, next to the text ‘Your next NWSL home game.’",
+    ),
+    "pwhl": (
+        "og-image-pwhl.png",
+        "A calendar with one highlighted game day marked by a hockey-puck "
+        "icon, next to the text ‘Your next PWHL home game.’",
+    ),
+}
 
 
 def _base(
@@ -21,9 +60,13 @@ def _base(
     title: str,
     description: str,
     canonical_url: str,
+    base_url: str,
     body: str,
     og_type: str = "website",
+    og_image: str = DEFAULT_OG_IMAGE,
+    og_image_alt: str = DEFAULT_OG_IMAGE_ALT,
 ) -> str:
+    image_url = f"{base_url}/{og_image}"
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -33,10 +76,24 @@ def _base(
 <meta name="description" content="{e(description)}">
 <link rel="canonical" href="{e(canonical_url)}">
 <link rel="stylesheet" href="{CSS_PATH}">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:site_name" content="{e(SITE_NAME)}">
 <meta property="og:title" content="{e(title)}">
 <meta property="og:description" content="{e(description)}">
 <meta property="og:type" content="{e(og_type)}">
 <meta property="og:url" content="{e(canonical_url)}">
+<meta property="og:image" content="{e(image_url)}">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="{e(og_image_alt)}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{e(title)}">
+<meta name="twitter:description" content="{e(description)}">
+<meta name="twitter:image" content="{e(image_url)}">
+<meta name="twitter:image:alt" content="{e(og_image_alt)}">
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to main content</a>
@@ -169,6 +226,7 @@ them):</p>
         title="womens-sports-calendar",
         description="Subscribable calendars and ticket-price ranges for women's pro sports leagues, from the Ticketmaster Discovery API.",
         canonical_url=f"{base_url}/",
+        base_url=base_url,
         body=body,
     )
 
@@ -196,11 +254,15 @@ def render_league(
 {team_links}
 </ul>
 """
+    og_image, og_image_alt = LEAGUE_OG_IMAGES.get(slug, (DEFAULT_OG_IMAGE, DEFAULT_OG_IMAGE_ALT))
     return _base(
         title=f"{name} calendar and tickets",
         description=f"Subscribe to a {name} calendar and see Ticketmaster ticket price ranges for upcoming games.",
         canonical_url=f"{base_url}/{slug}/",
+        base_url=base_url,
         body=body,
+        og_image=og_image,
+        og_image_alt=og_image_alt,
     )
 
 
@@ -220,11 +282,18 @@ def render_team(
 <h2>Upcoming games</h2>
 {_games_table(team["games"], buy_link_subject=team["team_name"])}
 """
+    og_image, og_image_alt = LEAGUE_OG_IMAGES.get(league_slug, (DEFAULT_OG_IMAGE, DEFAULT_OG_IMAGE_ALT))
     return _base(
         title=f"{team['team_name']} calendar and tickets",
-        description=f"Subscribe to the {team['team_name']} calendar and see Ticketmaster ticket price ranges for upcoming games.",
+        description=(
+            f"Subscribe to the {team['team_name']} ({team['league_name']}) calendar and see "
+            "Ticketmaster ticket price ranges for upcoming games."
+        ),
         canonical_url=f"{base_url}/{league_slug}/{team_slug}/",
+        base_url=base_url,
         body=body,
+        og_image=og_image,
+        og_image_alt=og_image_alt,
     )
 
 
