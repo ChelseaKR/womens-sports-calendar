@@ -6,6 +6,14 @@ in-scope league. No league's own schedule feed is used (see
 docs/LICENSES-AND-ATTRIBUTION.md and docs/DECISIONS.md 0006) -- these lists
 exist only to drive Ticketmaster Discovery API keyword queries. Adding a
 team or a league is a data change here, not a code change.
+
+AUSL was added 2026-09-14 (docs/DECISIONS.md 0008) using the six permanent,
+city-based franchises of its 2026 season, per
+https://en.wikipedia.org/wiki/2026_AUSL_season (read 2026-09-14) and
+https://www.espn.com/mlb/story/_/id/49000604/athletes-unlimited-softball-league-schedule-teams-players
+(read 2026-09-14). AUSL is Athletes Unlimited's softball league; Athletes
+Unlimited's other three disciplines (basketball, lacrosse, volleyball) are
+NOT tracked -- see LEAGUES_EXAMINED_NOT_INCLUDED below for why.
 """
 
 from __future__ import annotations
@@ -125,6 +133,28 @@ LEAGUES: tuple[League, ...] = (
             "PWHL/HockeyTech feed. See docs/LICENSES-AND-ATTRIBUTION.md."
         ),
     ),
+    League(
+        slug="ausl",
+        name="AUSL",
+        country_codes=("US",),
+        teams=_teams(
+            "Chicago Bandits",
+            "Carolina Blaze",
+            "Portland Cascade",
+            "Oklahoma City Spark",
+            "Utah Talons",
+            "Texas Volts",
+        ),
+        schedule_source_used=False,
+        schedule_source_note=(
+            "AUSL's own schedule (theausl.com, operated by Athletes "
+            "Unlimited) is not used: its Terms of Service ban automated "
+            "access and commercial exploitation of site content, same as "
+            "auprosports.com's terms. Games below are Ticketmaster "
+            "Discovery API listings for AUSL teams, not an AUSL feed. See "
+            "docs/LICENSES-AND-ATTRIBUTION.md."
+        ),
+    ),
 )
 
 LEAGUES_EXAMINED_NOT_INCLUDED: tuple[dict[str, str], ...] = (
@@ -155,11 +185,21 @@ LEAGUES_EXAMINED_NOT_INCLUDED: tuple[dict[str, str], ...] = (
         ),
     },
     {
-        "name": "Athletes Unlimited",
+        "name": "Athletes Unlimited (basketball, lacrosse, volleyball)",
         "reason": (
-            "Terms of service ban automated access and commercial "
-            "exploitation of content. Not configured as a tracked league "
-            "(team roster/Ticketmaster coverage not yet scoped)."
+            "AUSL, the softball league Athletes Unlimited operates, is a "
+            "tracked league (see above) via Ticketmaster team-keyword "
+            "search, same as WNBA/NWSL/PWHL -- added 2026-09-14, "
+            "docs/DECISIONS.md 0008. Athletes Unlimited's other three "
+            "disciplines are not tracked: basketball, lacrosse, and "
+            "volleyball each play a single host-city season with teams "
+            "re-drafted weekly by rotating captains (e.g. basketball's "
+            "'Gold Rush'/'Rhythm'/'Glow'/'Eclipse'), so there is no "
+            "fixed, season-long team name to keyword-search for, unlike a "
+            "city franchise. Not a licensing gap -- theausl.com's own "
+            "Terms of Service (same automated-access and commercial-use "
+            "bans as auprosports.com) rules out AUSL's own site either "
+            "way, since only Ticketmaster is queried."
         ),
     },
 )

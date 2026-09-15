@@ -68,3 +68,19 @@ Placeholder `calendar.chelseakr.com` references in the pipeline's default
 `--base-url`, CI, and docs are updated to `https://nexthomegame.com`
 accordingly; production behavior does not change until the repo variable is
 actually set and DNS points at GitHub Pages.
+
+## 0008 — Fourth tracked league: AUSL, not all of Athletes Unlimited (2026-09-14)
+
+AUSL (Athletes Unlimited Softball League) is added as a tracked league, same
+Ticketmaster-only pattern as WNBA/NWSL/PWHL: six team names hand-authored
+into `pipeline/src/wsc_pipeline/config.py`, no league schedule feed read. Per
+`docs/LICENSES-AND-ATTRIBUTION.md`'s 2026-09-14 addendum, licensing was never
+the blocker (AUSL's own site fails the same test every league's does, and
+was already failing it under the generic "Athletes Unlimited" entry) — the
+real gap was that "Athletes Unlimited" is a four-sport brand, and only its
+softball property has fixed, season-long team franchises to keyword-search
+for. AU's other three disciplines (basketball, lacrosse, volleyball) use a
+single-host-city season with teams re-drafted weekly by rotating captains,
+with no stable team name to configure, and remain untracked for that
+structural reason. `LEAGUES_EXAMINED_NOT_INCLUDED`'s "Athletes Unlimited"
+entry is renamed accordingly to name only those three disciplines.
