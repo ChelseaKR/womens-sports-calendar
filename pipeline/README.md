@@ -12,7 +12,7 @@ and the static site into `dist/`.
 
 ```sh
 uv sync --extra dev
-uv run pytest -q                 # 72 tests, 4 with a recorded negative-control run (see below)
+uv run pytest -q                 # 80 tests, 4 with a recorded negative-control run (see below)
 
 # Degraded mode (no key) -- always safe, always produces a valid site:
 uv run python -m wsc_pipeline.build --out dist --base-url https://nexthomegame.com
@@ -119,14 +119,14 @@ Also run (not part of `pytest`, but part of `make verify` and so CI-gated on
 every push/PR, not a one-time manual check):
 
 - `make validate-html` — `html5validator` against every generated page (0
-  errors across all 47 pages in the degraded, no-API-key build CI runs).
+  errors across all 54 pages in the degraded, no-API-key build CI runs).
 - `make a11y` — `pa11y --standard WCAG2AA` against every generated page (the
-  same 47) **plus** two fixture pages rendered with a populated games table
+  same 54) **plus** two fixture pages rendered with a populated games table
   (a priced game, an unpriced game, and a date-TBD game together — the exact
   shape `tests/test_site_html.py::_pages()` builds and asserts on, reused via
   `scripts/render_a11y_fixtures.py` rather than duplicated) — these two exist
   because the degraded build CI runs never has a non-empty games table to
-  check. **49/49 pages pass, 0 issues, as of this pipeline's last run** — see
+  check. **56/56 pages pass, 0 issues, as of this pipeline's last run** — see
   `pipeline/Makefile`'s `a11y` target for exactly what runs.
 
 No human screen-reader walkthrough has been performed (this is a brand-new

@@ -192,7 +192,68 @@ Checked for the same reason.
   - *"Use the Site as part of any effort to compete with us or otherwise use
     the Site and/or the Content for any revenue-generating endeavor or
     commercial enterprise."*
-- **Verdict: NOT USED.**
+- **Verdict: NOT USED** — for AU's own site/schedule content, same as WNBA
+  and PWHL above. This did not, on its own, rule out tracking an
+  Athletes Unlimited property the way WNBA/NWSL/PWHL are tracked (via
+  Ticketmaster team-keyword search, never the league's own site) — see
+  the 2026-09-14 addendum immediately below.
+
+### Addendum, read 2026-09-14: Athletes Unlimited is a multi-sport brand;
+### only AUSL (softball) is added as a tracked league
+
+Re-examined before adding a fourth tracked league, per this repo's
+licence-before-bytes rule (`docs/DECISIONS.md` 0003).
+
+- **theausl.com terms, checked separately:** `https://theausl.com/terms-of-service/`,
+  **Last Updated: August 12, 2025**, read 2026-09-14. theausl.com is
+  Athletes Unlimited's own softball-specific site (operated by
+  auprosports.com, confirmed via its footer). Its terms carry the same
+  two bans as auprosports.com/tos/ above: *"you will not access the Site
+  through automated or non-human means, whether through a bot, script, or
+  otherwise"* and *"no part of the Site and no Content or Marks may be
+  copied, reproduced, aggregated, republished... for any commercial
+  purpose whatsoever."* **Verdict: NOT USED**, identical reasoning and
+  outcome to the auprosports.com verdict above — AUSL's own site/schedule
+  is not read by this pipeline either.
+- **What changed the outcome for AUSL specifically:** per
+  `docs/DECISIONS.md` 0006, no league's own schedule source was ever
+  going to be used — WNBA, NWSL, and PWHL are already tracked leagues
+  despite an identical "NOT USED" verdict for their own sites, because
+  tracking means querying Ticketmaster Discovery API by team name, never
+  reading the league's site. The open question for Athletes Unlimited was
+  never licensing (already settled, same as every other league); it was
+  whether AU has a *fixed, season-long team roster* to keyword-search
+  for, the same way "Indiana Fever" or "Boston Fleet" names a stable
+  franchise all season. Checked 2026-09-14:
+  - **AUSL (softball):** as of the 2026 season, six **permanent
+    city-based franchises** — Chicago Bandits, Carolina Blaze, Portland
+    Cascade, Oklahoma City Spark, Utah Talons, Texas Volts — each with a
+    real home venue for a full regular season (June 9 – July 20, 2026).
+    Source: `https://en.wikipedia.org/wiki/2026_AUSL_season` and
+    `https://www.espn.com/mlb/story/_/id/49000604/athletes-unlimited-softball-league-schedule-teams-players`,
+    both read 2026-09-14. This is the same shape as WNBA/NWSL/PWHL, so
+    AUSL is added as a tracked league (`pipeline/src/wsc_pipeline/config.py`,
+    `docs/DECISIONS.md` 0008). Spot-checked that Ticketmaster carries
+    inventory at AUSL venues, e.g. Parkway Bank Sports Complex (Chicago
+    Bandits) at `ticketmaster.com/parkway-bank-sports-complex-tickets-rosemont/venue/33188`
+    and Dell Diamond (Texas Volts) at
+    `ticketmaster.com/the-dell-diamond-tickets-round-rock/venue/99114` —
+    both read 2026-09-14 — so the same `keyword=<team name>,
+    classificationName=Sports` query WNBA/NWSL/PWHL use would plausibly
+    surface AUSL events too.
+  - **AU basketball, lacrosse, volleyball:** none has fixed franchises.
+    Each plays a single-host-city season (e.g. basketball at Nashville
+    Municipal Auditorium) where 40-odd athletes are re-drafted onto
+    color- or captain-named teams *every week* (basketball's
+    Gold Rush/Rhythm/Glow/Eclipse; lacrosse and volleyball the same
+    weekly-captain-draft shape). There is no team name that persists for
+    a season, so there is nothing stable to hand-author into
+    `config.py` or keyword-search on Ticketmaster the way a city
+    franchise's name works — a search for a common word like "Rhythm"
+    would also be a poor keyword regardless. **Not configured as tracked
+    leagues; this is a structural gap, not a licensing one** (their own
+    sites were never going to be read either way, same reasoning as
+    every other league in this document).
 
 ## 2. Ticket data and prices — Ticketmaster Discovery API
 
