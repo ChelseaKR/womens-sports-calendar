@@ -24,6 +24,23 @@ from .ticketmaster import DiscoveryClient, TicketmasterFetchError
 
 DEFAULT_BASE_URL = "https://nexthomegame.com"
 
+# Favicon and Open Graph / Twitter card images: hand-authored SVG rendered
+# to PNG by scripts/render_social_assets.py, committed here rather than
+# regenerated on every build -- a normal (including nightly CI) build never
+# needs rsvg-convert installed, it only copies already-rendered files. See
+# that script's module docstring for the rendering pipeline and the
+# contrast ratios checked for everything drawn into them.
+ASSETS_DIR = Path(__file__).resolve().parents[2] / "assets"
+STATIC_ASSET_FILES = (
+    "favicon.svg",
+    "favicon-32.png",
+    "apple-touch-icon.png",
+    "og-image.png",
+    "og-image-wnba.png",
+    "og-image-nwsl.png",
+    "og-image-pwhl.png",
+)
+
 
 def fetch_all_games(api_key: str) -> tuple[list[Game], dict[str, set[str]], int, int]:
     """Returns (games, truncated_team_slugs_by_league, requests_made, bytes_received).
@@ -170,6 +187,14 @@ def _write_html(out_dir: Path, base_url: str, games_by_league: dict[str, list[Ga
 
 def _write_static(out_dir: Path) -> None:
     (out_dir / "style.css").write_text(site.STYLE_CSS, encoding="utf-8")
+    for name in STATIC_ASSET_FILES:
+        src = ASSETS_DIR / name
+        if not src.is_file():
+            raise FileNotFoundError(
+                f"missing static asset {src} -- run "
+                "`uv run python scripts/render_social_assets.py` and commit its output"
+            )
+        shutil.copyfile(src, out_dir / name)
 
 
 def _write_sitemap_and_robots(out_dir: Path, base_url: str) -> None:

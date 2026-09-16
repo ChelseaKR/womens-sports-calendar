@@ -12,7 +12,7 @@ and the static site into `dist/`.
 
 ```sh
 uv sync --extra dev
-uv run pytest -q                 # 63 tests, 4 with a recorded negative-control run (see below)
+uv run pytest -q                 # 72 tests, 4 with a recorded negative-control run (see below)
 
 # Degraded mode (no key) -- always safe, always produces a valid site:
 uv run python -m wsc_pipeline.build --out dist --base-url https://nexthomegame.com
@@ -62,16 +62,30 @@ used (requests, bytes).
   either a real object or `null`, never omitted.
 - `site.py` — the static HTML generator. Zero `<script>` elements on any
   page (checked by `tests/test_site_html.py`), `<link rel="canonical">`,
-  Open Graph tags, semantic landmarks, table headers with `scope`, link
-  text that names its destination ("Buy tickets for X vs Y on \<date\>
-  from Ticketmaster", never bare "Buy" or "click here"), and a literal,
-  non-euphemistic privacy note in the footer.
+  a favicon (SVG primary + PNG/apple-touch-icon fallbacks), Open Graph and
+  Twitter Card tags — including a real `og:image` per page (the site-wide
+  default on the index, a per-league card on every league and team page,
+  see `assets/` below) — semantic landmarks, table headers with `scope`,
+  link text that names its destination ("Buy tickets for X vs Y on
+  \<date\> from Ticketmaster", never bare "Buy" or "click here"), and a
+  literal, non-euphemistic privacy note in the footer.
 - `build.py` — the orchestrator/CLI (`python -m wsc_pipeline.build`).
   Writes to a temp directory and only atomically replaces `--out` on full
   success, so a failed fetch never leaves a partial/broken build where a
   good one used to be — the "a stale build is never published as current"
   rule, enforced locally as well as by the GitHub Actions job stopping
-  before the deploy step on any failure.
+  before the deploy step on any failure. Also copies the favicon and
+  social-card assets from `assets/` into `--out` (raising if one is
+  missing, rather than shipping a page whose `og:image` 404s).
+- `assets/` — the favicon and Open Graph / Twitter card images: hand-
+  authored SVG (`scripts/render_social_assets.py`), rendered to PNG with
+  `rsvg-convert` and committed here (both the `.svg` sources and the
+  rendered `.png` files), so a normal build — including the nightly CI
+  run — never needs `rsvg-convert` installed; it only copies
+  already-rendered files. Re-run the script and commit its output only
+  when the artwork itself changes. Colour contrast for every text/graphic
+  pair drawn into these images is checked and recorded in the script's
+  module docstring, at the same rigor as `site.STYLE_CSS`.
 
 ## Tests
 
@@ -82,7 +96,12 @@ exclusion), the Ticketmaster client (throttling, retry, the 429 path, the
 "failed fetch raises" contract), coverage math, the JSON data layer's
 absence discipline, and the generated HTML (no `<script>` tags anywhere,
 no price rendered without a matching Ticketmaster event, table headers,
-link text, canonical/OG tags, the privacy note).
+link text, canonical/favicon/OG/Twitter-card tags — including that each
+page's `og:image` is the real, correctly-sized card for that page type,
+not one generic image repeated everywhere — the privacy note, and that
+`build.py` actually copies the favicon and social-card bytes into `--out`
+at the real dimensions those tags promise, failing loudly if one is
+missing).
 
 Four of these checks were run through a full negative-control cycle
 (sabotage the guarded code, confirm the sabotage landed by occurrence

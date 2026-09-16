@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img">
+<rect width="1200" height="630" fill="#0b1f3a"/>
+
+
+<rect x="165.2" y="75" width="12" height="26" rx="4" fill="#c9d6ea"/><rect x="422.8" y="75" width="12" height="26" rx="4" fill="#c9d6ea"/>
+<rect x="70" y="95" width="460" height="350" rx="24" fill="#ffffff"/>
+<path d="M70 167 V119 A24 24 0 0 1 94 95 H506 A24 24 0 0 1 530 119 V167 Z" fill="#0b1f3a"/>
+<rect x="109.0" y="191" width="46" height="46" rx="10" fill="#c7ccd1" opacity="0.35"/><rect x="165.0" y="191" width="46" height="46" rx="10" fill="#c7ccd1" opacity="0.35"/><rect x="221.0" y="191" width="46" height="46" rx="10" fill="#c7ccd1" opacity="0.35"/><rect x="277.0" y="191" width="46" height="46" rx="10" fill="#c7ccd1" opacity="0.35"/><rect x="333.0" y="191" width="46" height="46" rx="10" fill="#c7ccd1" opacity="0.35"/><rect x="389.0" y="191" width="46" height="46" rx="10" fill="#c7ccd1" opacity="0.35"/><rect x="445.0" y="191" width="46" height="46" rx="10" fill="#c7ccd1" opacity="0.35"/><rect x="109.0" y="249" width="46" height="46" rx="10" fill="#c7ccd1" opacity="0.35"/><rect x="165.0" y="249" width="46" height="46" rx="10" fill="#c7ccd1" opacity="0.35"/><rect x="221.0" y="249" width="46" height="46" rx="10" fill="#c7ccd1" opacity="0.35"/><rect x="277.0" y="249" width="46" height="46" rx="10" fill="#f4c94c"/>
+<circle cx="300.0" cy="272.0" r="15.64" fill="#0b1f3a"/>
+<path d="M284.36 272.0 H315.64 M300.0 256.36 V287.64" stroke="#ffffff" stroke-width="2.1896000000000004" fill="none"/>
+<path d="M290.616 256.36 C299.218 265.744 299.218 278.256 290.616 287.64"
+      stroke="#ffffff" stroke-width="2.1896000000000004" fill="none"/>
+<path d="M309.384 256.36 C300.782 265.744 300.782 278.256 309.384 287.64"
+      stroke="#ffffff" stroke-width="2.1896000000000004" fill="none"/>
+<rect x="333.0" y="249" width="46" height="46" rx="10" fill="#c7ccd1" opacity="0.35"/><rect x="389.0" y="249" width="46" height="46" rx="10" fill="#c7ccd1" opacity="0.35"/><rect x="445.0" y="249" width="46" height="46" rx="10" fill="#c7ccd1" opacity="0.35"/><rect x="109.0" y="307" width="46" height="46" rx="10" fill="#c7ccd1" opacity="0.35"/><rect x="165.0" y="307" width="46" height="46" rx="10" fill="#c7ccd1" opacity="0.35"/><rect x="221.0" y="307" width="46" height="46" rx="10" fill="#c7ccd1" opacity="0.35"/><rect x="277.0" y="307" width="46" height="46" rx="10" fill="#c7ccd1" opacity="0.35"/><rect x="333.0" y="307" width="46" height="46" rx="10" fill="#c7ccd1" opacity="0.35"/><rect x="389.0" y="307" width="46" height="46" rx="10" fill="#c7ccd1" opacity="0.35"/><rect x="445.0" y="307" width="46" height="46" rx="10" fill="#c7ccd1" opacity="0.35"/><rect x="109.0" y="365" width="46" height="46" rx="10" fill="#c7ccd1" opacity="0.35"/><rect x="165.0" y="365" width="46" height="46" rx="10" fill="#c7ccd1" opacity="0.35"/><rect x="221.0" y="365" width="46" height="46" rx="10" fill="#c7ccd1" opacity="0.35"/><rect x="277.0" y="365" width="46" height="46" rx="10" fill="#c7ccd1" opacity="0.35"/><rect x="333.0" y="365" width="46" height="46" rx="10" fill="#c7ccd1" opacity="0.35"/><rect x="389.0" y="365" width="46" height="46" rx="10" fill="#c7ccd1" opacity="0.35"/><rect x="445.0" y="365" width="46" height="46" rx="10" fill="#c7ccd1" opacity="0.35"/>
+
+<text x="580" y="220" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="58" font-weight="700" fill="#ffffff">
+<tspan x="580">Your next</tspan>
+<tspan x="580" dy="68">WNBA home game.</tspan>
+</text>
+<text x="580" y="386" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="28" fill="#c9d6ea">
+<tspan x="580">Calendar &amp; ticket prices,</tspan>
+<tspan x="580" dy="38">from Ticketmaster</tspan>
+</text>
+<text x="70" y="590" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="600" fill="#8fa8cf">nexthomegame.com</text>
+
+</svg>
