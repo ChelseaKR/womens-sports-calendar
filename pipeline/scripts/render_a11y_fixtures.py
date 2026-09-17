@@ -7,8 +7,16 @@ class="games-table"> row.
 
 Reuses tests/test_site_html.py::_pages() directly, so there is exactly one
 definition of this fixture shape -- shared with the HTML-content assertions
-in that file -- rather than a second, driftable copy here. `make a11y`
-writes these to dist-a11y-fixtures/ and pa11y-checks them alongside dist/.
+in that file -- rather than a second, driftable copy here.
+
+Written *inside* dist/ (at dist/_a11y-fixtures/), not a sibling top-level
+directory: every page here links style.css and favicon/fonts with a
+root-absolute path ("/style.css"), which only resolves when the page is
+served from an HTTP root that also holds those files -- nesting the
+fixtures under dist/ means they share dist/style.css and dist/fonts/ for
+free once `make a11y` serves dist/ as that root. A sibling directory has no
+style.css or fonts next to it at all, so pa11y would silently check
+unstyled, default-browser-styled markup -- real contrast never exercised.
 """
 
 from __future__ import annotations
@@ -21,7 +29,7 @@ sys.path.insert(0, str(PIPELINE_ROOT))
 
 from tests.test_site_html import _pages  # noqa: E402
 
-OUT_DIR = PIPELINE_ROOT / "dist-a11y-fixtures"
+OUT_DIR = PIPELINE_ROOT / "dist" / "_a11y-fixtures"
 
 # Only league/team pages have a games table; index just links to leagues.
 FIXTURE_PAGES = ("league", "team")

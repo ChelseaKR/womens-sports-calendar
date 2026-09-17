@@ -21,20 +21,34 @@ validate-html:
 # Also renders and checks the two populated-games-table pages (priced +
 # unpriced + date-TBD game together) that a degraded, no-key build never
 # produces -- see scripts/render_a11y_fixtures.py.
+#
+# Pages are checked over a real local HTTP server (127.0.0.1), not as raw
+# file:// paths: every page links style.css/fonts/favicon with a
+# root-absolute path ("/style.css"), which a browser resolves against the
+# filesystem root (not the page's own folder) under file://, so pa11y would
+# silently check unstyled, default-browser-styled markup -- passing on any
+# palette/contrast choice, real or broken, because none of this site's own
+# CSS ever loaded. Serving dist/ at an HTTP root is also what really
+# happens in production (GitHub Pages), so this is the more faithful check,
+# not just a workaround.
 a11y: install build
 	set -e; \
-	for f in $$(find dist -name '*.html' | sort); do \
-		echo "== pa11y --standard WCAG2AA: $$f =="; \
-		npx --yes pa11y --standard WCAG2AA --config pa11y.config.json "$$f"; \
-	done; \
-	rm -rf dist-a11y-fixtures; \
+	rm -rf dist/_a11y-fixtures; \
 	uv run python scripts/render_a11y_fixtures.py; \
-	for f in dist-a11y-fixtures/league.html dist-a11y-fixtures/team.html; do \
-		echo "== pa11y --standard WCAG2AA (populated games table): $$f =="; \
-		npx --yes pa11y --standard WCAG2AA --config pa11y.config.json "$$f"; \
+	python3 -m http.server 8917 --directory dist >/tmp/wsc-a11y-server.log 2>&1 & \
+	server_pid=$$!; \
+	trap "kill $$server_pid 2>/dev/null || true" EXIT; \
+	for i in $$(seq 1 20); do \
+		curl -sf http://127.0.0.1:8917/style.css > /dev/null 2>&1 && break; \
+		sleep 0.25; \
+	done; \
+	for f in $$(find dist -name '*.html' | sort); do \
+		url="http://127.0.0.1:8917/$${f#dist/}"; \
+		echo "== pa11y --standard WCAG2AA: $$url =="; \
+		npx --yes pa11y --standard WCAG2AA --config pa11y.config.json "$$url"; \
 	done
 
 verify: install test build validate-html a11y
 
 clean:
-	rm -rf dist dist.tmp dist-a11y-fixtures .pytest_cache .venv
+	rm -rf dist dist.tmp .pytest_cache .venv

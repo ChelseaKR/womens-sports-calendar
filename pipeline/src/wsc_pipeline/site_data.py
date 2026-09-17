@@ -24,6 +24,11 @@ def game_to_dict(game: Game) -> dict:
         "venue_state": game.venue_state,
         "start_display": display_start(game),
         "start_utc": game.start_utc.isoformat() if game.start_utc else None,
+        # ISO date only (no time), for rendering -- e.g. a big "JUN 15"
+        # date-chip -- without the HTML layer re-parsing start_display's
+        # human-readable string. None exactly when there is no real local
+        # date (same "date TBD" case start_display already handles).
+        "start_local_date": game.start_local_date.isoformat() if game.start_local_date else None,
         "tzid": game.tzid,
         "date_tbd": game.date_tbd,
         "in_calendar_feed": bool(game.start_utc is not None and not game.date_tbd),

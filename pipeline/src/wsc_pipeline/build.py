@@ -40,6 +40,17 @@ STATIC_ASSET_FILES = (
     "og-image-nwsl.png",
     "og-image-pwhl.png",
 )
+# Self-hosted webfonts (SIL OFL licensed, latin-subset .woff2 files
+# committed under pipeline/assets/fonts/) -- never a Google Fonts <link>,
+# since a third-party font request would contact Google on every page load,
+# contradicting this site's own footer promise ("Nothing leaves your
+# browser when you read this site"). Copied into dist/fonts/ so
+# site.STYLE_CSS's @font-face rules (url("/fonts/...")) resolve.
+STATIC_FONT_FILES = (
+    "big-shoulders-display-latin.woff2",
+    "big-shoulders-text-latin.woff2",
+    "public-sans-latin.woff2",
+)
 
 
 def fetch_all_games(api_key: str) -> tuple[list[Game], dict[str, set[str]], dict[str, set[str]], int, int]:
@@ -212,6 +223,14 @@ def _write_static(out_dir: Path) -> None:
                 "`uv run python scripts/render_social_assets.py` and commit its output"
             )
         shutil.copyfile(src, out_dir / name)
+
+    fonts_dir = out_dir / "fonts"
+    fonts_dir.mkdir(exist_ok=True)
+    for name in STATIC_FONT_FILES:
+        src = ASSETS_DIR / "fonts" / name
+        if not src.is_file():
+            raise FileNotFoundError(f"missing static font {src} -- see pipeline/assets/fonts/")
+        shutil.copyfile(src, fonts_dir / name)
 
 
 def _write_sitemap_and_robots(out_dir: Path, base_url: str) -> None:
