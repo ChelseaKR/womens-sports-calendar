@@ -84,3 +84,37 @@ single-host-city season with teams re-drafted weekly by rotating captains,
 with no stable team name to configure, and remain untracked for that
 structural reason. `LEAGUES_EXAMINED_NOT_INCLUDED`'s "Athletes Unlimited"
 entry is renamed accordingly to name only those three disciplines.
+
+## 0009 — USL W League examined, NOT added: Ticketmaster coverage fails, not licensing (2026-09-16)
+
+USL W League was evaluated as a fifth tracked league, same
+research-before-bytes process as every league above, and does not become a
+tracked league. Per `docs/LICENSES-AND-ATTRIBUTION.md`'s 2026-09-16 entry
+and addendum:
+
+- **Licensing was checked and is moot**, exactly as for every tracked
+  league: uslsoccer.com's Terms of Use (governing all USL Family
+  properties, USL W-League named explicitly) ban automated commercial
+  collection and limit Content to personal/non-commercial use, but this
+  was never going to matter — the pipeline never reads a league's own
+  site, only Ticketmaster by team keyword (0006).
+- **The real blocker is Ticketmaster coverage, checked empirically.** The
+  2026 season fields 96 clubs across 16 divisions — a much larger and more
+  volatile roster than any currently-tracked league (WNBA 15, NWSL 16,
+  PWHL 12, AUSL 6 teams). A 16-club spot-check spanning both
+  pro-affiliated clubs (the best case for Ticketmaster coverage) and small
+  independent clubs found **zero** clubs with a confirmed, correctly-scoped,
+  current Ticketmaster listing. The three clubs with any Ticketmaster
+  presence at all either had zero events listed or listed only their
+  affiliated men's team's games — a worse failure mode than plain absence,
+  since a naive keyword match could surface the wrong team's games under
+  this product's women's-league label.
+- **Two 2026 USL W League clubs (Racing Louisville FC, North Carolina
+  Courage U23) share or nearly share a name with an already-tracked NWSL
+  franchise**, a separate structural problem that would need its own fix
+  even if coverage were otherwise solid.
+- With 96 clubs and a uniformly negative sample, no scoped subset (the way
+  NCAA scoped to Big Ten, or AUSL scoped to six franchises) presents
+  itself. `config.py`'s `LEAGUES_EXAMINED_NOT_INCLUDED` gets a "USL W
+  League" entry; `LEAGUES` is unchanged. Revisit only if Ticketmaster's own
+  listings for these clubs change.

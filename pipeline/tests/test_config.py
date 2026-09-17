@@ -51,12 +51,39 @@ def test_team_slugs_are_unique_across_the_whole_registry():
     assert len(all_slugs) == len(set(all_slugs))
 
 
-def test_leagues_examined_not_included_still_has_four_entries():
-    """NCAA, Unrivaled, LOVB, and the three non-softball Athletes Unlimited
-    disciplines -- AUSL graduating to a tracked league renames this entry
-    rather than removing it, so the count is unchanged. Mirrors
-    tests/test_build.py's site.json assertion on this same list."""
-    assert len(LEAGUES_EXAMINED_NOT_INCLUDED) == 4
+def test_leagues_examined_not_included_still_has_five_entries():
+    """NCAA, Unrivaled, LOVB, the three non-softball Athletes Unlimited
+    disciplines, and USL W League (added 2026-09-16, docs/DECISIONS.md
+    0009 -- examined and rejected on Ticketmaster coverage, not licensing).
+    Mirrors tests/test_build.py's site.json assertion on this same list."""
+    assert len(LEAGUES_EXAMINED_NOT_INCLUDED) == 5
+
+
+def test_usl_w_league_examined_and_excluded_for_coverage_not_licensing():
+    """USL W League (docs/DECISIONS.md 0009): licensing was moot, same as
+    every tracked league, but a 16-club Ticketmaster spot-check across the
+    96-club 2026 roster found zero clubs with confirmed current coverage,
+    so it stays untracked -- this must not be confused with an
+    unscoped/unchecked exclusion like Unrivaled or LOVB."""
+    names = [item["name"] for item in LEAGUES_EXAMINED_NOT_INCLUDED]
+    assert "USL W League" in names
+    entry = next(item for item in LEAGUES_EXAMINED_NOT_INCLUDED if item["name"] == "USL W League")
+    assert "96 clubs" in entry["reason"]
+    assert "ticketmaster" in entry["reason"].lower()
+    assert "coverage, not licensing" in entry["reason"]
+    assert "0009" in entry["reason"]
+
+
+def test_usl_w_league_is_not_a_tracked_league():
+    """The exclusion in LEAGUES_EXAMINED_NOT_INCLUDED must correspond to an
+    actual absence from LEAGUES -- otherwise the two lists would
+    contradict each other on the site's own "leagues examined" page."""
+    try:
+        league_by_slug("usl-w-league")
+    except KeyError:
+        pass
+    else:
+        raise AssertionError("USL W League must not be a tracked league (docs/DECISIONS.md 0009)")
 
 
 def test_athletes_unlimited_exclusion_is_scoped_to_non_softball_disciplines():
