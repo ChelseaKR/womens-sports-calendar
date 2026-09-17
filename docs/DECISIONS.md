@@ -121,3 +121,51 @@ its exact genre taxonomy values were not confirmed against a live call in
 this session (see PR description), and guessing at that string risks
 silently returning zero results for a team, which is worse than the residual
 gap it would close.
+
+## 0010 — Fifth tracked league: NCAA women's basketball, Big Ten only (2026-09-16)
+
+NCAA women's basketball is added as a tracked league, same Ticketmaster-only
+pattern as WNBA/NWSL/PWHL/AUSL, scoped to the Big Ten's 18 teams for the
+2026-27 season. Per `docs/LICENSES-AND-ATTRIBUTION.md`'s 2026-09-16
+addendum, the original 2026-09-13 "NCAA women's sports" entry bundled two
+different things under one verdict: NCAA Content's own commercial-use ban
+(real, but moot -- no league's own site is ever read, per 0006) and "no
+unified feed across ~350 schools" (also moot under the same reasoning -- no
+tracked league has ever had a unified feed). Neither was actually the
+blocker once separated out.
+
+What was actually checked before adding this league:
+
+1. **Team identity is fixed**, unlike AU's non-softball disciplines -- a
+   university's basketball program doesn't get re-drafted weekly. This was
+   always true of NCAA basketball; the original entry didn't turn on it.
+2. **NCAA/school trademark posture** (checked fresh, since this is the
+   first governing-body-plus-member-institutions source examined): NCAA.org
+   and a university athletics licensing page both restrict marks/logos and
+   commercial reproduction of their own content, same shape as every other
+   league -- moot, since neither is scraped. Naming a team in text (never
+   its logo) to search and link to Ticketmaster is nominative fair use,
+   the same legal footing every existing tracked-league team name already
+   stands on.
+3. **Ticketmaster coverage, verified empirically, not assumed.** Six Big
+   Ten programs spot-checked (Iowa, Ohio State, Indiana, Nebraska,
+   Michigan, Rutgers) each have a dedicated Ticketmaster artist page
+   titled "<School> Womens Basketball", several carrying real dated
+   2026-27 events; South Carolina's own athletics department confirms
+   Ticketmaster as its official single-game-ticket seller. This rules out
+   the real risk that college tickets sell only through university box
+   offices (Paciolan/Evenue systems exist alongside Ticketmaster, not
+   instead of it).
+
+Team names are suffixed "Womens Basketball" in `config.py` (e.g. "Iowa
+Hawkeyes Womens Basketball") because, unlike a WNBA/NWSL/PWHL/AUSL city
+franchise, a bare school nickname is shared across every sport that school
+fields -- this matches Ticketmaster's own artist-page naming, not an
+invented convention.
+
+The Big Ten, not all ~350 Division I programs, is the starting scope: it is
+the conference with the most direct positive coverage evidence gathered
+here, not the only eligible one. The other ~332 programs and every NCAA
+women's sport besides basketball remain in `LEAGUES_EXAMINED_NOT_INCLUDED`
+-- not a licensing gap, just not yet scoped, same bucket as Unrivaled and
+LOVB.

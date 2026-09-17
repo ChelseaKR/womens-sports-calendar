@@ -78,3 +78,47 @@ def test_athletes_unlimited_exclusion_is_scoped_to_non_softball_disciplines():
 def test_leagues_examined_not_included_reasons_still_present():
     for expected in ("NCAA", "Unrivaled", "LOVB"):
         assert any(expected in item["name"] for item in LEAGUES_EXAMINED_NOT_INCLUDED)
+
+
+def test_ncaaw_big_ten_is_tracked_with_eighteen_teams():
+    """NCAA women's basketball (Big Ten only) was added 2026-09-16,
+    docs/DECISIONS.md 0009 -- the conference's 18 members for the 2026-27
+    season, after confirming real Ticketmaster inventory per team (unlike
+    the other tracked leagues, a bare school nickname is shared across
+    every sport, so team names carry a 'Womens Basketball' suffix)."""
+    ncaaw = league_by_slug("ncaaw-big-ten")
+    assert ncaaw.name == "NCAA Women's Basketball (Big Ten)"
+    assert ncaaw.country_codes == ("US",)
+    assert len(ncaaw.teams) == 18
+    for team in ncaaw.teams:
+        assert team.name.endswith("Womens Basketball")
+
+
+def test_ncaaw_big_ten_schedule_source_not_used_but_still_a_tracked_league():
+    """Same shape as WNBA/NWSL/PWHL/AUSL: no NCAA or school site is read
+    (docs/DECISIONS.md 0006), but the league is still tracked via
+    Ticketmaster team-keyword search."""
+    ncaaw = league_by_slug("ncaaw-big-ten")
+    assert ncaaw.schedule_source_used is False
+    assert "not" in ncaaw.schedule_source_note.lower()
+    assert "ticketmaster" in ncaaw.schedule_source_note.lower()
+
+
+def test_team_slugs_are_unique_within_ncaaw_big_ten():
+    slugs = [team.slug for team in league_by_slug("ncaaw-big-ten").teams]
+    assert len(slugs) == len(set(slugs))
+
+
+def test_ncaa_exclusion_is_scoped_to_outside_the_big_ten():
+    """The bare "NCAA women's sports" entry must not still exist once
+    Big Ten women's basketball is tracked -- that would contradict
+    config.py's own LEAGUES tuple on the site's "leagues examined and not
+    included" page, same reasoning as the Athletes Unlimited rescoping."""
+    names = [item["name"] for item in LEAGUES_EXAMINED_NOT_INCLUDED]
+    assert "NCAA women's sports" not in names
+    matches = [item for item in LEAGUES_EXAMINED_NOT_INCLUDED if "NCAA" in item["name"]]
+    assert len(matches) == 1
+    entry = matches[0]
+    assert "big ten" in entry["name"].lower()
+    assert "not a licensing gap" in entry["reason"].lower()
+    assert "not yet scoped" in entry["reason"].lower()

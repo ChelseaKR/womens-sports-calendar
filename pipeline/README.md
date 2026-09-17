@@ -12,7 +12,7 @@ and the static site into `dist/`.
 
 ```sh
 uv sync --extra dev
-uv run pytest -q                 # 80 tests, 4 with a recorded negative-control run (see below)
+uv run pytest -q                 # 84 tests, 4 with a recorded negative-control run (see below)
 
 # Degraded mode (no key) -- always safe, always produces a valid site:
 uv run python -m wsc_pipeline.build --out dist --base-url https://nexthomegame.com

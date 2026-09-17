@@ -1,9 +1,9 @@
 # womens-sports-calendar (working name)
 
-Subscribable `.ics` calendar feeds per league and team for women's pro sports,
-plus a ticket-price finder, built nightly from the leagues' own public schedule
-feeds and the Ticketmaster Discovery API. No account, no tracking, no script
-from anyone but us on the page. Monetised only by plain affiliate URLs.
+Subscribable `.ics` calendar feeds per league and team for women's pro and
+college sports, plus a ticket-price finder, built nightly from the
+Ticketmaster Discovery API. No account, no tracking, no script from anyone
+but us on the page. Monetised only by plain affiliate URLs.
 
 [moved to private strategy notes]
 

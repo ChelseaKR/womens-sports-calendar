@@ -14,6 +14,18 @@ https://www.espn.com/mlb/story/_/id/49000604/athletes-unlimited-softball-league-
 (read 2026-09-14). AUSL is Athletes Unlimited's softball league; Athletes
 Unlimited's other three disciplines (basketball, lacrosse, volleyball) are
 NOT tracked -- see LEAGUES_EXAMINED_NOT_INCLUDED below for why.
+
+NCAA women's basketball (Big Ten only) was added 2026-09-16 (docs/DECISIONS.md
+0009) using the conference's 18 members for the 2026-27 season, per
+https://bigten.org/wbb/article/60396/ (read 2026-09-16). Unlike a WNBA/NWSL/
+PWHL/AUSL team name, a bare school nickname (e.g. "Iowa Hawkeyes") is shared
+across every sport that school plays, so each team name below is suffixed
+"Womens Basketball" to disambiguate the Ticketmaster keyword search --
+matching the naming Ticketmaster's own artist pages already use (confirmed
+per team before adding any of them, see docs/LICENSES-AND-ATTRIBUTION.md).
+The other ~332 Division I women's basketball programs, and every NCAA
+women's sport other than basketball, are NOT tracked -- see
+LEAGUES_EXAMINED_NOT_INCLUDED below for why.
 """
 
 from __future__ import annotations
@@ -155,16 +167,72 @@ LEAGUES: tuple[League, ...] = (
             "docs/LICENSES-AND-ATTRIBUTION.md."
         ),
     ),
+    League(
+        slug="ncaaw-big-ten",
+        name="NCAA Women's Basketball (Big Ten)",
+        country_codes=("US",),
+        teams=_teams(
+            "Illinois Fighting Illini Womens Basketball",
+            "Indiana Hoosiers Womens Basketball",
+            "Iowa Hawkeyes Womens Basketball",
+            "Maryland Terrapins Womens Basketball",
+            "Michigan Wolverines Womens Basketball",
+            "Michigan State Spartans Womens Basketball",
+            "Minnesota Golden Gophers Womens Basketball",
+            "Nebraska Cornhuskers Womens Basketball",
+            "Northwestern Wildcats Womens Basketball",
+            "Ohio State Buckeyes Womens Basketball",
+            "Oregon Ducks Womens Basketball",
+            "Penn State Nittany Lions Womens Basketball",
+            "Purdue Boilermakers Womens Basketball",
+            "Rutgers Scarlet Knights Womens Basketball",
+            "UCLA Bruins Womens Basketball",
+            "USC Trojans Womens Basketball",
+            "Washington Huskies Womens Basketball",
+            "Wisconsin Badgers Womens Basketball",
+        ),
+        schedule_source_used=False,
+        schedule_source_note=(
+            "No NCAA women's basketball schedule source -- not NCAA.com, "
+            "not NCAA.org, not any individual school's athletics site -- "
+            "is used: their Terms of Service ban commercial exploitation "
+            "of their content (same blanket shape as every other league "
+            "here) and there is no unified machine-readable feed across "
+            "Division I programs. Games below are Ticketmaster Discovery "
+            "API listings for Big Ten women's basketball teams, not any "
+            "NCAA or school feed. Team names are suffixed 'Womens "
+            "Basketball' to disambiguate the keyword search, since a "
+            "school's nickname alone spans every sport it fields. Limited "
+            "to the Big Ten's 18 teams, not all ~350 Division I programs -- "
+            "see docs/LICENSES-AND-ATTRIBUTION.md."
+        ),
+    ),
 )
 
 LEAGUES_EXAMINED_NOT_INCLUDED: tuple[dict[str, str], ...] = (
     {
-        "name": "NCAA women's sports",
+        "name": (
+            "NCAA women's basketball outside the Big Ten, and NCAA women's "
+            "sports other than basketball"
+        ),
         "reason": (
-            "No unified machine-readable schedule across ~350 school "
-            "athletic sites, and NCAA.com's Terms of Service ban "
-            "commercial exploitation of NCAA Content. Not configured as a "
-            "tracked league."
+            "Big Ten women's basketball is a tracked league (see above) via "
+            "Ticketmaster team-keyword search, same as WNBA/NWSL/PWHL/AUSL "
+            "-- added 2026-09-16, docs/DECISIONS.md 0009, after confirming "
+            "real Ticketmaster inventory (dedicated '<School> Womens "
+            "Basketball' artist pages carrying real dated 2026-27 games) "
+            "across Big Ten programs, not just a couple of blue bloods. The "
+            "other ~332 Division I women's basketball programs, and every "
+            "NCAA women's sport other than basketball (soccer, volleyball, "
+            "softball, etc.), remain untracked. Not a licensing gap -- "
+            "NCAA.com's and NCAA.org's Terms of Service ban commercial "
+            "exploitation of their own content, same shape as every other "
+            "league in this document, but neither site is scraped either "
+            "way, same as every tracked league. The gap is that "
+            "Ticketmaster coverage and conference-by-conference team-roster "
+            "stability have not been checked for the remaining programs or "
+            "sports -- team roster/Ticketmaster coverage not yet scoped, "
+            "same bucket as Unrivaled and LOVB below."
         ),
     },
     {

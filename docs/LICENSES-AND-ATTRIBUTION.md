@@ -146,6 +146,136 @@ leagues. Not a bypass — it is worse than the leagues' own terms.
 - **Verdict: NOT USED.** No unified feed, and the terms would forbid
   commercial reuse of NCAA Content in any case.
 
+### Addendum, read 2026-09-16: NCAA women's basketball specifically is
+### re-examined and added (Big Ten only) — the "no unified feed" reasoning
+### above was never the actual blocker under this pipeline's model
+
+Re-examined before adding a fifth tracked league, per this repo's
+licence-before-bytes rule (`docs/DECISIONS.md` 0003). The 2026-09-13 entry
+above bundled two different things under one "NOT USED" verdict: (a) NCAA
+Content itself (stats, video, "the NCAA Content") is commercially
+restricted by NCAA.com's own terms, and (b) there is no single schedule
+feed across ~350 schools. (b) reads as disqualifying on its own, but per
+`docs/DECISIONS.md` 0006 **no tracked league's own schedule feed is ever
+used** — WNBA, NWSL, PWHL, and AUSL are all tracked despite an identical
+"no usable own-site feed" finding, because tracking means querying the
+Ticketmaster Discovery API by team name, never reading a league or school's
+own site. So "no unified NCAA feed" was never actually the blocker; the
+real open questions, unchecked in the original entry, were the ones this
+addendum checks:
+
+- **Team identity stability:** unlike AU's non-softball disciplines (weekly
+  captain-redraft, no team persists a season), an NCAA women's basketball
+  team is a university's program — a fixed name, fixed venue, season after
+  season. Structurally this is the WNBA/NWSL/PWHL/AUSL shape, not the
+  excluded-AU-disciplines shape. No re-examination needed here; this was
+  always true and the original entry didn't turn on it.
+- **NCAA's and member schools' own trademark/licensing posture** (checked
+  fresh, since this repo has never queried a *governing body plus its
+  member institutions* before, only single-operator leagues):
+  - `https://www.ncaa.org/sports/2015/4/24/ncaa-org-terms-of-service.aspx`
+    (the canonical NCAA.org terms URL found via search), fetched directly
+    2026-09-16: **redirects to the NCAA.org homepage (HTTP 302)** — the
+    page no longer resolves at that URL, the same "terms page unreachable"
+    outcome already logged for NWSL above. A cached rendering of the same
+    page (via search, not a direct identifying-UA fetch — flagged, weaker
+    provenance than this doc's other entries) shows the same blanket shape
+    as every other league: *"No Content may be reproduced, republished,
+    uploaded, posted, transmitted, distributed, copied, publicly displayed
+    or otherwise used except as provided in these Terms of Use without the
+    written permission of the NCAA,"* limited to *"personal, non-commercial
+    use."* **This changes nothing** — NCAA.org's site content was never
+    going to be read either way, same reasoning as every tracked league.
+  - University of Iowa Athletics licensing page
+    (`https://hawkeyesports.com/licensing`), read 2026-09-16: *"Any product
+    bearing the logos, trademarks, word marks, or having an implied
+    association with the University of Iowa must be licensed."* This
+    governs **merchandise and marks/logos**, not plain-text naming of the
+    team — the site never uses a school's logo, colors, or mascot, only
+    the team's name as text, exactly parallel to how this product already
+    names "Indiana Fever" or "Chicago Sky" without a WNBA team licence.
+  - **Nominative fair use directly covers this.** Trademark counsel
+    commentary on NCAA marks (Stites & Harbison, "How to Use the NCAA's
+    Trademarks without Getting Sued") states plainly: *"Use of individual
+    school names (but not necessarily school colors, school logos or
+    school mascots) fall within an exception to trademark infringement law
+    referred to as 'nominative fair use.'"* The three-part nominative-use
+    test — the product can't be identified without the name, only as much
+    of the mark as needed is used, and nothing suggests sponsorship — is
+    satisfied by construction: a team-name keyword search plus a plain
+    link to that team's own Ticketmaster listing takes only the name, and
+    every purchase link leaves our site for Ticketmaster's own checkout
+    (no sponsorship implied). **No different exposure than the trademarked
+    pro-team names already in this product.**
+  - **Verdict on NCAA/school terms: NOT USED, same as every other league.**
+    Neither NCAA.org, NCAA.com, nor any school's athletics site is read by
+    this pipeline; only its team name is used as a Ticketmaster search
+    keyword and displayed as text.
+- **Ticketmaster coverage — checked empirically, not assumed** (this is the
+  one genuinely new risk this addendum was written to rule in or out:
+  college tickets often sell through a school's own box office —
+  Paciolan/Evenue systems, visible at e.g. `hawkeyesports.evenue.net` and
+  `goduke.evenue.net` — rather than Ticketmaster). Checked via Ticketmaster
+  search and direct fetch, all read 2026-09-16:
+  - Every Big Ten team checked (6 of 18: Iowa, Ohio State, Indiana,
+    Nebraska, Michigan, Rutgers) has its own dedicated Ticketmaster artist
+    page titled `"<School> Womens Basketball"` — e.g.
+    `ticketmaster.com/iowa-hawkeyes-womens-basketball-tickets/artist/849600`,
+    `.../ohio-state-buckeyes-womens-basketball-tickets/artist/849603`,
+    `.../indiana-university-womens-basketball-tickets/artist/849606`,
+    `.../university-of-nebraska-cornhuskers-womens-basketball-tickets/artist/847390`,
+    `.../university-of-michigan-women-s-basketball-tickets/artist/2551036`,
+    `.../rutgers-scarlet-knights-women-s-basketball-tickets` (via
+    StubHub-indexed search; Ticketmaster's own listing carries an artist
+    page too). Iowa's page showed a real dated event (vs. Oregon,
+    1/15/26); Duke (ACC, checked for comparison) showed two real dated
+    events (vs. UConn 11/28/26 at TD Garden; vs. Washington State
+    11/21/26). A direct fetch of Ticketmaster's Rutgers-specific search on
+    2026-09-16 returned zero current listings — the artist page exists but
+    nothing is on sale yet this early in the season for that program,
+    which the pipeline's existing coverage report already treats as a
+    normal per-team zero, not an error (`coverage.py`; the same shape as a
+    WNBA team with no game found on a given build).
+  - **Confirmed as an official channel, not just secondary-market
+    listings:** South Carolina's own athletics department (SEC, checked
+    for comparison, not tracked) states *"Single-game tickets go on sale
+    to the general public via Ticketmaster."* Iowa's own tickets page
+    (`hawkeyesports.com/tickets/wbb`) links to its Evenue box office as one
+    channel; Ticketmaster independently carries listings for the same
+    team regardless, which is all the Discovery API keyword search needs.
+  - This is stronger evidence than the AUSL venue spot-check above (two
+    venues, inferred plausibility) — six Big Ten programs directly
+    confirmed, each with a distinctly-titled artist page, several with
+    real forward-dated 2026-27 events. **Ticketmaster coverage for major-
+    conference NCAA women's basketball is real, not sparse or
+    unreliable**, contrary to the a-priori assumption that college
+    tickets mostly sell through university box offices.
+- **What changed the outcome:** NCAA women's basketball (Big Ten's 18
+  teams for the 2026-27 season) is added as a tracked league
+  (`pipeline/src/wsc_pipeline/config.py`, `docs/DECISIONS.md` 0009), same
+  Ticketmaster-only pattern as every other league. Team names are
+  suffixed "Womens Basketball" in the keyword search — unlike a WNBA/NWSL/
+  PWHL/AUSL city-franchise name, a bare school nickname (e.g. "Iowa
+  Hawkeyes") is shared across every sport that school fields, and
+  Ticketmaster's own artist-page titles already carry the same suffix, so
+  this matches the pattern rather than inventing one.
+- **What is deliberately NOT added, and why (a real, bounded starting
+  scope, not all ~350 Division I programs):** the Big Ten was picked
+  because it is the conference checked here with the most direct,
+  positive Ticketmaster-coverage evidence (6 of 18 teams spot-checked, all
+  with dedicated artist pages) — not because it is uniquely eligible.
+  Coverage and team-roster stability for the other ~332 Division I
+  women's basketball programs, across ~30 other conferences, has not been
+  systematically checked; two non-Big-Ten programs spot-checked for
+  comparison (South Carolina, Duke) also show real Ticketmaster inventory,
+  suggesting the pattern likely extends to other major conferences, but
+  "likely extends" is not the same as checked, and mid-major/low-major
+  programs were not sampled at all. NCAA women's sports other than
+  basketball (soccer, volleyball, softball, etc.) were not examined for
+  Ticketmaster coverage or team-roster stability either. Both remain in
+  `LEAGUES_EXAMINED_NOT_INCLUDED`, not a licensing block — see
+  `pipeline/src/wsc_pipeline/config.py`.
+
 ### Unrivaled (3x3 basketball league)
 
 Checked because research §6 idea 1 named it as a candidate league.
@@ -363,7 +493,7 @@ part of this repo's own design (`docs/DECISIONS.md`, README). See
 | PWHL (HockeyTech feed) | schedule, broadcaster | **No** | ToS clause (xi) bans "automated scripts"; personal non-commercial licence | — |
 | NWSL official site | schedule | **No — unknown** | Terms page is a JS shell, unreadable; no machine-readable feed | — |
 | ECAL (NWSL/team calendar sync) | schedule | **No** | Personal-use-only + explicit data-mining/robots ban | — |
-| NCAA women's | schedule | **No** | No unified feed; ToS bans commercial exploitation of NCAA Content | — |
+| NCAA women's (own site/feed) | schedule | **No** | No unified feed; ToS bans commercial exploitation of NCAA Content | — |
 | Unrivaled | schedule | **No** | Automated-collection ban + explicit "commercial purpose... collecting product prices" ban | — |
 | LOVB | schedule | **No** | Commercial-use + data-mining/robots ban | — |
 | Athletes Unlimited | schedule | **No** | Automated-access ban + commercial-exploitation ban | — |
