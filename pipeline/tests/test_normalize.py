@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from wsc_pipeline.normalize import display_start, normalize_event, parse_teams
+from wsc_pipeline.normalize import display_start, normalize_event, parse_teams, team_is_participant
 from .conftest import make_raw_event
 
 
@@ -106,3 +106,104 @@ def test_normalize_event_no_venue_fields_are_none_not_fabricated():
     assert game.venue_name is None
     assert game.venue_city is None
     assert game.venue_state is None
+
+
+# -- team_is_participant: regression coverage for the 2026-09-16 live-site
+# bug where an NWSL "Angel City" Discovery API keyword search returned an
+# unrelated WHL hockey game ("Everett Silvertips vs Tri-City Americans")
+# played at "Angel Of The Winds Arena" -- the keyword matched the venue
+# name, not any actual participant. All fixture shapes below (event name,
+# venue name, home/away split) mirror the real nexthomegame.com production
+# data pulled from https://nexthomegame.com/data/nwsl/angel-city.json on
+# 2026-09-16, and the second/third cases were also confirmed live in that
+# same production pull -- these are not hypothetical inputs.
+
+
+def test_team_is_participant_rejects_wrong_sport_same_venue_keyword_match():
+    """The exact reported bug: keyword search for NWSL's "Angel City"
+    returns a WHL hockey game at "Angel Of The Winds Arena" -- the venue
+    name contains "Angel", the teams playing do not."""
+    raw = make_raw_event(
+        event_id="EVT-HOCKEY",
+        name="Everett Silvertips vs Tri-City Americans",
+        venue_name="Angel Of The Winds Arena",
+        venue_city="Everett",
+        venue_state="WA",
+    )
+    assert team_is_participant("Angel City", raw) is False
+
+
+def test_team_is_participant_rejects_wrong_sport_same_city_keyword_match():
+    """Same production pull: keyword search for "Angel City" also returned
+    real MLB Angels/Royals games (the Angels' own name contains "Angel")."""
+    raw = make_raw_event(
+        event_id="EVT-MLB",
+        name="Los Angeles Angels vs Kansas City Royals",
+        venue_name="Angel Stadium of Anaheim",
+        venue_city="Anaheim",
+        venue_state="CA",
+    )
+    assert team_is_participant("Angel City", raw) is False
+
+
+def test_team_is_participant_rejects_same_sport_wrong_team():
+    """classificationName=Sports alone can't catch this: a keyword search
+    for NWSL's "Bay FC" also returned a real soccer match between two
+    entirely different clubs that both happen to have "Bay" in their name."""
+    raw = make_raw_event(
+        event_id="EVT-OTHERSOCCER",
+        name="Tampa Bay Sun FC vs DC Power FC",
+        venue_name="Suncoast Credit Union Field",
+        venue_city="Tampa",
+        venue_state="FL",
+    )
+    assert team_is_participant("Bay FC", raw) is False
+
+
+def test_team_is_participant_accepts_real_match():
+    raw = make_raw_event(
+        event_id="EVT-REAL",
+        name="Angel City FC vs Seattle Reign FC",
+        venue_name="BMO Stadium",
+        venue_city="Los Angeles",
+        venue_state="CA",
+    )
+    assert team_is_participant("Angel City", raw) is True
+    assert team_is_participant("Seattle Reign", raw) is True
+
+
+def test_team_is_participant_accepts_ticketmaster_home_team_abbreviation():
+    """Real production shape: Ticketmaster lists a home game as just
+    "Mystics vs Connecticut Sun ..." -- must not be rejected for dropping
+    the city name, or a real Washington Mystics home game disappears."""
+    raw = make_raw_event(
+        event_id="EVT-ABBREV",
+        name="Mystics vs Connecticut Sun (Windbreaker Giveaway - First 1,500 Fans)",
+        venue_name="CareFirst Arena",
+        venue_city="Washington",
+        venue_state="DC",
+    )
+    assert team_is_participant("Washington Mystics", raw) is True
+
+
+def test_team_is_participant_uses_attractions_when_name_is_unparseable():
+    raw = make_raw_event(
+        event_id="EVT-ATTR",
+        name="PWHL: Championship Night",
+        attractions=["Minnesota Frost", "Ottawa Charge"],
+    )
+    assert team_is_participant("Minnesota Frost", raw) is True
+
+
+def test_team_is_participant_rejects_shared_city_different_league():
+    """A same-city collision that is not the reported bug but is the same
+    class: keyword search for PWHL's "Minnesota Frost" returning a real
+    NBA game merely because both mention "Minnesota"."""
+    raw = make_raw_event(
+        event_id="EVT-NBA",
+        name="San Antonio Spurs vs Minnesota Timberwolves",
+        venue_name="Frost Bank Center",
+        venue_city="San Antonio",
+        venue_state="TX",
+    )
+    assert team_is_participant("Minnesota Frost", raw) is False

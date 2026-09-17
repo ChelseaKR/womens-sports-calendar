@@ -17,6 +17,8 @@ from datetime import datetime, date
 from zoneinfo import ZoneInfo
 
 _VS_SPLIT = re.compile(r"\s+(?:vs\.?|v\.?|at|@)\s+", re.IGNORECASE)
+_NON_ALNUM = re.compile(r"[^a-z0-9]+")
+_MIN_MATCH_LEN = 4
 
 
 @dataclass(frozen=True)
@@ -63,6 +65,61 @@ def parse_teams(event_name: str, attractions: list[dict]) -> tuple[str | None, s
         if len(names) == 2:
             home, away = names[0], names[1]
     return home, away
+
+
+def _normalize_for_match(s: str) -> str:
+    return _NON_ALNUM.sub(" ", s.lower()).strip()
+
+
+def _phrase_match(a: str, b: str) -> bool:
+    """True if the shorter of (a, b), once lowercased and stripped of
+    punctuation, is a contiguous substring of the longer one. Both sides
+    must be at least _MIN_MATCH_LEN characters -- short fragments (a bare
+    "FC", a single initial) are not trustworthy evidence of a match.
+
+    This is deliberately a *phrase* match, not a word-overlap match: two
+    team names that merely share a common word (a city, "FC", a mascot
+    word reused by an unrelated franchise in another sport, e.g. NWSL's
+    "Utah Royals" vs MLB's "Kansas City Royals") must NOT count as a
+    match. Sharing one contiguous phrase is what lets "Mystics" stand in
+    for "Washington Mystics" (a real Ticketmaster abbreviation seen in
+    production) while still rejecting "Minnesota Timberwolves" as a stand-in
+    for "Minnesota Frost" (a real Ticketmaster keyword-search false
+    positive also seen in production).
+    """
+    na, nb = _normalize_for_match(a), _normalize_for_match(b)
+    if len(na) < _MIN_MATCH_LEN or len(nb) < _MIN_MATCH_LEN:
+        return False
+    shorter, longer = (na, nb) if len(na) <= len(nb) else (nb, na)
+    return shorter in longer
+
+
+def team_is_participant(team_name: str, raw_event: dict) -> bool:
+    """Validates that a Discovery API keyword-search result actually names
+    the searched team as a participant, instead of trusting the keyword
+    match blindly.
+
+    Why this exists: Discovery API's `keyword` parameter is a broad
+    full-text search -- confirmed in production (2026-09-16) to match
+    against venue names and other metadata, not just event/attraction
+    names. A keyword search for NWSL's "Angel City" returned a WHL hockey
+    game at "Angel Of The Winds Arena" and MLB Angels/Royals games at
+    "Angel Stadium of Anaheim" -- none of which are Angel City FC. The
+    existing classificationName="Sports" filter narrows the segment but
+    does not restrict to the right sport, and does nothing at all against
+    a same-sport, wrong-team collision (a Ticketmaster search for NWSL's
+    "Bay FC" also returned real games between "Tampa Bay Sun FC" and other
+    clubs). This checks what the event itself says -- its own name and
+    attractions -- never the venue, never the city, so a keyword-search
+    false positive can be dropped without ever entering the site's data.
+    """
+    embedded = raw_event.get("_embedded", {})
+    attractions = embedded.get("attractions") or []
+    name = raw_event.get("name", "")
+    home, away = parse_teams(name, attractions)
+    candidates = [c for c in (name, home, away) if c]
+    candidates.extend(a.get("name") for a in attractions if a.get("name"))
+    return any(_phrase_match(team_name, c) for c in candidates)
 
 
 def _parse_price(price_ranges: list[dict] | None) -> PriceRange | None:

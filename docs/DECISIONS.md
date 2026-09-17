@@ -84,3 +84,40 @@ single-host-city season with teams re-drafted weekly by rotating captains,
 with no stable team name to configure, and remain untracked for that
 structural reason. `LEAGUES_EXAMINED_NOT_INCLUDED`'s "Athletes Unlimited"
 entry is renamed accordingly to name only those three disciplines.
+
+## 0009 — Validate Discovery API keyword-search results against the event's own participants (2026-09-16)
+
+A production bug (NWSL's "Angel City" team page showing a WHL hockey game,
+"Everett Silvertips vs Tri-City Americans" at "Angel Of The Winds Arena")
+showed that Discovery API's `keyword` search is a broad full-text match, not
+an exact team/attraction-name match — it matches on venue names and other
+metadata, not just who is actually playing. `classificationName=Sports`
+(already in place since 0006) only narrows the segment; it does nothing
+against a wrong sport within Sports, or a same-sport wrong team (confirmed
+separately live: a "Bay FC" search also returned a real match between two
+unrelated clubs, "Tampa Bay Sun FC" and "DC Power FC").
+
+Every raw Discovery API result is now checked with
+`normalize.team_is_participant()` before being trusted: the event's own name
+and `_embedded.attractions` (never the venue) must contain the searched
+team's name as a contiguous phrase, in either direction (so a real
+Ticketmaster shorthand like "Mystics" still matches "Washington Mystics",
+without accepting a same-city, different-team collision like "Minnesota
+Timberwolves" for "Minnesota Frost"). A result that fails is dropped, not
+published, and counted per team in the coverage report (`teams with
+mismatched events`) so the exclusion is visible rather than silent. Checked
+against a full pull of nexthomegame.com's live production data
+(2026-09-16): 140 of 304 published games across all four leagues were
+false-positive keyword matches (wrong sport, wrong team, or non-sporting
+events -- horse racing, MMA, concerts) and are now excluded; the 2
+legitimate abbreviated-name games in that pull still pass.
+
+Known residual gap: two teams in different leagues/sports that share an
+identical or near-identical name (a hypothetical NWSL "Utah Royals" vs
+MLB's "Kansas City Royals") could still collide on the "Royals" phrase
+alone. Closing that fully needs a verified sport/genre check using
+Discovery API's per-event `classifications` field — not added here because
+its exact genre taxonomy values were not confirmed against a live call in
+this session (see PR description), and guessing at that string risks
+silently returning zero results for a team, which is worse than the residual
+gap it would close.

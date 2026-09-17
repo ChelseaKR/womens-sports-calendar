@@ -58,3 +58,16 @@ def test_render_report_degraded_mode_notes_missing_key():
     report = render_report(coverage)
     assert "TICKETMASTER_API_KEY not configured" in report
     assert "not a failed build" in report
+
+
+def test_compute_league_coverage_records_mismatched_teams():
+    """A team whose Discovery API keyword search returned a false-positive
+    result (rejected by normalize.team_is_participant, see build.py's
+    fetch_all_games) must show up in the coverage report -- dropping a
+    contaminated event silently, with no trace in the report, would hide
+    the exact 2026-09-16 production bug class from ever being noticed again."""
+    lc = compute_league_coverage(LEAGUE, [], set(), {"indiana-fever"})
+    assert lc.teams_with_mismatched_events == ["indiana-fever"]
+    report = render_report(BuildCoverage(leagues=[lc], requests_made=0, bytes_received=0, api_key_present=True))
+    assert "indiana-fever" in report
+    assert "did not actually name the team" in report

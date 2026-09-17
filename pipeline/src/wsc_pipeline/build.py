@@ -19,7 +19,7 @@ from pathlib import Path
 
 from . import config, ics, site, site_data
 from .coverage import BuildCoverage, LeagueCoverage, compute_league_coverage, render_report
-from .normalize import Game, normalize_event
+from .normalize import Game, normalize_event, team_is_participant
 from .ticketmaster import DiscoveryClient, TicketmasterFetchError
 
 DEFAULT_BASE_URL = "https://nexthomegame.com"
@@ -42,20 +42,35 @@ STATIC_ASSET_FILES = (
 )
 
 
-def fetch_all_games(api_key: str) -> tuple[list[Game], dict[str, set[str]], int, int]:
-    """Returns (games, truncated_team_slugs_by_league, requests_made, bytes_received).
+def fetch_all_games(api_key: str) -> tuple[list[Game], dict[str, set[str]], dict[str, set[str]], int, int]:
+    """Returns (games, truncated_team_slugs_by_league,
+    mismatched_team_slugs_by_league, requests_made, bytes_received).
     Raises TicketmasterFetchError on any failed team query -- callers must
     let this propagate so the build fails rather than publishing a partial,
     silently-thinned result as if it were complete.
+
+    Every raw event Discovery API returns for a team's keyword search is
+    checked with team_is_participant() before it is normalized: Discovery
+    API's keyword search is a broad full-text match (confirmed in
+    production to match on venue names, not just event/attraction names),
+    so a raw result is not proof the event actually involves the team
+    searched for. Events that fail the check are dropped, not published --
+    same "never fabricate, drop rather than guess" discipline normalize_event
+    already applies to a missing id/date -- and counted per team so the
+    coverage report makes the exclusion visible instead of silent.
     """
     games: list[Game] = []
     truncated: dict[str, set[str]] = {lg.slug: set() for lg in config.LEAGUES}
+    mismatched: dict[str, set[str]] = {lg.slug: set() for lg in config.LEAGUES}
     with DiscoveryClient(api_key) as client:
         for league, team in config.all_teams():
             raw_events, team_truncated = client.search_team_events(team.slug, team.name, league.country_codes)
             if team_truncated:
                 truncated[league.slug].add(team.slug)
             for raw in raw_events:
+                if not team_is_participant(team.name, raw):
+                    mismatched[league.slug].add(team.slug)
+                    continue
                 game = normalize_event(
                     raw,
                     league_slug=league.slug,
@@ -65,7 +80,7 @@ def fetch_all_games(api_key: str) -> tuple[list[Game], dict[str, set[str]], int,
                 if game is not None:
                     games.append(game)
         budget = client.budget
-    return games, truncated, budget.requests_made, budget.bytes_received
+    return games, truncated, mismatched, budget.requests_made, budget.bytes_received
 
 
 def build(*, out_dir: Path, base_url: str, api_key: str | None, affiliate_id: str | None) -> BuildCoverage:
@@ -78,9 +93,9 @@ def build(*, out_dir: Path, base_url: str, api_key: str | None, affiliate_id: st
     """
     api_key_present = bool(api_key)
     if api_key_present:
-        games, truncated, requests_made, bytes_received = fetch_all_games(api_key)  # may raise
+        games, truncated, mismatched, requests_made, bytes_received = fetch_all_games(api_key)  # may raise
     else:
-        games, truncated, requests_made, bytes_received = [], {}, 0, 0
+        games, truncated, mismatched, requests_made, bytes_received = [], {}, {}, 0, 0
 
     tmp_dir = out_dir.with_name(out_dir.name + ".tmp")
     if tmp_dir.exists():
@@ -95,7 +110,9 @@ def build(*, out_dir: Path, base_url: str, api_key: str | None, affiliate_id: st
 
     league_coverages = []
     for lg in config.LEAGUES:
-        lc = compute_league_coverage(lg, games_by_league[lg.slug], truncated.get(lg.slug, set()))
+        lc = compute_league_coverage(
+            lg, games_by_league[lg.slug], truncated.get(lg.slug, set()), mismatched.get(lg.slug, set())
+        )
         league_coverages.append(lc)
 
     coverage = BuildCoverage(

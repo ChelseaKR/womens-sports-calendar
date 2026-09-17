@@ -9,6 +9,8 @@ from wsc_pipeline import build as build_module
 from wsc_pipeline.config import LEAGUES
 from wsc_pipeline.ticketmaster import TicketmasterFetchError
 
+from .conftest import make_raw_event
+
 
 def test_degraded_build_with_no_api_key_succeeds_and_says_so(tmp_path: Path):
     """'with no key, the build emits calendars without prices and says so,
@@ -125,3 +127,63 @@ def test_build_fails_loudly_if_a_static_asset_is_missing(tmp_path: Path, monkeyp
     out_dir = tmp_path / "dist"
     with pytest.raises(FileNotFoundError):
         build_module.build(out_dir=out_dir, base_url="https://calendar.chelseakr.com", api_key=None, affiliate_id=None)
+
+
+class _FakeDiscoveryClient:
+    """Stands in for DiscoveryClient in fetch_all_games() tests: returns a
+    per-team canned response instead of hitting the network, so
+    fetch_all_games's own filtering logic (not the HTTP layer, already
+    covered by test_ticketmaster_client.py) is what's under test."""
+
+    def __init__(self, responses: dict[str, list[dict]]):
+        from wsc_pipeline.ticketmaster import CrawlBudget
+
+        self._responses = responses
+        self.budget = CrawlBudget()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return None
+
+    def search_team_events(self, team_slug: str, team_name: str, country_codes: tuple[str, ...]):
+        return self._responses.get(team_slug, []), False
+
+
+def test_fetch_all_games_drops_keyword_search_false_positives_and_reports_them(monkeypatch):
+    """End-to-end regression for the 2026-09-16 live bug: a Discovery API
+    response that mixes a real Angel City FC game with the unrelated WHL
+    hockey game that actually shipped to production must, after
+    fetch_all_games, produce only the real game -- and must surface the
+    drop in the mismatched-team map so it's visible in the coverage report,
+    not silently absorbed."""
+    real_game = make_raw_event(
+        event_id="EVT-REAL",
+        name="Angel City FC vs Seattle Reign FC",
+        venue_name="BMO Stadium",
+        venue_city="Los Angeles",
+        venue_state="CA",
+    )
+    hockey_leak = make_raw_event(
+        event_id="EVT-HOCKEY",
+        name="Everett Silvertips vs Tri-City Americans",
+        venue_name="Angel Of The Winds Arena",
+        venue_city="Everett",
+        venue_state="WA",
+    )
+    fake_client = _FakeDiscoveryClient({"angel-city": [real_game, hockey_leak]})
+    monkeypatch.setattr(build_module, "DiscoveryClient", lambda api_key: fake_client)
+
+    games, _truncated, mismatched, _requests, _bytes = build_module.fetch_all_games("fake-key")
+
+    angel_city_games = [g for g in games if g.tracked_team_slug == "angel-city"]
+    assert [g.event_id for g in angel_city_games] == ["EVT-REAL"]
+    assert "angel-city" in mismatched["nwsl"]
+
+    # No other team's canned response was populated, so nothing else should
+    # have produced a game or a mismatch -- confirms the fake only affected
+    # the team under test.
+    assert all(g.tracked_team_slug == "angel-city" for g in games)
+    assert mismatched["nwsl"] == {"angel-city"}
+    assert all(slugs == set() for lg_slug, slugs in mismatched.items() if lg_slug != "nwsl")

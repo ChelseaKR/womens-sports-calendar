@@ -24,6 +24,7 @@ class LeagueCoverage:
     games_with_price: int
     games_date_tbd: int
     teams_truncated: list[str] = field(default_factory=list)
+    teams_with_mismatched_events: list[str] = field(default_factory=list)
 
     @property
     def team_hit_rate(self) -> float:
@@ -66,6 +67,7 @@ def compute_league_coverage(
     league: League,
     games: list[Game],
     truncated_team_slugs: set[str],
+    mismatched_team_slugs: set[str] | None = None,
 ) -> LeagueCoverage:
     teams_with_games = {g.tracked_team_slug for g in games}
     return LeagueCoverage(
@@ -77,6 +79,7 @@ def compute_league_coverage(
         games_with_price=sum(1 for g in games if g.price is not None),
         games_date_tbd=sum(1 for g in games if g.date_tbd),
         teams_truncated=sorted(truncated_team_slugs),
+        teams_with_mismatched_events=sorted(mismatched_team_slugs or set()),
     )
 
 
@@ -123,6 +126,13 @@ def render_report(coverage: BuildCoverage) -> str:
             lines.append(
                 f"  WARNING: possibly-incomplete (Discovery API reported "
                 f"more than one page) for: {', '.join(lc.teams_truncated)}"
+            )
+        if lc.teams_with_mismatched_events:
+            lines.append(
+                f"  NOTE: excluded >=1 Discovery API keyword-search result "
+                f"that did not actually name the team (a false-positive "
+                f"match, e.g. wrong sport/wrong team at the same venue or "
+                f"city) for: {', '.join(lc.teams_with_mismatched_events)}"
             )
         lines.append("")
 
