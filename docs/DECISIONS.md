@@ -121,3 +121,38 @@ its exact genre taxonomy values were not confirmed against a live call in
 this session (see PR description), and guessing at that string risks
 silently returning zero results for a team, which is worse than the residual
 gap it would close.
+
+## 0011 — WPBL examined and not added: zero Ticketmaster coverage, not a licensing block (2026-09-16)
+
+WPBL (Women's Pro Baseball League) — a real, currently operating
+professional women's baseball league that began its inaugural season
+2026-08-01, with four fixed city-franchise teams (Boston Hunters, New York
+Heights, Los Angeles Queens, San Francisco Firebells) — was evaluated as a
+fifth tracked league and **not added**.
+
+Team-identity shape passed (fixed, season-long rosters, same as
+WNBA/NWSL/PWHL/AUSL, unlike AU's redrafted disciplines). Licensing turned
+out to be moot, same as every other league (DECISIONS 0006: no league's own
+site is ever read) — and WPBL's own site is, if anything, the *least*
+restrictive found in this whole survey: no Terms of Use page exists at all,
+its Privacy Policy has no automated-access or commercial-use clause, and
+its robots.txt is a permissive WordPress default. None of that matters,
+because the actual blocker is structural and empirical: WPBL's own tickets
+page names **TicketReturn** (ticketreturn.com), not Ticketmaster, as its
+ticketing partner, and a direct Ticketmaster search for all four 2026 teams
+plus the bare league name returned **zero results across the board** —
+100% of the league checked, not a sample, confirmed 2026-09-16. This is a
+clean, total absence (contrast the AUSL addition, DECISIONS 0008, where a
+spot-check found real per-venue inventory before it was tracked). Adding
+WPBL under the current Ticketmaster-only data model (DECISIONS 0006) would
+ship team and league pages, and `.ics` feeds, that can never contain a real
+game or price — the "absence rendered as a value" failure mode this
+portfolio treats as a real defect elsewhere, not an acceptable degraded
+state to ship on purpose.
+
+Recorded in `docs/LICENSES-AND-ATTRIBUTION.md` §1 (WPBL entry) and §5
+(summary table); `LEAGUES_EXAMINED_NOT_INCLUDED` in
+`pipeline/src/wsc_pipeline/config.py` gets a WPBL entry alongside NCAA/
+Unrivaled/LOVB. Nothing in `config.py`'s tracked `LEAGUES` tuple changes.
+Re-check if WPBL ever signs with Ticketmaster or a future season adds
+teams/venues that do.

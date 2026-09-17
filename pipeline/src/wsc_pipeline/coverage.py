@@ -94,7 +94,7 @@ def render_report(coverage: BuildCoverage) -> str:
         lines.append("")
 
     lines.append(
-        f"Leagues examined for licensing: 7 "
+        f"Leagues examined for licensing: 8 "
         f"(see docs/LICENSES-AND-ATTRIBUTION.md). Leagues configured and "
         f"queried this build: {coverage.leagues_examined}. Leagues with "
         f"at least one game found: {coverage.leagues_with_games}."

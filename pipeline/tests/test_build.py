@@ -38,7 +38,7 @@ def test_degraded_build_with_no_api_key_succeeds_and_says_so(tmp_path: Path):
 
     site_json = json.loads((out_dir / "data" / "site.json").read_text())
     assert site_json["api_key_present"] is False
-    assert len(site_json["leagues_examined_not_included"]) == 4
+    assert len(site_json["leagues_examined_not_included"]) == 5
 
 
 def test_degraded_build_emits_valid_ics_with_zero_events(tmp_path: Path):

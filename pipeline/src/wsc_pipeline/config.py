@@ -14,6 +14,12 @@ https://www.espn.com/mlb/story/_/id/49000604/athletes-unlimited-softball-league-
 (read 2026-09-14). AUSL is Athletes Unlimited's softball league; Athletes
 Unlimited's other three disciplines (basketball, lacrosse, volleyball) are
 NOT tracked -- see LEAGUES_EXAMINED_NOT_INCLUDED below for why.
+
+WPBL (Women's Pro Baseball League) was examined 2026-09-16 (docs/DECISIONS.md
+0009) and NOT added: it is a real, currently operating league with fixed
+team franchises, so team identity was never the blocker, and licensing was
+moot as usual -- but a direct Ticketmaster search for all four of its 2026
+teams and the bare league name returned zero results across the board.
 """
 
 from __future__ import annotations
@@ -200,6 +206,23 @@ LEAGUES_EXAMINED_NOT_INCLUDED: tuple[dict[str, str], ...] = (
             "Terms of Service (same automated-access and commercial-use "
             "bans as auprosports.com) rules out AUSL's own site either "
             "way, since only Ticketmaster is queried."
+        ),
+    },
+    {
+        "name": "WPBL (Women's Pro Baseball League)",
+        "reason": (
+            "Real, currently operating league (inaugural season started "
+            "2026-08-01) with four fixed city franchises -- same "
+            "team-identity shape as WNBA/NWSL/PWHL/AUSL. Not a licensing "
+            "gap: WPBL's own site has no Terms of Use page at all and a "
+            "permissive robots.txt, the least restrictive of any league "
+            "examined -- moot anyway, since no league's own site is ever "
+            "read. Not configured as a tracked league because "
+            "Ticketmaster coverage is zero: WPBL's own tickets page names "
+            "TicketReturn, not Ticketmaster, as its ticketing partner, "
+            "and a direct Ticketmaster search for all four 2026 teams "
+            "plus the bare league name returned zero results across the "
+            "board, confirmed 2026-09-16. See docs/DECISIONS.md 0009."
         ),
     },
 )

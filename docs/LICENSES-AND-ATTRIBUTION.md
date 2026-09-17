@@ -18,8 +18,12 @@ all (JS-rendered, no accessible text).** Zero leagues pass on their own
 schedule feed. The Ticketmaster Discovery API is the only source that passes,
 and it becomes the *sole* source of game data, not a price overlay joined to a
 separately-fetched schedule — see `docs/DECISIONS.md` 0006. **Leagues examined:
-7. Leagues in: 0 (own schedule). Games sourced: 100% via Ticketmaster Discovery
-API home-game listings, filtered by team keyword.**
+8. Leagues in: 0 (own schedule). Games sourced: 100% via Ticketmaster Discovery
+API home-game listings, filtered by team keyword.** (WPBL, examined
+2026-09-16, is the eighth — licence-wise it is the one outlier with no
+restrictive terms found, but it is still not tracked: see its entry in §1 and
+`docs/DECISIONS.md` 0009 for the actual, dispositive reason — zero
+Ticketmaster coverage.)
 
 ## 1. League schedule sources — examined, not used
 
@@ -255,6 +259,96 @@ licence-before-bytes rule (`docs/DECISIONS.md` 0003).
     sites were never going to be read either way, same reasoning as
     every other league in this document).
 
+### WPBL (Women's Pro Baseball League)
+
+Checked 2026-09-16 as a candidate fifth tracked league — its inaugural season
+started 2026-08-01, so unlike Unrivaled/LOVB/AU it is a *currently playing*
+league, not just announced.
+
+- **What WPBL actually is, confirmed fresh (not assumed):** a real,
+  currently operating independent professional women's baseball league (no
+  MLB affiliation), co-founded by Justine Siegal, the first woman to coach
+  for an MLB organization (then-Oakland Athletics). It is the first
+  professional baseball league for women since the All-American Girls
+  Professional Baseball League dissolved in 1954. Its inaugural 2026 season
+  has four teams with fixed, season-long identities and rosters (players
+  drafted centrally in November 2025, signed to one-season contracts, 15
+  active + 2 inactive per team) — the same "fixed team roster" shape
+  WNBA/NWSL/PWHL/AUSL all have, unlike Athletes Unlimited's other three
+  disciplines, which were correctly excluded above for lacking one:
+  - Boston Hunters (Boston, MA)
+  - New York Heights (New York, NY)
+  - Los Angeles Queens (Los Angeles, CA)
+  - San Francisco Firebells (San Francisco, CA)
+
+  Structural note: unlike every currently-tracked league, WPBL's 2026 season
+  uses a single neutral hub venue — Robin Roberts Stadium in Springfield,
+  Illinois — for every game of every team, rather than each team hosting at
+  its own city's venue. This does not by itself break the pipeline's query
+  mechanism (`pipeline/src/wsc_pipeline/ticketmaster.py` does a team-name
+  keyword search with no venue/city filter, so a hub model would not stop a
+  match), but it is a real structural difference from the pattern worth
+  recording. The league has stated plans to expand to six or eight clubs;
+  not evaluated here since only the four 2026 teams currently exist.
+  Sources: `https://en.wikipedia.org/wiki/Women%27s_Pro_Baseball_League` and
+  `https://www.espn.com/mlb/story/_/id/49533662/2026-womens-pro-baseball-league-where-watch-schedule-more`,
+  both read 2026-09-16.
+- **Terms:** WPBL's own site carries **no Terms of Use / Terms of Service
+  page at all** — `https://www.womensprobaseballleague.com/terms-of-use/`
+  and `/terms-of-service/` both → **HTTP 404**, and the footer (fetched
+  2026-09-16) links only a Privacy Policy, no separate terms page. The
+  Privacy Policy (`https://www.womensprobaseballleague.com/privacy-policy/`,
+  no effective date shown, read 2026-09-16) contains no clause on automated
+  access, scraping, bots, commercial use, or reproduction/republishing —
+  it covers only personal-data handling. `https://www.womensprobaseballleague.com/robots.txt`
+  returned **HTTP 200** with a standard, permissive WordPress default
+  (`Disallow: /wp-admin/` plus a WPForms block; no blanket disallow, no
+  bot-specific rule). This is the **first league in this survey with no
+  readable restriction found anywhere** — every other league examined
+  either has a blanket commercial/automated-use ban or unreadable terms.
+  Per `docs/DECISIONS.md` 0003, "unknown means not used" is about the
+  *absence of an affirmative grant*, not about a ban — but there being
+  nothing to read at all (no terms page exists to grant or deny) is a
+  meaningfully different shape than NWSL's unreadable-JS-shell case, so it
+  is called out separately here rather than folded into "NOT USED — unknown"
+  language that would imply we found and couldn't parse a page. In any
+  case this is **moot regardless of how it's characterized**, per the
+  standing rule (DECISIONS 0006): no league's own site is ever read by this
+  pipeline, WPBL's schedule included — only Ticketmaster is queried, and
+  team names in text are nominative fair use, the same footing every
+  already-tracked team name stands on.
+- **Ticketmaster coverage — checked empirically, not assumed:** WPBL's own
+  tickets page (`https://www.womensprobaseballleague.com/tickets/`, read
+  2026-09-16) names its ticketing partner explicitly: single-game tickets
+  "starting at $22" and group tickets are sold through **TicketReturn**
+  (`ticketreturn.com`), not Ticketmaster — Ticketmaster is not named or
+  linked anywhere on that page. Spot-checked Ticketmaster's own search
+  directly for all four 2026 teams (100% of the league, not a partial
+  sample) plus the bare league name, 2026-09-16:
+  - `ticketmaster.com/search?q=Boston Hunters WPBL` → **0 results**
+  - `ticketmaster.com/search?q=New York Heights WPBL` → **0 results**
+  - `ticketmaster.com/search?q=Los Angeles Queens WPBL` → **0 results**
+  - `ticketmaster.com/search?q=San Francisco Firebells` → **0 results**
+  - `ticketmaster.com/search?q=WPBL` → **0 results**
+  - No listing found for the venue itself either (Robin Roberts Stadium,
+    Springfield, IL) under a Ticketmaster venue page.
+
+  Every result returned Ticketmaster's own "no upcoming events" message,
+  not merely a thin result. This is a clean, total absence, not a sparse
+  one — the opposite of the AUSL spot-check (2026-09-14 addendum above),
+  which found real per-venue inventory before AUSL was added.
+- **Verdict: NOT ADDED.** Team-identity shape holds up (fixed franchises,
+  same as WNBA/NWSL/PWHL/AUSL) and the licence question turns out moot
+  either way (no site is ever read, and WPBL's own terms are in any case
+  the least restrictive found in this survey). The pipeline's entire data
+  model is "Ticketmaster Discovery API event for a tracked team's keyword
+  search, or nothing" (DECISIONS 0006) — with confirmed **zero**
+  Ticketmaster inventory across all four teams and the league name itself,
+  adding WPBL would ship four team pages and `.ics` feeds that can never
+  contain a game or a price, which is exactly the "absence rendered as
+  emptiness presented as if it were coverage" failure mode this repo
+  avoids elsewhere. See `docs/DECISIONS.md` 0009.
+
 ## 2. Ticket data and prices — Ticketmaster Discovery API
 
 - **What we take:** event id, venue, date/time (with TZID), price range
@@ -367,14 +461,17 @@ part of this repo's own design (`docs/DECISIONS.md`, README). See
 | Unrivaled | schedule | **No** | Automated-collection ban + explicit "commercial purpose... collecting product prices" ban | — |
 | LOVB | schedule | **No** | Commercial-use + data-mining/robots ban | — |
 | Athletes Unlimited | schedule | **No** | Automated-access ban + commercial-exploitation ban | — |
+| WPBL | schedule | **No — moot** | No terms page exists at all (least-restrictive site found, but no league site is ever read); **not tracked anyway — zero Ticketmaster coverage across all 4 teams, confirmed 2026-09-16** | — |
 | **Ticketmaster Discovery API** | event id, venue, date/time, price range, purchase URL | **Yes — sole source** | No ban on affiliate-monetised display of price ranges; nightly caching is "reasonable periods"; we never replicate Ticketmaster.com | 1 req/s self-imposed (published: 2–5 req/s conflicting, 5000/day agreed); attribution shown though not required |
 | Impact (Ticketmaster affiliate) | plain affiliate URL, applied server-side to `event.url` | **Yes** | Sanctioned monetisation route per TM's own FAQ | Impact publisher ID configured in TM developer account; approval discretionary |
 
-**Leagues examined: 7 (WNBA, PWHL, NWSL, NCAA women's, Unrivaled, LOVB,
-Athletes Unlimited). Leagues whose own schedule is used: 0.** All game,
+**Leagues examined: 8 (WNBA, PWHL, NWSL, NCAA women's, Unrivaled, LOVB,
+Athletes Unlimited, WPBL). Leagues whose own schedule is used: 0.** All game,
 venue, date, and price data in this product comes from the Ticketmaster
 Discovery API, per league via team-name filtering — see `docs/DECISIONS.md`
-0006 and `pipeline/README.md` for the mechanism.
+0006 and `pipeline/README.md` for the mechanism. WPBL is examined but not
+tracked: see its §1 entry — the blocker is zero Ticketmaster coverage, not
+licensing.
 
 ## 6. What remains unknown
 
