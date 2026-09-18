@@ -32,6 +32,11 @@ WPBL (Women's Pro Baseball League) was examined 2026-09-16 (docs/DECISIONS.md
 team franchises, so team identity was never the blocker, and licensing was
 moot as usual -- but a direct Ticketmaster search for all four of its 2026
 teams and the bare league name returned zero results across the board.
+
+USL W League was examined 2026-09-16 (docs/DECISIONS.md 0014) and NOT
+added: its 96-club 2026 roster was checked against Ticketmaster and came
+back with zero clubs carrying a confirmed, correctly-scoped, current
+listing in a 16-club spot-check -- see LEAGUES_EXAMINED_NOT_INCLUDED below.
 """
 
 from __future__ import annotations
@@ -314,6 +319,26 @@ LEAGUES_EXAMINED_NOT_INCLUDED: tuple[dict[str, str], ...] = (
             "and a direct Ticketmaster search for all four 2026 teams "
             "plus the bare league name returned zero results across the "
             "board, confirmed 2026-09-16."
+        ),
+    },
+    {
+        "name": "USL W League",
+        "reason": (
+            "Examined 2026-09-16 and not added -- coverage, not licensing, "
+            "is the reason (uslsoccer.com's Terms of Use would fail the "
+            "same way every other league's do, but that was never the "
+            "blocker). The 2026 "
+            "season has 96 clubs across 16 divisions, a much larger and "
+            "more volatile roster than any tracked league. A 16-club "
+            "Ticketmaster spot-check spanning pro-affiliated and "
+            "independent clubs found zero with a confirmed, "
+            "correctly-scoped, current Ticketmaster listing; the few "
+            "clubs with any Ticketmaster presence returned either no "
+            "events or only their affiliated men's team's games. Two "
+            "clubs (Racing Louisville FC, North Carolina Courage U23) "
+            "also collide by name with already-tracked NWSL franchises. "
+            "No scoped subset presented itself the way Big Ten (NCAA) or "
+            "six franchises (AUSL) did."
         ),
     },
 )

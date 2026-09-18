@@ -18,12 +18,14 @@ all (JS-rendered, no accessible text).** Zero leagues pass on their own
 schedule feed. The Ticketmaster Discovery API is the only source that passes,
 and it becomes the *sole* source of game data, not a price overlay joined to a
 separately-fetched schedule — see `docs/DECISIONS.md` 0006. **Leagues examined:
-8. Leagues in: 0 (own schedule). Games sourced: 100% via Ticketmaster Discovery
+9. Leagues in: 0 (own schedule). Games sourced: 100% via Ticketmaster Discovery
 API home-game listings, filtered by team keyword.** (WPBL, examined
 2026-09-16, is the eighth — licence-wise it is the one outlier with no
 restrictive terms found, but it is still not tracked: see its entry in §1 and
 `docs/DECISIONS.md` 0011 for the actual, dispositive reason — zero
-Ticketmaster coverage.)
+Ticketmaster coverage. USL W League, examined the same day, is the ninth and
+is not tracked either: see its entry in §1 and `docs/DECISIONS.md` 0014 —
+too little Ticketmaster coverage across its 96 clubs.)
 
 ## 1. League schedule sources — examined, not used
 
@@ -479,6 +481,138 @@ league, not just announced.
   emptiness presented as if it were coverage" failure mode this repo
   avoids elsewhere. See `docs/DECISIONS.md` 0011.
 
+### USL W League
+
+Checked 2026-09-16, considered as a further tracked league per the established
+WNBA/NWSL/PWHL/AUSL pattern (Ticketmaster team-keyword search, never the
+league's own site).
+
+- **Terms:** `https://www.uslsoccer.com/terms-of-use`, **Last Updated: June
+  17, 2024**, read 2026-09-16. This single document governs "USL Family"
+  properties and explicitly names "USL W-League" in its definition of
+  League Entities (*"...the entities operating the USL Championship League,
+  Gainbridge Super League, USL League One, USL League Two, USL W-League,
+  USL Academy, USL Youth"*). `uslwleague.com` carries no separate terms
+  page of its own (checked; no terms link surfaced in its footer/nav), so
+  this is the operative document for the W League too.
+  - Automated-collection ban: *"use or attempt to use any engine, software,
+    tool, agent or other device or mechanism (including, without
+    limitation, browsers, spiders, robots, avatars or intelligent agents)
+    to navigate or search the Services to harvest or otherwise collect
+    information from the Services to be used for any commercial
+    purpose"* — on point for a pipeline that would fetch and republish
+    schedule data commercially.
+  - Content licence: *"You may download one copy of each piece of Content
+    from the Services to any single computer for your personal,
+    noncommercial use only"* — "Content" is defined broadly (*"video,
+    audio, photos, text, images, user interfaces, graphics, statistics,
+    updated scores, news, ... logos and all copyrights and intellectual
+    property"*) and, read plainly, covers a published schedule.
+  - "USL Statistics" (a narrower defined term) carries its own explicit
+    commercial ban: *"the USL Statistics may not be used in connection
+    with any sponsorship or commercial activity"* — same shape as WNBA §9.
+  - `https://www.uslwleague.com/robots.txt` is largely permissive to a
+    generic UA (`Disallow: /documents`, `/assets`, `/news-sections`, and a
+    handful of other paths; no blanket ban) but separately disallows a
+    specifically-identified bot (`008`) from the whole site — informative,
+    not a licence, per this doc's standing practice.
+- **Verdict on the league's own site: NOT USED**, same reasoning and outcome
+  as every other league in this document — and moot, per
+  `docs/DECISIONS.md` 0006: no league's own schedule source was ever a
+  candidate, because tracking means a Ticketmaster Discovery API keyword
+  search per team, never a read of the league's site. This confirms the
+  standing rule applies here too; it is not, on its own, why USL W League
+  ends up untracked — see the addendum immediately below.
+
+#### Addendum, read 2026-09-16: USL W League NOT added — Ticketmaster
+#### coverage, not licensing, is the blocker
+
+Per this repo's licence-before-bytes rule, licensing was checked first and,
+as above, is moot (same as AUSL's addendum above). The open question was
+the same one AUSL settled affirmatively: does this league have a stable set
+of team names to keyword-search, and does Ticketmaster actually carry
+inventory for them? Both parts were checked here and both come back
+negative at a scale that rules the league out entirely, not just a subset
+of it.
+
+**1. Roster size and volatility.** The 2026 USL W League season fields **96
+clubs across 16 divisions in 4 conferences**, per
+`https://www.uslwleague.com/league-teams` and
+`https://en.wikipedia.org/wiki/2026_USL_W_League_season` (both read
+2026-09-16) — a near-exact match between the two sources (95–96 clubs; the
+one-name discrepancy is `Tallahassee Reckoning` vs `TLH Reckoning`, the
+same club under two abbreviations). The league added 15 expansion clubs for
+2026 alone and created an entirely new "Northeast Division" from scratch —
+the "large and somewhat volatile roster" this league is known for,
+confirmed rather than assumed.
+
+**2. Ticketmaster spot-check.** 16 clubs were sampled across all four
+conferences (2026-09-16, via `ticketmaster.com` artist/venue pages and web
+search — same method as the AUSL venue spot-check above), deliberately
+mixing clubs affiliated with an existing pro men's team (the *best case*
+for Ticketmaster coverage, since those clubs' parent organizations already
+run Ticketmaster inventory for the men's side) with small independent
+clubs:
+
+| Club | Division | Ticketmaster finding |
+|---|---|---|
+| Detroit City FC (Women's Team) | Great Forest (MI) | Has a distinct TM artist page (`artist/2854323`) — but **0 events listed**: "we couldn't find any upcoming matches" |
+| Hartford Athletic | Northeast | TM artist page active with 7 upcoming events — **all are the men's USL Championship team's games** (Las Vegas Lights, Louisville City, etc.); zero W League fixtures despite the club fielding a W League team |
+| Indy Eleven | Valley | Men's team has a full TM artist page; actual **W League tickets are sold via GoFevo** (`gofevo.com/group/indyelevenwleaguetickets2026`), a separate platform, per the club's own ticket page |
+| Charlotte Eagles | South Central | TM artist page exists (`artist/857382`) — **0 events listed** |
+| One Knoxville SC | South Central | TM results return only the unrelated men's USL League One club; no distinct W League listing found |
+| Oakland Soul SC | Nor Cal | Not on Ticketmaster; SeatGeek is the club's stated ticketing partner |
+| Minnesota Aurora FC | Heartland | No confirmed direct TM Discovery listing; primary ticketing is the club's own site / SeatGeek |
+| Union FC Macomb | Great Lakes | Not on Ticketmaster; own site, StubHub, SeatGeek |
+| Sioux Falls City FC | Heartland | Not on Ticketmaster; sold directly on the club's own site |
+| Long Island Rough Riders | Metropolitan | Not on Ticketmaster; sold via vivenu |
+| Racing Louisville FC (W League team) | Valley | Not on Ticketmaster; SeatGeek exclusively — **and this name collides with the already-tracked NWSL team of the same name** (see item 3) |
+| NC Courage U23 | South Atlantic | Not on Ticketmaster; Vivid Seats resale listing only, no confirmed primary listing — **also collides with the already-tracked NWSL "North Carolina Courage"** |
+| Snohomish United | Northwest | Not on Ticketmaster; sold via vivenu |
+| Tacoma Galaxy | Northwest | Not on Ticketmaster; sold via vivenu |
+| Virginia Beach United | Chesapeake | Not on Ticketmaster; sold on the club's own site |
+| Carolina Ascent FC | *(not W League)* | Ticketmaster does list this club, but it plays in **USL Super League**, a separate fully-professional league — not a W League club at all; surfaced here as a name-confusion hazard, not counted as a coverage data point |
+
+**Result: 0 of 15 genuine USL W League clubs sampled had a confirmed,
+correctly-scoped, current Ticketmaster listing.** The three clubs with any
+Ticketmaster artist page at all (Detroit City FC, Hartford Athletic,
+Charlotte Eagles — not coincidentally, the three most affiliated with an
+existing pro men's team) either return zero events or return only the
+men's team's games. That is a worse failure mode than plain absence: a
+naive team-keyword query against these would either silently return
+nothing (fine, matches every other league's "no game found" path) or
+silently return the wrong team's games mislabeled as this product's
+women's-league data. `pipeline/src/wsc_pipeline/ticketmaster.py`'s
+query-matching logic is out of scope for this change, but this finding is
+worth a note for whoever next touches that matching logic.
+
+**3. Roster-name collisions with already-tracked leagues.** At least two
+2026 USL W League clubs are named identically, or near-identically, to
+teams this product already tracks under NWSL: **Racing Louisville FC** (an
+NWSL franchise already tracked; the W League club is a developmental
+affiliate side sharing the exact same name) and **North Carolina Courage
+U23**, which overlaps enough with the tracked NWSL **North Carolina
+Courage** to make a keyword search ambiguous even before coverage is
+considered. This would need its own resolution even in a world where
+Ticketmaster coverage were otherwise solid — it isn't, so it is recorded
+here but not acted on further.
+
+**Verdict: NOT ADDED.** Unlike AUSL (where the licence question was the
+only open one, and it resolved in favour of tracking once six stable
+franchises and confirmed Ticketmaster venue inventory were both in hand),
+USL W League fails the second, empirical test this repo requires before
+adding any league: Ticketmaster coverage was checked, not assumed, across a
+representative sample spanning the league's best case (pro-affiliated
+clubs) to its typical case (independent local clubs), and it came back
+essentially empty. Given 96 clubs and this sample's uniform result, no
+scoped subset (the way NCAA scoped to Big Ten, or AUSL scoped to six
+franchises) presents itself — there is no cluster of USL W League clubs
+with confirmed live Ticketmaster inventory large enough to justify a
+tracked-league entry. This is a coverage finding, not a licensing one
+(licensing was moot here exactly as it is for every other tracked league);
+revisit only if Ticketmaster's own listings for these clubs change, not by
+re-reading the league's terms.
+
 ## 2. Ticket data and prices — Ticketmaster Discovery API
 
 - **What we take:** event id, venue, date/time (with TZID), price range
@@ -593,16 +727,20 @@ part of this repo's own design (`docs/DECISIONS.md`, README). See
 | LOVB | schedule | **No** | Commercial-use + data-mining/robots ban | — |
 | Athletes Unlimited | schedule | **No** | Automated-access ban + commercial-exploitation ban | — |
 | WPBL | schedule | **No — moot** | No terms page exists at all (least-restrictive site found, but no league site is ever read); **not tracked anyway — zero Ticketmaster coverage across all 4 teams, confirmed 2026-09-16** | — |
+| USL W League (uslsoccer.com terms) | schedule | **No** | Automated-collection-for-commercial-purpose ban + personal/noncommercial content licence; moot anyway — not added regardless, for coverage reasons (see §1 addendum) | — |
 | **Ticketmaster Discovery API** | event id, venue, date/time, price range, purchase URL | **Yes — sole source** | No ban on affiliate-monetised display of price ranges; nightly caching is "reasonable periods"; we never replicate Ticketmaster.com | 1 req/s self-imposed (published: 2–5 req/s conflicting, 5000/day agreed); attribution shown though not required |
 | Impact (Ticketmaster affiliate) | plain affiliate URL, applied server-side to `event.url` | **Yes** | Sanctioned monetisation route per TM's own FAQ | Impact publisher ID configured in TM developer account; approval discretionary |
 
-**Leagues examined: 8 (WNBA, PWHL, NWSL, NCAA women's, Unrivaled, LOVB,
-Athletes Unlimited, WPBL). Leagues whose own schedule is used: 0.** All game,
-venue, date, and price data in this product comes from the Ticketmaster
-Discovery API, per league via team-name filtering — see `docs/DECISIONS.md`
+**Leagues examined: 9 (WNBA, PWHL, NWSL, NCAA women's, Unrivaled, LOVB,
+Athletes Unlimited, WPBL, USL W League). Leagues whose own schedule is used:
+0.** All game, venue, date, and price data in this product comes from the
+Ticketmaster Discovery API, per league via team-name filtering — see `docs/DECISIONS.md`
 0006 and `pipeline/README.md` for the mechanism. WPBL is examined but not
 tracked: see its §1 entry — the blocker is zero Ticketmaster coverage, not
 licensing.
+USL W League is examined but not tracked for the same kind of reason: a
+16-club Ticketmaster spot-check across its 96 clubs found none with
+confirmed, correctly scoped coverage (§1 addendum, dated 2026-09-16).
 
 ## 6. What remains unknown
 

@@ -51,7 +51,7 @@ def test_degraded_build_with_no_api_key_succeeds_and_says_so(tmp_path: Path):
     assert all(lg["games_count"] is None for lg in site_json["leagues"])
     team_json = json.loads((out_dir / "data" / LEAGUES[0].slug / f"{LEAGUES[0].teams[0].slug}.json").read_text())
     assert team_json["fetched"] is False
-    assert len(site_json["leagues_examined_not_included"]) == 5
+    assert len(site_json["leagues_examined_not_included"]) == 6
 
 
 def test_degraded_build_emits_valid_ics_with_zero_events(tmp_path: Path):
