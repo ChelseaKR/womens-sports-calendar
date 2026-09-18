@@ -675,7 +675,7 @@ def _freshness_note(payload: Mapping[str, object]) -> str:
     when = datetime.fromisoformat(str(fetched_at)).astimezone(UTC)
     shown = f"{when:%A} {when.day} {when:%B %Y}, {when:%H:%M} UTC"
     return (
-        f'<p class="schedule-source-note data-freshness">Listings as of <time datetime="{e(str(fetched_at))}">'
+        f'<p class="schedule-source-note data-freshness">Listings as of <time datetime="{e(when.isoformat(timespec="seconds"))}">'
         f"{e(shown)}</time>, from Ticketmaster. They are refreshed every night.</p>\n"
     )
 

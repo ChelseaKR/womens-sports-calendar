@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from importlib.metadata import version
 from pathlib import Path
 
@@ -94,7 +94,10 @@ def test_league_and_team_pages_say_when_the_listings_were_fetched(
         html = page.read_text()
         match = re.search(r'Listings as of <time datetime="([^"]+)">([^<]+) UTC</time>', html)
         assert match, f"{page}: no fetch time on the page"
-        assert match.group(1) == stamp
+        # HTML's valid-date-time allows at most three fractional digits; a raw
+        # isoformat() carries six and failed the deploy's html validation.
+        assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?([+-]\d{2}:\d{2}|Z)", match.group(1))
+        assert match.group(1) == datetime.fromisoformat(stamp).astimezone(UTC).isoformat(timespec="seconds")
 
 
 @pytest.mark.parametrize("source_id", [site_data.SOURCE_ID])
