@@ -76,6 +76,42 @@ BUILD_FLAGS ?=
 build:
 	uv run python -m wsc_pipeline.build --out dist --base-url $(BASE_URL) $(BUILD_FLAGS)
 
+.PHONY: install-perf perf
+
+# Performance, Core Web Vitals lab gate and Lighthouse accessibility score
+# (PERFORMANCE-STANDARD §3, OBSERVABILITY-STANDARD §8, ACCESSIBILITY-STANDARD
+# A11Y-02), from one config: perf/lighthouse.json. Lighthouse runs against
+# the built site on a local server (a separate port from `a11y`), using the
+# same Chrome build puppeteer pins for `a11y`, so local and CI measure with
+# one browser version. The self-test first proves the budgets reject a page
+# with a heavy, blocking script. Regression is checked against the committed
+# perf/baseline.json.
+PERF_FLAGS ?=
+
+install-perf:
+	npm ci --prefix perf --no-audit --no-fund
+
+# bash, not the POSIX /bin/sh CI runners default to (dash has no pipefail).
+perf: SHELL := /bin/bash
+perf: install install-a11y install-perf build
+	set -euo pipefail; \
+	rm -rf dist/_a11y-fixtures; \
+	uv run python scripts/render_a11y_fixtures.py; \
+	CHROME_PATH="$$(node -e 'import("puppeteer").then((p) => console.log(p.default.executablePath()))')"; \
+	export CHROME_PATH; \
+	python3 -m http.server 8918 --directory dist >/tmp/wsc-perf-server.log 2>&1 & \
+	server_pid=$$!; \
+	trap 'kill $$server_pid' EXIT; \
+	for i in $$(seq 1 20); do \
+		curl -sf http://127.0.0.1:8918/style.css > /dev/null 2>&1 && break; \
+		sleep 0.25; \
+	done; \
+	node perf/lighthouse_budgets.mjs --self-test dist http://127.0.0.1:8918; \
+	node perf/lighthouse_budgets.mjs http://127.0.0.1:8918 perf/lighthouse.json perf/baseline.json perf/report.json $(PERF_FLAGS)
+
+# Adds `perf` to `verify`; make merges the prerequisites of both `verify` rules.
+verify: perf
+
 # html5validator is a pinned dev dependency (pyproject.toml), synced by
 # `make install` -- plain `uv run` reuses that venv. It used to be pulled in
 # ad hoc via `uv run --with html5validator`, which re-resolves and builds a
