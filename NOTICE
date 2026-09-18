@@ -1,0 +1,25 @@
+Next Home Game (womens-sports-calendar)
+Copyright (c) 2026 Chelsea Kelly-Reif
+
+The software in this repository (source code, tests, build and CI
+configuration, and the documentation written for it) is licensed under the
+Elastic License 2.0. See LICENSE.
+
+That license does not cover the following. Each keeps its own terms:
+
+- Schedule, event, venue and price data. Game schedules belong to the
+  leagues and teams that set them. The listings this project publishes are
+  fetched at build time from the Ticketmaster Discovery API and used under
+  Ticketmaster's Developer Portal terms of use, which do not allow
+  sublicensing. None of that data is stored in this repository, and LICENSE
+  grants no rights to it. docs/LICENSES-AND-ATTRIBUTION.md records the terms
+  each source was read under, and docs/data/ticketmaster-discovery-api.md
+  records what is fetched and how long it is kept.
+- League, team and venue names and marks, which belong to their owners.
+  They appear only to identify whose games are listed. No affiliation with
+  or endorsement by any league, team, venue or ticket seller is implied.
+- The fonts in pipeline/assets/fonts/, which are under the SIL Open Font
+  License 1.1. The license files and pipeline/assets/fonts/README.md are in
+  that directory.
+- docs/standards/, which is a vendored copy of the portfolio standards
+  (ChelseaKR/portfolio-standards) and is under that repository's license.
