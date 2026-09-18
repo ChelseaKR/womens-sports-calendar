@@ -41,28 +41,37 @@ on:
 permissions:
   contents: read
 
+# Deploys serialize and are never cancelled mid-flight (CI-CD-STANDARD §8b,
+# CICD-23): cancelling an in-progress deploy can leave Pages half-promoted.
+# The constant group is the §11c "deliberate exception" -- only the newest
+# pending run matters for a deploy, and this workflow produces no required
+# status check.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   UV_VERSION: "0.12.9"
 
 jobs:
-  build-and-deploy:
-    name: build the pipeline output and deploy it to Pages
+  # Build and deploy are separate jobs so that the job holding the
+  # Ticketmaster secrets has no write token and no OIDC identity, and the job
+  # that can write to Pages never sees a secret or runs repository code
+  # (CI-CD-STANDARD §2, CICD-04). Neither job restores a cache: this build
+  # produces the deployed artifact, and cache poisoning would reach
+  # production (CI-CD-STANDARD §8c, CICD-24).
+  build:
+    name: build and validate the site
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: read
-      pages: write # publish the artifact; the only write here, and not to the repo
-      id-token: write # deploy-pages authenticates by OIDC rather than a stored secret
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     defaults:
       run:
         working-directory: pipeline
+        # bash -eo pipefail instead of the default bash -e (see ci.yml); each
+        # step adds -u.
+        shell: bash
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -74,47 +83,74 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           python-version: "3.12"
-          enable-cache: true
+          enable-cache: false
 
       - name: make install
-        run: make install
+        run: |
+          set -euo pipefail
+          make install
 
       # If any check here (including the absence-discipline and
       # duplicate-UID tests) fails, the job stops -- nothing downstream
       # runs, and nothing gets deployed.
       - name: make test
-        run: make test
+        run: |
+          set -euo pipefail
+          make test
 
       # --require-api-key: a missing TICKETMASTER_API_KEY fails this step
       # instead of producing a degraded, fetched-nothing site. Any fetch
-      # failure also fails it. Either way the job stops before
-      # Configure/Upload/Deploy Pages run.
+      # failure also fails it. Either way the job stops before the artifact
+      # is uploaded and the deploy job never starts. SITE_BASE_URL arrives
+      # through env, never interpolated into the script (zizmor
+      # template-injection).
       - name: make build
         env:
           TICKETMASTER_API_KEY: ${{ secrets.TICKETMASTER_API_KEY }}
           TICKETMASTER_AFFILIATE_ID: ${{ secrets.TICKETMASTER_AFFILIATE_ID }}
-        run: make build BASE_URL="${{ vars.SITE_BASE_URL || 'https://nexthomegame.com' }}" BUILD_FLAGS=--require-api-key
+          SITE_BASE_URL: ${{ vars.SITE_BASE_URL }}
+        run: |
+          set -euo pipefail
+          make build BASE_URL="${SITE_BASE_URL:-https://nexthomegame.com}" BUILD_FLAGS=--require-api-key
 
       - name: make validate-html
-        run: make validate-html
+        run: |
+          set -euo pipefail
+          make validate-html
 
       # The real, fetched feeds -- the files subscribers' calendar apps
       # re-fetch -- validated before anything is deployed: every linked
       # feed exists, parses, has no duplicate UIDs, and matches its page.
       # A failure stops the job here; the last good deploy stays live.
       - name: make validate-ics
-        run: make validate-ics
+        run: |
+          set -euo pipefail
+          make validate-ics
 
       - name: Print the coverage report to the job summary
-        run: cat dist/COVERAGE.txt >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Configure Pages
-        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+        run: |
+          set -euo pipefail
+          cat dist/COVERAGE.txt >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the built site
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: pipeline/dist
+
+  deploy:
+    name: deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write # publish the artifact; the only write here, and not to the repo
+      id-token: write # deploy-pages authenticates by OIDC rather than a stored secret
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure Pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
 
       - name: Deploy
         id: deployment
