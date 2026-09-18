@@ -14,7 +14,7 @@ the calendar feeds carry no tracking of any kind.
 [moved to private strategy notes]
 
 **Status: Production.** Live at https://nexthomegame.com and rebuilt every
-night. Private repository.
+night. Public repository since 2026-09-18; see [License](#license).
 
 ## Quickstart
 
@@ -61,7 +61,7 @@ says the schedule was not fetched, never "no games". With a key
   turns Google signals and ad personalisation off, and denies
   analytics storage for the EEA, UK and Switzerland. The `.ics` feeds are
   never tracked.
-- `docs/` — research, decisions, licences and attributions.
+- `docs/` — decisions, licenses and attributions.
 - `.github/workflows/` — `ci.yml` (`make verify` on every push and PR) and
   `pages.yml` (the nightly and manual build and GitHub Pages deploy).
 - `docs/adr/` — architecture decisions from 2026-09-17 on
@@ -81,6 +81,11 @@ is what is used). Still open, owner steps: the `https://www` certificate,
 and verifying the Google Search Console Domain property (a DNS TXT record
 in the Route 53 zone) and submitting `https://nexthomegame.com/sitemap.xml`.
 
+Since 2026-09-18 the site deploys from this public repository. The
+repository it was built in before then is archived and private, so pull
+request numbers up to #38 in `CHANGELOG.md` and `docs/DECISIONS.md` refer
+to it, not to this one.
+
 ## Not yet decided
 
 The pages say "Next Home Game" (header, `<title>`, `og:site_name`), matching
@@ -97,21 +102,30 @@ scholarly or civic-reuse intent.
 
 | Standard | State |
 |---|---|
-| Responsible-Tech Framework | Applies — gap tracked in #29 (audits A, C and F drafted in `docs/RESPONSIBLE-TECH-AUDITS.md`, pending owner sign-off) |
-| Code Quality | Applies — gap tracked in #22 (ruff, mypy --strict, an 85% branch floor, lock-drift and pip-audit gates in `make verify`; mutation testing open) |
-| Security & Supply-Chain | Applies — gap tracked in #23 (gitleaks, TruffleHog, Semgrep and OSV-Scanner gates; Scorecard and release signing open) |
-| CI/CD | Applies — gap tracked in #24 (the protect-main ruleset is committed but not applied) |
-| Release & Versioning | Applies — gap tracked in #28 (the deployed site is the release; there is no release process yet) |
-| Observability | Applies — gap tracked in #25 (Tier B site, Tier C pipeline; no field Core Web Vitals) |
-| Performance | Applies — gap tracked in #33 (Lighthouse budgets with a committed baseline; k6 N/A: static files, no server route of ours) |
-| Accessibility | Applies — gap tracked in #26 (WCAG 2.2 AA target; axe, pa11y, keyboard, reflow and motion gates on every page; no human review yet; statement in `docs/a11y/STATEMENT.md`) |
-| Internationalization | Applies — gap tracked in #27 (English-only; a deferral is declared in `docs/I18N.md`, owner decision pending) |
+| Responsible-Tech Framework | Applies — gap tracked in #8 (audits A, C and F drafted in `docs/RESPONSIBLE-TECH-AUDITS.md`, pending owner sign-off) |
+| Code Quality | Applies — gap tracked in #1 (ruff, mypy --strict, an 85% branch floor, lock-drift and pip-audit gates in `make verify`; mutation testing open) |
+| Security & Supply-Chain | Applies — gap tracked in #2 (gitleaks, TruffleHog, Semgrep and OSV-Scanner gates; Scorecard and release signing open) |
+| CI/CD | Applies — gap tracked in #3 (the protect-main ruleset is applied as of 2026-09-18; the solo-maintainer declaration and CodeQL for workflows are open) |
+| Release & Versioning | Applies — gap tracked in #7 (the deployed site is the release; there is no release process yet) |
+| Observability | Applies — gap tracked in #4 (Tier B site, Tier C pipeline; no field Core Web Vitals) |
+| Performance | Applies — gap tracked in #12 (Lighthouse budgets with a committed baseline; k6 N/A: static files, no server route of ours) |
+| Accessibility | Applies — gap tracked in #5 (WCAG 2.2 AA target; axe, pa11y, keyboard, reflow and motion gates on every page; no human review yet; statement in `docs/a11y/STATEMENT.md`) |
+| Internationalization | Applies — gap tracked in #6 (English-only; a deferral is declared in `docs/I18N.md`, owner decision pending) |
 | AI Evaluation | N/A — no LLM, prompt, retrieval or model component (ADR 0004) |
-| Documentation | Applies — gap tracked in #31 (nothing yet checks the vendored standards against their tag) |
-| Quality & Metrics | Applies — gap tracked in #32 (`DEFINITION_OF_DONE.md` and a PR template; DORA review and cross-browser smoke open) |
+| Documentation | Applies — gap tracked in #10 (nothing yet checks the vendored standards against their tag) |
+| Quality & Metrics | Applies — gap tracked in #11 (`DEFINITION_OF_DONE.md` and a PR template; DORA review and cross-browser smoke open) |
 | AI Development Measurement | Applies (delivery and quality-debt metrics come from this repository's PR history in the standards repository's rollup; never used as a gate) |
 | Incident Response | Applies (`incident` and `sev1`–`sev4` labels; the postmortem template in `docs/incidents/` and the stale-data alarm in `freshness.yml`; no incidents to date) |
-| Data Governance | Applies — gap tracked in #30 (L1 public listings; a data card, fetch timestamps and a 30-hour freshness alarm; ingest schema and 24-hour removal open) |
-| Discovery & Adoption | Applies (advisory; the repository is private, and the public site carries Open Graph cards on every page) |
+| Data Governance | Applies — gap tracked in #9 (L1 public listings; a data card, fetch timestamps and a 30-hour freshness alarm; ingest schema and 24-hour removal open) |
+| Discovery & Adoption | Applies (advisory; the repository is public, and the site carries Open Graph cards on every page) |
 
-Release cadence: none yet (see #28). The site's data refreshes nightly.
+Release cadence: none yet (see #7). The site's data refreshes nightly.
+
+## License
+
+The code is licensed under the Elastic License 2.0 (`LICENSE`). The license
+doesn't cover schedule, event, venue or price data: game schedules belong to
+the leagues and teams, and the listings come from the Ticketmaster Discovery
+API under Ticketmaster's terms, which don't allow sublicensing. It doesn't
+cover league and team names and marks either. `NOTICE` lists these and the
+other exceptions (the fonts and the vendored standards).
