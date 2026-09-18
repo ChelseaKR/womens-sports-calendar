@@ -5,9 +5,10 @@ site (scripts/build_fixture_site.py), and by pages.yml on the real fetched
 build before deploy. Exits non-zero on the first site that would publish:
 
 1. robots.txt that blocks the site or does not point at the sitemap.
-2. A sitemap that is not well-formed, names a page the build did not write,
-   misses one it did, lists the 404 page, or carries a <lastmod> that is not
-   a W3C date, lies in the future, or disagrees with lastmod.json.
+2. A sitemap that is not well-formed, declares a DTD or an entity, names a
+   page the build did not write, misses one it did, lists the 404 page, or
+   carries a <lastmod> that is not a W3C date, lies in the future, or
+   disagrees with lastmod.json.
 3. An indexable page without exactly one <title>, one meta description, one
    <h1> and a canonical link to its own sitemap URL, or a title or
    description another page also uses.
@@ -38,7 +39,9 @@ from datetime import UTC, date, datetime, timedelta
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
-from xml.etree import ElementTree
+
+from defusedxml import DefusedXmlException
+from defusedxml import ElementTree as SafeElementTree
 
 from . import config, sitemap, structured_data
 
@@ -138,11 +141,17 @@ def _check_robots(dist: Path, base_url: str) -> None:
 
 def _sitemap_entries(dist: Path, base_url: str) -> dict[str, str | None]:
     """site path -> lastmod (None when omitted)."""
+    # defusedxml, never the standard library parser: it refuses entity
+    # expansion and external references, and forbid_dtd refuses any DOCTYPE,
+    # which a sitemap never needs. The file is this build's own output, but
+    # the check should not depend on that staying true.
     try:
-        root = ElementTree.parse(dist / "sitemap.xml").getroot()
-    except (OSError, ElementTree.ParseError) as exc:
+        root = SafeElementTree.parse(dist / "sitemap.xml", forbid_dtd=True).getroot()
+    except (OSError, SafeElementTree.ParseError) as exc:
         raise SeoError(f"sitemap.xml is missing or not well-formed: {exc}") from exc
-    if root.tag != f"{SITEMAP_NS}urlset":
+    except DefusedXmlException as exc:
+        raise SeoError(f"sitemap.xml declares a DTD or an entity, which a sitemap never needs: {exc!r}") from exc
+    if root is None or root.tag != f"{SITEMAP_NS}urlset":
         raise SeoError("sitemap.xml is not a sitemaps.org <urlset>")
     entries: dict[str, str | None] = {}
     for url in root.findall(f"{SITEMAP_NS}url"):

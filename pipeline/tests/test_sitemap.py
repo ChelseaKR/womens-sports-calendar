@@ -12,6 +12,8 @@ from pathlib import Path
 
 import httpx
 import pytest
+from defusedxml import DefusedXmlException
+from defusedxml import ElementTree as SafeElementTree
 
 from wsc_pipeline import build as build_module
 from wsc_pipeline import site, sitemap, validate_seo
@@ -269,3 +271,64 @@ def test_control_a_404_in_the_sitemap_fails(history_dist: Path, tmp_path: Path):
     sm.write_text(sm.read_text().replace("</urlset>", f"  <url><loc>{BASE_URL}/gone/</loc></url>\n</urlset>"))
     with pytest.raises(validate_seo.SeoError, match="noindex page"):
         validate_seo.validate_dist(dist)
+
+
+# ---------------------------------------------------------------------------
+# The sitemap parser: defusedxml, and it refuses DTDs and entities
+# ---------------------------------------------------------------------------
+
+
+def test_the_rendered_sitemap_escapes_and_the_validator_reads_it_back(tmp_path: Path):
+    text = sitemap.render_sitemap(BASE_URL, [("/", None), ("/a&b/", "2026-09-17"), ("/<c>/", None)])
+    assert f"<loc>{BASE_URL}/a&amp;b/</loc><lastmod>2026-09-17</lastmod>" in text
+    assert f"<loc>{BASE_URL}/&lt;c&gt;/</loc>" in text
+    (tmp_path / "sitemap.xml").write_text(text)
+    assert validate_seo._sitemap_entries(tmp_path, BASE_URL) == {"/": None, "/a&b/": "2026-09-17", "/<c>/": None}
+
+
+XML_DECLARATION = '<?xml version="1.0" encoding="UTF-8"?>\n'
+FIRST_LOC = f"<loc>{BASE_URL}/"
+
+
+@pytest.mark.parametrize(
+    "doctype,entity_ref",
+    [
+        pytest.param("<!DOCTYPE urlset>", None, id="a bare DOCTYPE"),
+        pytest.param(f'<!DOCTYPE urlset [<!ENTITY site "{BASE_URL}">]>', "&site;", id="an internal entity"),
+        pytest.param(
+            '<!DOCTYPE urlset [<!ENTITY ext SYSTEM "file:///etc/hostname">]>', "&ext;", id="an external entity"
+        ),
+        pytest.param(
+            '<!DOCTYPE urlset [<!ENTITY a "aaaaaaaa"><!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;">]>',
+            "&b;",
+            id="nested entity expansion",
+        ),
+    ],
+)
+def test_control_a_sitemap_with_a_dtd_or_an_entity_is_refused(
+    history_dist: Path, tmp_path: Path, doctype: str, entity_ref: str | None
+):
+    dist = _corrupt(history_dist, tmp_path / "dist", "sitemap.xml", XML_DECLARATION, XML_DECLARATION + doctype + "\n")
+    if entity_ref is not None:
+        path = dist / "sitemap.xml"
+        text = path.read_text()
+        assert FIRST_LOC in text, "sabotage target not found"
+        path.write_text(text.replace(FIRST_LOC, f"<loc>{entity_ref}{BASE_URL}/", 1))
+    assert doctype in (dist / "sitemap.xml").read_text()
+    with pytest.raises(validate_seo.SeoError, match="declares a DTD or an entity") as caught:
+        validate_seo.validate_dist(dist)
+    # Refused by defusedxml's policy, not because the sabotage made the file
+    # malformed: the cause is a DefusedXmlException, not a ParseError.
+    assert isinstance(caught.value.__cause__, DefusedXmlException)
+
+
+def test_control_the_refused_documents_are_well_formed(history_dist: Path, tmp_path: Path):
+    """The DTD and internal-entity documents above parse once the policy is
+    lifted, so the refusal is the policy and nothing else."""
+    doctype = f'<!DOCTYPE urlset [<!ENTITY site "{BASE_URL}">]>'
+    dist = _corrupt(history_dist, tmp_path / "dist", "sitemap.xml", XML_DECLARATION, XML_DECLARATION + doctype + "\n")
+    path = dist / "sitemap.xml"
+    path.write_text(path.read_text().replace(FIRST_LOC, "<loc>&site;/", 1))
+    permissive = SafeElementTree.parse(path, forbid_dtd=False, forbid_entities=False).getroot()
+    locs = [el.text for el in permissive.iter("{http://www.sitemaps.org/schemas/sitemap/0.9}loc")]
+    assert locs == [loc for loc, _ in LOC_RE.findall((history_dist / "sitemap.xml").read_text())]
