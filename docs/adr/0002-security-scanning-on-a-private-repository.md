@@ -1,6 +1,10 @@
 # 0002. Security scanning on a private repository
 
-Status: Accepted
+Status: Accepted. Its premise changed on 2026-09-18, when the repository
+became public: GitHub code scanning, CodeQL and OpenSSF Scorecard are now
+available, which is the trigger this ADR names for adding CodeQL and
+superseding it. Until a new ADR does that, the scanners below stay the
+gates. Tracked in #2.
 Date: 2026-09-17
 Deciders: Chelsea Kelly-Reif
 

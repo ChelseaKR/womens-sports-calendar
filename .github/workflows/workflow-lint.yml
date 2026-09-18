@@ -3,9 +3,10 @@
 # touch .github/workflows/, so its two contexts always report and can be
 # required status checks without leaving a PR "Expected -- waiting".
 #
-# CodeQL `language: actions` (CICD-20) is not used: code scanning is not
-# available to this private repository, and zizmor covers workflow SAST
-# here (see docs/adr/0002 on the security branch).
+# CodeQL `language: actions` (CICD-20) is not used yet: code scanning was
+# not available while this repository was private, and zizmor covers
+# workflow SAST here (docs/adr/0002). Adding CodeQL now that the repository
+# is public is tracked in issue 2.
 
 name: workflow-lint
 
