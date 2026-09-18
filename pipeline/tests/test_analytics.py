@@ -85,7 +85,7 @@ def _assert_guarded_ga(html: str, ga4_id: str) -> None:
     assert len(re.findall(r"<script\b", html, flags=re.IGNORECASE)) == 1
     script = scripts[0]
     assert script + "\n</head>" in html, "the GA loader must close out <head>"
-    first_effect = min(script.index("w.dataLayer"), script.index("createElement"), script.index("addEventListener"))
+    first_effect = min(script.index("w.dataLayer"), script.index("createElement"), script.index('d.addEventListener("click"'))
     for guard in (f'if (w.location.hostname !== "{HOST}") return;', GPC_GUARD, DNT_GUARD):
         assert guard in script, f"missing guard: {guard}"
         assert script.index(guard) < first_effect, f"guard runs too late: {guard}"
@@ -372,7 +372,8 @@ def _scenarios(rows, clicks=()) -> list[dict]:
 def _assert_nothing_loaded(result: dict) -> None:
     assert result["dataLayer"] is None, result["name"]
     assert result["appended"] == [], result["name"]
-    assert result["listeners"] == [], result["name"]
+    # Only the footer opt-out control's DOMContentLoaded wiring, never GA's click listener.
+    assert result["listeners"] == ["DOMContentLoaded"], result["name"]
 
 
 def test_snippet_loads_nothing_under_gpc_dnt_or_off_site(tmp_path: Path):
@@ -409,7 +410,7 @@ def test_snippet_without_a_signal_sets_consent_defaults_config_and_loads_gtag(tm
         assert r["appended"] == [
             {"tag": "script", "async": True, "src": f"https://www.googletagmanager.com/gtag/js?id={TEST_ID}"}
         ]
-        assert r["listeners"] == ["click"]
+        assert r["listeners"] == ["DOMContentLoaded", "click"]
 
         ticket, affiliate, webcal, feed, footer_tm, internal = r["clicks"]
         assert ticket["pushed"] == [

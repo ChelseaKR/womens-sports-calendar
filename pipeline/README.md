@@ -12,7 +12,7 @@ and the static site into `dist/`.
 
 ```sh
 uv sync --extra dev
-uv run pytest -q                 # 139 tests; negative controls described below
+uv run pytest -q                 # 158 tests; negative controls described below
 
 # Degraded mode (no key) -- always safe, always produces a valid site:
 uv run python -m wsc_pipeline.build --out dist --base-url https://nexthomegame.com
@@ -74,8 +74,11 @@ used (requests, bytes).
   `GA4_MEASUREMENT_ID` is the one place the measurement ID goes (committed:
   it is public); empty means no page carries any analytics. When set, every
   HTML page gets one inline loader in `<head>` that returns before loading
-  anything unless the page is on the base URL's own host and the browser
-  sends neither Global Privacy Control nor Do Not Track; sets Consent Mode v2
+  anything unless the page is on the base URL's own host, the browser
+  sends neither Global Privacy Control nor Do Not Track, and the visitor has
+  not used the footer's "Opt out of analytics" (a localStorage flag,
+  `OPT_OUT_STORAGE_KEY`, that toggles to "Opt back in";
+  `tests/test_analytics_opt_out.py`); sets Consent Mode v2
   defaults (ad storage / ad user data / ad personalisation denied everywhere,
   analytics storage denied in the EEA, UK and Switzerland); configures gtag
   with Google signals and ad personalisation off; and records

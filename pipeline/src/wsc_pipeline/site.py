@@ -143,7 +143,8 @@ def _base(
 PRIVACY_NOTE_ANALYTICS = """This site's pages use Google Analytics to count
 visits and clicks on ticket and calendar links, with Google's advertising
 features switched off. It is not loaded at all if your browser sends Global
-Privacy Control or Do Not Track, and the calendar feeds are never tracked. A
+Privacy Control or Do Not Track, or once you opt out here, and the calendar
+feeds are never tracked. A
 &ldquo;Buy tickets&rdquo; link goes to the ticket seller's own site and tells
 them we sent you."""
 PRIVACY_NOTE_NO_ANALYTICS = """This site runs no analytics, no scripts, and
@@ -159,8 +160,21 @@ AFFILIATE_NOTE_ACTIVE = (
 AFFILIATE_NOTE_INACTIVE = "They are plain links, and this site is not paid for them."
 
 
+# The footer's "Opt out of analytics" control, only on pages that carry the
+# GA4 loader. `hidden` until that loader's script wires it on
+# DOMContentLoaded (analytics.py), so a browser without JavaScript -- which
+# never runs GA either -- is never shown a button that does nothing. A
+# <button>, not a link: it changes a setting rather than going anywhere.
+ANALYTICS_CHOICE = (
+    '<span class="analytics-choice" data-analytics-choice hidden>'
+    '<button type="button" class="analytics-toggle">Opt out of analytics</button> '
+    '<span class="analytics-status" role="status"></span></span>'
+)
+
+
 def _footer(*, analytics_on: bool) -> str:
     note = PRIVACY_NOTE_ANALYTICS if analytics_on else PRIVACY_NOTE_NO_ANALYTICS
+    choice = f"\n{ANALYTICS_CHOICE}" if analytics_on else ""
     affiliate_note = AFFILIATE_NOTE_ACTIVE if affiliate_links_active() else AFFILIATE_NOTE_INACTIVE
     return f"""<footer class="site-footer">
 <h2>Sources and terms</h2>
@@ -174,7 +188,7 @@ tickets&rdquo; link goes to the home team's official ticket seller where we
 know it, and otherwise to the game's Ticketmaster listing.
 {affiliate_note}</p>
 <p class="privacy-note">{note}
-<a href="{PRIVACY_PATH}">Privacy: what this site measures and what it never does</a>.</p>
+<a href="{PRIVACY_PATH}">Privacy: what this site measures and what it never does</a>.{choice}</p>
 </footer>
 """
 
@@ -448,11 +462,20 @@ approximate location. Google says Google Analytics 4 does not log or store
 IP addresses.</li>
 <li><strong>Kept for {e(GA4_DATA_RETENTION)}.</strong> Google Analytics deletes
 this site's event-level data after {e(GA4_DATA_RETENTION)}.</li>
+<li><strong>Opt out on this device.</strong> Use &ldquo;Opt out of
+analytics&rdquo; at the bottom of any page. It saves one setting in this
+browser's local storage (not a cookie), and from the next page you open, this
+site doesn't load Google Analytics in this browser at all. The page you are
+on is also told to stop sending, through Google's own opt-out setting. The
+same button then reads &ldquo;Opt back in&rdquo;, which removes the setting.
+The choice applies to this browser on this device only, and clearing this
+site's data in your browser clears it. It doesn't delete Google Analytics
+cookies already set; your browser's settings can clear those.</li>
 </ul>
 <p>Google handles this data under its own terms: see
 <a href="https://policies.google.com/technologies/partner-sites">how Google uses information from sites that use its services</a>.
-To opt out in any browser, turn on Global Privacy Control or Do Not Track, or
-install <a href="https://tools.google.com/dlpage/gaoptout">Google's Analytics opt-out browser add-on</a>.</p>
+To opt out, use &ldquo;Opt out of analytics&rdquo; at the bottom of any page,
+turn on Global Privacy Control or Do Not Track in your browser, or install <a href="https://tools.google.com/dlpage/gaoptout">Google's Analytics opt-out browser add-on</a>.</p>
 """
         ticket_measured = " Google Analytics records only that the link was clicked, on this site's page."
     else:
@@ -771,6 +794,12 @@ a:focus-visible, button:focus-visible {
 .site-footer a:visited { color: var(--on-navy-link-visited); }
 .site-footer a:focus-visible { outline-color: var(--on-navy-focus); }
 .site-footer .privacy-note { color: var(--on-navy-dim); }
+.analytics-toggle {
+  background: none; border: 0; padding: 0.125rem 0; min-height: 1.5rem;
+  color: var(--on-navy-link); font: inherit; text-decoration: underline;
+  text-underline-offset: 0.15em; cursor: pointer;
+}
+.site-footer button:focus-visible { outline-color: var(--on-navy-focus); }
 
 /* ---- breadcrumb + source note ---- */
 nav[aria-label="breadcrumb"] {

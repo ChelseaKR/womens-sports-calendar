@@ -16,7 +16,15 @@ What ga4_head_snippet() emits when an ID is set, on every HTML page:
 - It returns before loading anything when the browser sends Global Privacy
   Control (navigator.globalPrivacyControl === true) or Do Not Track
   (navigator.doNotTrack / window.doNotTrack / navigator.msDoNotTrack is
-  "1" or "yes"): no Google script, no request to Google, no cookie.
+  "1" or "yes"), or when the visitor used the footer's "Opt out of
+  analytics" (localStorage OPT_OUT_STORAGE_KEY is "1"): no Google script,
+  no request to Google, no cookie.
+- Before those checks, it wires that footer choice (site.analytics_choice)
+  on DOMContentLoaded, on every host, so CI's pa11y sweep checks the real,
+  visible control: "Opt out of analytics" sets the flag and Google's own
+  window["ga-disable-<ID>"] opt-out property; "Opt back in" removes the
+  flag. Under GPC/DNT, or with storage blocked, the button stays hidden and
+  the status line says why.
 - Consent Mode v2 defaults: ad_storage, ad_user_data and ad_personalization
   are denied everywhere; analytics_storage is denied in the EEA, the UK and
   Switzerland (via `region`) and granted elsewhere. There is no consent
@@ -70,13 +78,64 @@ ANALYTICS_DENIED_REGIONS = (*EU_MEMBER_STATES, "IS", "LI", "NO", "GB", "CH")
 
 GTAG_JS_URL = "https://www.googletagmanager.com/gtag/js"
 
+# The footer's "Opt out of analytics" choice (owner decision 2026-09-18,
+# DECISIONS 0012 addendum), remembered per browser in localStorage under
+# this key and checked before gtag.js is ever requested. Changing the key
+# would silently opt every opted-out visitor back in: never rename it.
+OPT_OUT_STORAGE_KEY = "nexthomegame:analytics-opt-out"
+# The footer's status line after each state change, announced by its
+# role="status" live region. /privacy/ describes the same behaviour.
+OPT_OUT_MESSAGES = {
+    "__MSG_OPTED_OUT__": "Opted out. From the next page you open, this site won't load Google Analytics in this browser.",
+    "__MSG_IS_OUT__": "You have opted out: this site doesn't load Google Analytics in this browser.",
+    "__MSG_BACK_IN__": "Opted back in. Analytics resumes from the next page you open.",
+    "__MSG_SIGNAL__": "Analytics is off: your browser sends Global Privacy Control or Do Not Track.",
+    "__MSG_NO_STORAGE__": (
+        "This browser is blocking site storage, so an opt-out can't be remembered here. "
+        "Global Privacy Control or Do Not Track keeps analytics off."
+    ),
+}
+
 _SNIPPET_TEMPLATE = r"""<script>
 (function () {
-  var w = window, n = navigator, d = document;
+  var w = window, n = navigator, d = document, KEY = __OPT_OUT_KEY__, OFF = __GA_DISABLE__;
+  var store = null;
+  try { store = w.localStorage; store.getItem(KEY); } catch (e) { store = null; }
+  function optedOut() { try { return !!store && store.getItem(KEY) === "1"; } catch (e) { return false; } }
+  var dnt = n.doNotTrack || w.doNotTrack || n.msDoNotTrack;
+  var signal = n.globalPrivacyControl === true || dnt === "1" || dnt === "yes";
+  d.addEventListener("DOMContentLoaded", function () {
+    var box = d.querySelector("[data-analytics-choice]");
+    if (!box) return;
+    var button = box.querySelector("button"), status = box.querySelector("[role=status]");
+    function render(message) {
+      button.textContent = optedOut() ? "Opt back in" : "Opt out of analytics";
+      button.hidden = signal || !store;
+      status.textContent = message;
+      box.hidden = false;
+    }
+    button.addEventListener("click", function () {
+      try {
+        if (optedOut()) {
+          store.removeItem(KEY);
+          w[OFF] = false;
+          render(__MSG_BACK_IN__);
+        } else {
+          store.setItem(KEY, "1");
+          w[OFF] = true;
+          render(__MSG_OPTED_OUT__);
+        }
+      } catch (e) {
+        store = null;
+        render(__MSG_NO_STORAGE__);
+      }
+    });
+    render(signal ? __MSG_SIGNAL__ : !store ? __MSG_NO_STORAGE__ : optedOut() ? __MSG_IS_OUT__ : "");
+  });
   if (w.location.hostname !== __HOST__) return;
   if (n.globalPrivacyControl === true) return;
-  var dnt = n.doNotTrack || w.doNotTrack || n.msDoNotTrack;
   if (dnt === "1" || dnt === "yes") return;
+  if (optedOut()) return;
   w.dataLayer = w.dataLayer || [];
   function gtag() { w.dataLayer.push(arguments); }
   gtag("consent", "default", {
@@ -146,6 +205,9 @@ def ga4_head_snippet(ga4_id: str | None, *, base_url: str) -> str:
         "__ID__": json.dumps(mid),
         "__GTAG_SRC__": json.dumps(f"{GTAG_JS_URL}?id={mid}"),
         "__TICKET_HOST_RE__": _ticket_host_regex_literal(),
+        "__OPT_OUT_KEY__": json.dumps(OPT_OUT_STORAGE_KEY),
+        "__GA_DISABLE__": json.dumps(f"ga-disable-{mid}"),
+        **{token: json.dumps(message) for token, message in OPT_OUT_MESSAGES.items()},
     }
     snippet = _SNIPPET_TEMPLATE
     for token, value in replacements.items():

@@ -7,8 +7,9 @@ account. Calendar-first and price-free since 2026-09-17
 (`docs/DECISIONS.md` 0013): no licence-clean price source exists, and the old
 price promise was empty on every game. Any revenue would come only from
 affiliate links, and none is active yet. The web pages use Google Analytics 4
-(not loaded under Global Privacy Control or Do Not Track, ads features off;
-`docs/DECISIONS.md` 0012); the calendar feeds carry no tracking of any kind.
+(not loaded under Global Privacy Control or Do Not Track, or after the
+footer's "Opt out of analytics", ads features off; `docs/DECISIONS.md` 0012);
+the calendar feeds carry no tracking of any kind.
 
 [moved to private strategy notes]
 
@@ -33,8 +34,9 @@ affiliate links, and none is active yet. The web pages use Google Analytics 4
   `/privacy/`. The only script is one inline
   Google Analytics 4 loader per page, emitted only while
   `pipeline/src/wsc_pipeline/analytics.py`'s `GA4_MEASUREMENT_ID` is set
-  (it is: `G-YKGPZ76LVE`); it loads nothing under Global Privacy Control or
-  Do Not Track, turns Google signals and ad personalisation off, and denies
+  (it is: `G-YKGPZ76LVE`); it loads nothing under Global Privacy Control,
+  Do Not Track, or the footer's remembered "Opt out of analytics" choice,
+  turns Google signals and ad personalisation off, and denies
   analytics storage for the EEA, UK and Switzerland. The `.ics` feeds are
   never tracked.
 - `docs/` — research, decisions, licences and attributions.

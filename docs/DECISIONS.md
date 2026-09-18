@@ -235,6 +235,17 @@ no-runtime architecture is unchanged.
 (linked from every footer) and the repo description were updated so no
 "no tracking" / "no cookies" claim remains false.
 
+*Addendum 2026-09-18 (owner decision, all four sites):* every footer carries
+a public "Opt out of analytics" control, remembered per browser in
+localStorage (`nexthomegame:analytics-opt-out` = `"1"`, never to be renamed)
+and checked before gtag.js is requested. It toggles to "Opt back in", which
+removes the flag, and `/privacy/` describes it. Opting out also sets
+Google's `window["ga-disable-<ID>"]` property for the page it happens on.
+It is a `<button>` rather than a link, because it changes a setting instead
+of navigating, and it stays `hidden` without JavaScript, where GA never runs
+either. The cookieless pings that EEA/UK/CH visitors' browsers still send
+under denied `analytics_storage` are accepted as they are.
+
 ## 0013 — Calendar-first, no prices; each ticket link goes to the home team's seller (2026-09-17)
 
 Owner decision, 2026-09-17. The site stops showing ticket prices and stops
