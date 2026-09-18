@@ -30,6 +30,15 @@ from .sellers import affiliate_links_active
 
 CSS_PATH = "/style.css"
 PRIVACY_PATH = "/privacy/"
+ACCESSIBILITY_PATH = "/accessibility/"
+# The status line docs/a11y/STATEMENT.md opens with. The page renders this
+# exact sentence and tests/test_accessibility_page.py asserts the two agree,
+# so the published statement and the committed one cannot drift apart.
+ACCESSIBILITY_STATUS = (
+    "WCAG 2.2 AA target. Automated checks pass on every page of every build. "
+    "No human assistive-technology review has been done yet."
+)
+ACCESSIBILITY_CONTACT_URL = "https://chelseakr.com/contact"
 # The name visitors see: the header brand, <title> suffix, and og:site_name
 # all use this one string. It was the repo slug ("womens-sports-calendar")
 # in <title>/og:site_name while the header already said "Next Home Game",
@@ -190,6 +199,7 @@ know it, and otherwise to the game's Ticketmaster listing.
 {affiliate_note}</p>
 <p class="privacy-note">{note}
 <a href="{PRIVACY_PATH}">Privacy: what this site measures and what it never does</a>.{choice}</p>
+<p class="privacy-note"><a href="{ACCESSIBILITY_PATH}">Accessibility statement</a>.</p>
 </footer>
 """
 
@@ -513,6 +523,56 @@ no access to those logs.</p>
         title=f"Privacy | {SITE_NAME}",
         description="What Next Home Game measures, what it never measures, and how to opt out.",
         canonical_url=f"{base_url}{PRIVACY_PATH}",
+        base_url=base_url,
+        body=body,
+        ga4_id=ga4_id,
+    )
+
+
+def render_accessibility(*, base_url: str, ga4_id: str | None = None) -> str:
+    """dist/accessibility/index.html, linked from every page's footer: the
+    published form of docs/a11y/STATEMENT.md (ACCESSIBILITY-STANDARD A11Y-16).
+    It states a target and what is checked, never a conformance claim, and
+    says plainly that no person has reviewed the site with assistive
+    technology yet."""
+    body = f"""<nav aria-label="breadcrumb"><a href="/">All leagues</a></nav>
+<h1>Accessibility</h1>
+<p class="lede"><strong>Accessibility status:</strong> {e(ACCESSIBILITY_STATUS)}</p>
+<h2>What is checked on every change</h2>
+<p>Every page this site publishes is checked automatically before a change is
+accepted:</p>
+<ul>
+<li>pa11y, to the WCAG 2 AA standard, with two independent rule engines.</li>
+<li>axe-core against WCAG 2.0, 2.1 and 2.2 A and AA rules, including colour
+contrast, target size and the page language.</li>
+<li>A keyboard walk: the first Tab reaches &ldquo;Skip to main
+content&rdquo;, every link can be reached, and each one shows a visible focus
+outline that nothing covers.</li>
+<li>Reflow: at 320 pixels wide nothing scrolls sideways.</li>
+<li>Reduced motion: if you ask your device for less motion, nothing on the
+site animates.</li>
+</ul>
+<h2>Known gaps</h2>
+<ul>
+<li>No person has yet checked the site with a screen reader (such as NVDA,
+JAWS or VoiceOver) or with a keyboard alone. Automated checks catch many
+problems but not all of them.</li>
+<li>The calendar feeds are read by your own calendar app, so how
+accessible they are depends on that app.</li>
+<li>&ldquo;Buy tickets&rdquo; links go to Ticketmaster or to a team's own
+ticket seller. Those sites are outside this statement.</li>
+</ul>
+<h2>Reporting a problem</h2>
+<p>If something on this site gets in your way, tell us through
+<a href="{e(ACCESSIBILITY_CONTACT_URL)}">the contact page at chelseakr.com</a>:
+say which page and what happened. A problem that stops you finding a team,
+subscribing to a calendar or following a ticket link is fixed first.</p>
+<p>Updated 2026-09-17.</p>
+"""
+    return _base(
+        title=f"Accessibility | {SITE_NAME}",
+        description="How Next Home Game is checked for accessibility, its known gaps, and how to report a problem.",
+        canonical_url=f"{base_url}{ACCESSIBILITY_PATH}",
         base_url=base_url,
         body=body,
         ga4_id=ga4_id,
@@ -862,6 +922,10 @@ nav[aria-label="breadcrumb"] {
 .subscribe::before { left: 1.75rem; }
 .subscribe::after { right: 1.75rem; }
 .subscribe h2 { font-size: 1.15rem; border-top: 0; padding-top: 0; margin-top: 0; }
+/* The feed URL is one long unbroken token (".../ics/<league>/<team>.ics");
+   without a break opportunity it pushed team pages to 350-430 CSS px wide at
+   a 320 px viewport, failing WCAG 1.4.10 Reflow. */
+.subscribe p a { overflow-wrap: anywhere; }
 .subscribe-instructions { padding-left: 1.1rem; font-size: 0.9375rem; }
 .subscribe-instructions li { margin-bottom: 0.5rem; }
 .subscribe-cta {

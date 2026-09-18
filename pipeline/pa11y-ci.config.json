@@ -1,6 +1,8 @@
 {
   "defaults": {
     "standard": "WCAG2AA",
+    "runners": ["htmlcs", "axe"],
+    "levelCapWhenNeedsReview": "warning",
     "concurrency": 5,
     "useIncognitoBrowserContext": false,
     "chromeLaunchConfig": {

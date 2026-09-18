@@ -252,6 +252,11 @@ def _write_html(
     privacy_dir = out_dir / "privacy"
     privacy_dir.mkdir(exist_ok=True)
     (privacy_dir / "index.html").write_text(site.render_privacy(base_url=base_url, ga4_id=ga4_id), encoding="utf-8")
+    accessibility_dir = out_dir / "accessibility"
+    accessibility_dir.mkdir(exist_ok=True)
+    (accessibility_dir / "index.html").write_text(
+        site.render_accessibility(base_url=base_url, ga4_id=ga4_id), encoding="utf-8"
+    )
 
     for lg in config.LEAGUES:
         games = games_by_league[lg.slug]
@@ -294,7 +299,7 @@ def _write_static(out_dir: Path) -> None:
 
 
 def _write_sitemap_and_robots(out_dir: Path, base_url: str) -> None:
-    urls = [f"{base_url}/", f"{base_url}{site.PRIVACY_PATH}"]
+    urls = [f"{base_url}/", f"{base_url}{site.PRIVACY_PATH}", f"{base_url}{site.ACCESSIBILITY_PATH}"]
     for lg in config.LEAGUES:
         urls.append(f"{base_url}/{lg.slug}/")
         for team in lg.teams:

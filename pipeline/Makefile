@@ -130,13 +130,26 @@ validate-ics:
 # was reliable across repeated full runs against every page in dist/.
 #
 # A faster sweep that quietly checks fewer pages would be a regression, not
-# a speedup, so the last step refuses to pass unless pa11y-ci's own JSON
+# a speedup, so the next step refuses to pass unless pa11y-ci's own JSON
 # report (pa11y-ci-results.json) names exactly the URLs handed to it, all
 # passing, and that URL list covers every page the site config says the
 # build must produce -- see scripts/check_a11y_coverage.py.
+#
+# pa11y-ci runs both the HTML_CodeSniffer and axe runners. axe results that
+# axe itself marks "needs review" (it could not compute a background behind
+# a pseudo-element, say) are capped at warning: they are logged, and each
+# kind is recorded with a measured value in docs/a11y/README.md.
+#
+# Then scripts/a11y_browser_checks.mjs runs what pa11y cannot: axe at
+# moderate and above as a hard failure, a keyboard walk of every tab stop,
+# 320 px reflow and reduced motion (ACCESSIBILITY-STANDARD A11Y-01/05/06/07/
+# 08/09/26), on the same URL list. Its --self-test first plants one defect
+# per check in a copy of a fixture page and fails unless each is caught;
+# scripts/check_a11y_browser_report.py then refuses a report that skipped
+# a page or examined nothing on one.
 a11y: install install-a11y build
 	set -e; \
-	rm -rf dist/_a11y-fixtures pa11y-ci-results.json; \
+	rm -rf dist/_a11y-fixtures pa11y-ci-results.json a11y-browser-results.json; \
 	uv run python scripts/render_a11y_fixtures.py; \
 	python3 -m http.server 8917 --directory dist >/tmp/wsc-a11y-server.log 2>&1 & \
 	server_pid=$$!; \
@@ -150,9 +163,12 @@ a11y: install install-a11y build
 		urls="$$urls http://127.0.0.1:8917/$${f#dist/}"; \
 	done; \
 	./node_modules/.bin/pa11y-ci --config pa11y-ci.config.json $$urls; \
-	uv run python scripts/check_a11y_coverage.py pa11y-ci-results.json $$urls
+	uv run python scripts/check_a11y_coverage.py pa11y-ci-results.json $$urls; \
+	node scripts/a11y_browser_checks.mjs --self-test http://127.0.0.1:8917/_a11y-fixtures/team.html; \
+	node scripts/a11y_browser_checks.mjs a11y-browser-results.json $$urls; \
+	uv run python scripts/check_a11y_browser_report.py a11y-browser-results.json $$urls
 
 verify: install lint format-check typecheck markers test wheel build validate-html validate-ics a11y audit
 
 clean:
-	rm -rf dist dist.tmp .pytest_cache .venv node_modules pa11y-ci-results.json
+	rm -rf dist dist.tmp .pytest_cache .venv node_modules pa11y-ci-results.json a11y-browser-results.json

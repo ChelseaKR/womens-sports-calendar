@@ -8,3 +8,4 @@ pipeline/**/__pycache__/
 pipeline/*.egg-info/
 pipeline/.coverage
 pipeline/pa11y-ci-results.json
+pipeline/a11y-browser-results.json
