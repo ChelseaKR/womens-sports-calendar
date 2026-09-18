@@ -45,6 +45,11 @@ Unreleased, and it is what runs live at https://nexthomegame.com.
 
 ### Fixed
 
+- The sitemap check in `make validate-seo` parses `sitemap.xml` with
+  `defusedxml` and refuses a DTD or an entity, instead of the standard
+  library parser Semgrep flags. `sitemap.py` escapes with `html.escape`,
+  which gives the same output. The findings surfaced once the repository
+  was public and CI could run.
 - The nightly deploy stopped at `validate-html` on 2026-09-18: the new
   "Listings as of" time carried six fractional-second digits, which
   `<time datetime>` does not allow (#37). Fetch times are now also recorded
