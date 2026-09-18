@@ -43,7 +43,9 @@ used (requests, bytes).
   extracts venue/date/TZID, and extracts a price range *only* when
   Ticketmaster published `priceRanges` with real `min`/`max` values —
   otherwise `price=None`, never a fabricated 0 or omitted-but-implied
-  value. No broadcaster field exists anywhere in this pipeline: no
+  value. That price now reaches only the `.ics` event description, which
+  is unchanged; no page or JSON shows it (DECISIONS 0013). No broadcaster
+  field exists anywhere in this pipeline: no
   licensed source carries one.
 - `ics.py` — RFC 5545 `.ics` emission. UIDs are derived deterministically
   from the Ticketmaster event id (`tm-<event_id>@womens-sports-calendar.invalid`),
@@ -58,8 +60,16 @@ used (requests, bytes).
   fraction of configured teams that had at least one upcoming Ticketmaster
   listing.
 - `site_data.py` — the compact JSON the HTML is templated from. One shape,
-  reused for league and team pages; a game's `price` key is present and
-  either a real object or `null`, never omitted.
+  reused for league and team pages. It publishes no prices (DECISIONS 0013).
+  A game's `buy` key is present and is either its one ticket link or `null`,
+  never omitted and never guessed.
+- `sellers.py` — where each game's ticket link goes. For a home game of a
+  team whose primary seller is known (and is not Ticketmaster, e.g. AXS or
+  SeatGeek), it links to that team's page at the seller, with the evidence
+  recorded per entry. Otherwise it uses the Ticketmaster event URL, labelled
+  with the site it actually points to. `AFFILIATE_LINK_TEMPLATES` is the
+  single place an affiliate ID would go. It is empty, and the footer
+  disclosure is rendered from it. The `.ics` feeds do not use this module.
 - `analytics.py` — Google Analytics 4 (`../docs/DECISIONS.md` 0012).
   `GA4_MEASUREMENT_ID` is the one place the measurement ID goes (committed:
   it is public); empty means no page carries any analytics. When set, every
@@ -79,7 +89,8 @@ used (requests, bytes).
   default on the index, a per-league card on every league and team page,
   see `assets/` below) — semantic landmarks, table headers with `scope`,
   link text that names its destination ("Buy tickets for X vs Y on
-  \<date\> from Ticketmaster", never bare "Buy" or "click here"), a
+  \<date\> from SeatGeek, the official seller for … home games", never bare
+  "Buy" or "click here"), no price anywhere, a
   literal, non-euphemistic privacy note in the footer that links
   `/privacy/`, and the privacy page itself. Both are rendered from the GA4
   ID, so they say "no analytics" exactly when a build has none.
@@ -109,8 +120,8 @@ checks at both the single-calendar and whole-build level, TBD-date
 exclusion), the Ticketmaster client (throttling, retry, the 429 path, the
 "failed fetch raises" contract), coverage math, the JSON data layer's
 absence discipline, and the generated HTML (no `<script>` tags anywhere
-without a GA4 ID, no price rendered without a matching Ticketmaster event,
-table headers,
+without a GA4 ID, no price or price promise on any page even when
+Ticketmaster sent one, table headers,
 link text, canonical/favicon/OG/Twitter-card tags — including that each
 page's `og:image` is the real, correctly-sized card for that page type,
 not one generic image repeated everywhere — the privacy note, and that

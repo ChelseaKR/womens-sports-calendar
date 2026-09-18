@@ -24,8 +24,9 @@ What ga4_head_snippet() emits when an ID is set, on every HTML page:
 - gtag config with allow_google_signals and allow_ad_personalization_signals
   both false.
 - A click listener that sends a gtag event for a "Buy tickets" link (any
-  link inside <main> whose host starts "ticketmaster." or contains
-  ".ticketmaster.": ticket_click) or a calendar-subscribe link (webcal:, or
+  link inside <main> whose host starts with, or contains after a dot, one
+  of the ticket-seller names from sellers.ticket_host_names(), e.g.
+  "ticketmaster.", "seatgeek.", "axs.": ticket_click) or a calendar-subscribe link (webcal:, or
   a path ending .ics: calendar_subscribe). It keys on the link's own URL,
   not on template markup, and it only observes the click: the link stays a
   plain URL, is never rewritten, and never routed through a Google
@@ -43,6 +44,8 @@ from __future__ import annotations
 import json
 import re
 from urllib.parse import urlparse
+
+from .sellers import ticket_host_names
 
 # The one place the measurement ID goes. Empty ("") = no GA anywhere.
 # G-YKGPZ76LVE is the nexthomegame.com web stream of GA4 property 554878764
@@ -93,7 +96,7 @@ _SNIPPET_TEMPLATE = r"""<script>
   d.addEventListener("click", function (ev) {
     var a = ev.target && ev.target.closest ? ev.target.closest("a[href]") : null;
     if (!a) return;
-    if (a.closest("main") && /(^|\.)ticketmaster\./i.test(a.hostname)) {
+    if (a.closest("main") && __TICKET_HOST_RE__.test(a.hostname)) {
       gtag("event", "ticket_click", { link_url: a.href, link_domain: a.hostname });
     } else if (a.protocol === "webcal:" || /\.ics$/.test(a.pathname)) {
       gtag("event", "calendar_subscribe", { link_url: a.href });
@@ -116,6 +119,18 @@ def measurement_id(value: str | None) -> str | None:
     return value
 
 
+def _ticket_host_regex_literal() -> str:
+    """A JS regex literal matching a hostname that starts with, or has
+    after a dot, one of the ticket-seller names (e.g. www.seatgeek.com,
+    ticketmaster.evyy.net). Names are checked to be plain lowercase labels,
+    since they are interpolated into an inline script."""
+    names = ticket_host_names()
+    for name in names:
+        if not re.fullmatch(r"[a-z0-9-]+", name):
+            raise ValueError(f"unexpected ticket host name: {name!r}")
+    return r"/(^|\.)(" + "|".join(names) + r")\./i"
+
+
 def ga4_head_snippet(ga4_id: str | None, *, base_url: str) -> str:
     """The <head> markup for one page: "" when no ID is set, otherwise the
     guarded inline loader described in the module docstring."""
@@ -130,6 +145,7 @@ def ga4_head_snippet(ga4_id: str | None, *, base_url: str) -> str:
         "__DENIED_REGIONS__": json.dumps(list(ANALYTICS_DENIED_REGIONS)),
         "__ID__": json.dumps(mid),
         "__GTAG_SRC__": json.dumps(f"{GTAG_JS_URL}?id={mid}"),
+        "__TICKET_HOST_RE__": _ticket_host_regex_literal(),
     }
     snippet = _SNIPPET_TEMPLATE
     for token, value in replacements.items():

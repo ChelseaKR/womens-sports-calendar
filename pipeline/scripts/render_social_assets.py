@@ -228,7 +228,7 @@ def build_svgs() -> dict[str, str]:
     files["og-image.svg"] = og_image_svg(
         highlights=[(1, 2, _basketball), (1, 3, _soccer_ball), (1, 4, _hockey_puck)],
         title="Your next\nhome game.",
-        subtitle="Calendar & ticket prices for\nWNBA, NWSL & PWHL",
+        subtitle="Subscribe-once calendars for\nWNBA, NWSL & PWHL",
         footer="nexthomegame.com",
     )
     for slug in LEAGUE_GLYPHS:
@@ -236,7 +236,7 @@ def build_svgs() -> dict[str, str]:
         files[f"og-image-{slug}.svg"] = og_image_svg(
             highlights=[(1, 3, GLYPHS[slug])],
             title=f"Your next\n{name} home game.",
-            subtitle="Calendar & ticket prices,\nfrom Ticketmaster",
+            subtitle="One calendar, subscribe once,\nupdated nightly",
             footer="nexthomegame.com",
         )
     return files

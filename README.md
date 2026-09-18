@@ -1,11 +1,14 @@
 # womens-sports-calendar (working name)
 
 Subscribable `.ics` calendar feeds per league and team for women's pro and
-college sports, plus a ticket-price finder, built nightly from the
-Ticketmaster Discovery API. No account. The web pages use Google Analytics 4
+college sports, built nightly from the Ticketmaster Discovery API, with one
+plain "Buy tickets" link per game to the home team's ticket seller. No
+account. Calendar-first and price-free since 2026-09-17
+(`docs/DECISIONS.md` 0013): no licence-clean price source exists, and the old
+price promise was empty on every game. Any revenue would come only from
+affiliate links, and none is active yet. The web pages use Google Analytics 4
 (not loaded under Global Privacy Control or Do Not Track, ads features off;
 `docs/DECISIONS.md` 0012); the calendar feeds carry no tracking of any kind.
-Monetised only by plain affiliate URLs.
 
 [moved to private strategy notes]
 
@@ -25,8 +28,9 @@ Monetised only by plain affiliate URLs.
 - `site/` — where the deployed output logically lives; see `site/README.md`
   for why the generator itself is in `pipeline/`. The built output
   (`pipeline/dist/`, gitignored, rebuilt every run) is one page per league and
-  team: the subscribe link, the next games, the price range, and one
-  affiliate link per game, plus `/privacy/`. The only script is one inline
+  team: the subscribe link first, then the next games, each with one plain
+  ticket link (`pipeline/src/wsc_pipeline/sellers.py`) and no prices, plus
+  `/privacy/`. The only script is one inline
   Google Analytics 4 loader per page, emitted only while
   `pipeline/src/wsc_pipeline/analytics.py`'s `GA4_MEASUREMENT_ID` is set
   (it is: `G-YKGPZ76LVE`); it loads nothing under Global Privacy Control or

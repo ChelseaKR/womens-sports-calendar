@@ -25,6 +25,7 @@ from datetime import date
 from html import escape as e
 
 from .analytics import GA4_DATA_RETENTION, ga4_head_snippet, measurement_id
+from .sellers import affiliate_links_active
 
 CSS_PATH = "/style.css"
 PRIVACY_PATH = "/privacy/"
@@ -143,28 +144,35 @@ PRIVACY_NOTE_ANALYTICS = """This site's pages use Google Analytics to count
 visits and clicks on ticket and calendar links, with Google's advertising
 features switched off. It is not loaded at all if your browser sends Global
 Privacy Control or Do Not Track, and the calendar feeds are never tracked. A
-&ldquo;Buy tickets&rdquo; link goes to Ticketmaster's own site and tells them
-we sent you."""
+&ldquo;Buy tickets&rdquo; link goes to the ticket seller's own site and tells
+them we sent you."""
 PRIVACY_NOTE_NO_ANALYTICS = """This site runs no analytics, no scripts, and
 sets no cookies, and the calendar feeds are never tracked. A &ldquo;Buy
-tickets&rdquo; link goes to Ticketmaster's own site and tells them we sent
-you."""
+tickets&rdquo; link goes to the ticket seller's own site and tells them we
+sent you."""
+
+# Rendered from sellers.AFFILIATE_LINK_TEMPLATES, so the disclosure is true
+# by construction: it says "affiliate" exactly when a link is one.
+AFFILIATE_NOTE_ACTIVE = (
+    "Some of these are affiliate links: if you buy through one, the seller may pay this site a commission."
+)
+AFFILIATE_NOTE_INACTIVE = "They are plain links, and this site is not paid for them."
 
 
 def _footer(*, analytics_on: bool) -> str:
     note = PRIVACY_NOTE_ANALYTICS if analytics_on else PRIVACY_NOTE_NO_ANALYTICS
+    affiliate_note = AFFILIATE_NOTE_ACTIVE if affiliate_links_active() else AFFILIATE_NOTE_INACTIVE
     return f"""<footer class="site-footer">
 <h2>Sources and terms</h2>
-<p>Game data, venues, dates, and prices are read from the
+<p>Game data, venues, and dates are read from the
 <a href="https://developer.ticketmaster.com/products-and-docs/apis/discovery-api/v2/">Ticketmaster Discovery API</a>,
 under its
 <a href="https://developer.ticketmaster.com/support/terms-of-use/">Terms of Use</a>.
 No league's own schedule is used on this site &mdash; each league page says
-why. Purchase links are plain Ticketmaster affiliate URLs; buying through
-one tells Ticketmaster this site sent you, and Ticketmaster (via its Impact
-affiliate programme) may pay this site a commission on the sale. Prices
-shown are the range Ticketmaster publishes for an event; a game with no
-Ticketmaster listing shows no price, never a guess.</p>
+why. This site does not show ticket prices. Each game's &ldquo;Buy
+tickets&rdquo; link goes to the home team's official ticket seller where we
+know it, and otherwise to the game's Ticketmaster listing.
+{affiliate_note}</p>
 <p class="privacy-note">{note}
 <a href="{PRIVACY_PATH}">Privacy: what this site measures and what it never does</a>.</p>
 </footer>
@@ -187,21 +195,19 @@ or use the direct feed URL:
 """
 
 
-def _format_price(price: dict | None) -> str | None:
-    """The one place a price range becomes display text. Returns None
-    (never a fabricated string) when Ticketmaster published no price --
-    every caller must render that None as its own explicit "not
-    available," never omit the fact or imply zero."""
-    if price is None:
+def _buy_link(game: dict, matchup: str, *, css_class: str = "") -> str | None:
+    """The one "Buy tickets" link for a game, from site_data's `buy`
+    (sellers.buy_link), with link text naming where it goes. None when
+    there is nowhere to buy; callers say so in words. No price is ever
+    shown (DECISIONS 0013)."""
+    buy = game.get("buy")
+    if not buy:
         return None
-    return f'{e(price["currency"])} {price["min"]:.2f}–{price["max"]:.2f}'
-
-
-def _price_cell(price: dict | None) -> str:
-    formatted = _format_price(price)
-    if formatted is None:
-        return '<span class="price-unavailable">not available</span>'
-    return f'<span class="price-value">{formatted}</span>'
+    text = f"Buy tickets for {matchup} on {game['start_display']} from {buy['seller']}"
+    if buy.get("home_team"):
+        text += f", the official seller for {buy['home_team']} home games"
+    class_attr = f' class="{css_class}"' if css_class else ""
+    return f'<a{class_attr} href="{e(buy["url"])}">{e(text)}</a>'
 
 
 def _matchup_text(game: dict) -> str:
@@ -257,8 +263,8 @@ def _next_game_hero(games: list[dict], *, team_name: str, fetched: bool = True) 
         return f"""<section class="next-game next-game--empty" aria-labelledby="next-game-heading">
 <h2 id="next-game-heading" class="sr-caption">Next home game</h2>
 <p class="next-game-empty-msg">No {e(team_name)} games are listed by
-Ticketmaster right now. Subscribe below and the next one will show up here
-automatically &mdash; nothing to check back for.</p>
+Ticketmaster right now. Subscribe above and the next one will show up in
+your calendar automatically &mdash; nothing to check back for.</p>
 </section>
 """
     g = games[0]
@@ -273,15 +279,9 @@ automatically &mdash; nothing to check back for.</p>
         date_chip = f'<div class="next-game-date" aria-hidden="true"><span class="next-game-month">{e(month)}</span><span class="next-game-day">{e(day)}</span></div>'
     else:
         date_chip = '<div class="next-game-date next-game-date--tbd" aria-hidden="true"><span class="next-game-month">Date</span><span class="next-game-day">TBD</span></div>'
-    formatted_price = _format_price(g["price"])
-    if formatted_price is not None:
-        price_html = f'<p class="next-game-price"><span class="next-game-price-value">{formatted_price}</span></p>'
-    else:
-        price_html = '<p class="next-game-price next-game-price-unavailable">Price not available</p>'
-    if g["ticket_url"]:
-        cta = f'<a class="next-game-cta" href="{e(g["ticket_url"])}">Buy tickets for {e(matchup)} on {e(g["start_display"])} from Ticketmaster</a>'
-    else:
-        cta = '<p class="next-game-cta next-game-cta--unavailable">No Ticketmaster listing yet for this game</p>'
+    cta = _buy_link(g, matchup, css_class="next-game-cta") or (
+        '<p class="next-game-cta next-game-cta--unavailable">No ticket link published for this game yet</p>'
+    )
     return f"""<section class="next-game" aria-labelledby="next-game-heading">
 <h2 id="next-game-heading" class="sr-caption">Next home game</h2>
 {date_chip}
@@ -289,7 +289,6 @@ automatically &mdash; nothing to check back for.</p>
 <p class="next-game-matchup">{e(matchup)}</p>
 <p class="next-game-when">{when}</p>
 <p class="next-game-venue">{e(venue)}</p>
-{price_html}
 {cta}
 </div>
 </section>
@@ -306,16 +305,12 @@ def _games_table(games: list[dict], *, buy_link_subject: str, fetched: bool = Tr
         matchup = _matchup_text(g)
         venue = ", ".join(p for p in (g["venue_name"], g["venue_city"], g["venue_state"]) if p) or "Venue not available"
         date_note = "" if g["in_calendar_feed"] else " (date TBD &mdash; not yet in the calendar feed)"
-        if g["ticket_url"]:
-            buy = f'<a href="{e(g["ticket_url"])}">Buy tickets for {e(matchup)} on {e(g["start_display"])} from Ticketmaster</a>'
-        else:
-            buy = '<span class="price-unavailable">no Ticketmaster listing</span>'
+        buy = _buy_link(g, matchup) or '<span class="ticket-unavailable">no ticket link published yet</span>'
         rows.append(
             "<tr>"
             f'<td><span class="game-date">{e(g["start_display"])}</span>{date_note}</td>'
             f"<td>{e(matchup)}</td>"
             f"<td>{e(venue)}</td>"
-            f"<td>{_price_cell(g['price'])}</td>"
             f"<td>{buy}</td>"
             "</tr>"
         )
@@ -327,7 +322,6 @@ def _games_table(games: list[dict], *, buy_link_subject: str, fetched: bool = Tr
 <th scope="col">Date</th>
 <th scope="col">Matchup</th>
 <th scope="col">Venue</th>
-<th scope="col">Price range</th>
 <th scope="col">Tickets</th>
 </tr>
 </thead>
@@ -366,9 +360,11 @@ def render_index(
     not_included_items = "\n".join(
         f"<li><strong>{e(item['name'])}:</strong> {e(item['reason'])}</li>" for item in not_included
     )
-    body = f"""<h1>Women's pro sports calendar and ticket-price finder</h1>
-<p class="lede">Subscribe once to a league or team calendar and see the
-Ticketmaster price range before you click. No account, no ads.</p>
+    body = f"""<h1>Women's pro sports calendars you subscribe to once</h1>
+<p class="lede">Pick a league or a team and add its calendar to your
+phone or computer. Every upcoming game shows up on its own, updated
+nightly, with a link to buy tickets from the team's seller. No account,
+no ads.</p>
 <h2>Leagues</h2>
 <ul class="league-strip">
 {league_links}
@@ -387,7 +383,7 @@ them):</p>
 """
     return _base(
         title=f"{SITE_NAME}: women's pro sports calendars and tickets",
-        description="Subscribable calendars and ticket-price ranges for women's pro sports leagues, from the Ticketmaster Discovery API.",
+        description="Subscribe once to a calendar for your women's pro sports league or team: every upcoming game, updated nightly, with a link to buy tickets.",
         canonical_url=f"{base_url}/",
         base_url=base_url,
         body=body,
@@ -425,6 +421,7 @@ def render_privacy(*, base_url: str, ga4_id: str | None = None) -> str:
     from the same GA4 ID as the pages' <head>, so it describes exactly what
     this build does: Google Analytics with its safeguards when an ID is
     set, "no analytics" when none is."""
+    affiliate_note = AFFILIATE_NOTE_ACTIVE if affiliate_links_active() else AFFILIATE_NOTE_INACTIVE
     if measurement_id(ga4_id) is not None:
         pages_section = f"""<h2>Web pages: Google Analytics</h2>
 <p>This site's pages use Google Analytics 4, a Google service, to count page
@@ -472,15 +469,15 @@ opt out.</p>
 <p>The <code>.ics</code> calendar feeds carry game listings and nothing else:
 no tracking pixel, no analytics, no redirecting links. A calendar app that
 subscribes to a feed and re-fetches it is not measured by this site. Ticket
-links inside a feed are the same plain Ticketmaster addresses the pages
-show.</p>
+links inside a feed are the plain Ticketmaster addresses for each game.</p>
 <h2>Ticket links</h2>
-<p>Every &ldquo;Buy tickets&rdquo; link is the plain address Ticketmaster
-publishes for that event, used as-is: never rewritten, and never routed
-through this site or through Google.{ticket_measured} Following one takes you
-to Ticketmaster, which then knows this site sent you; Ticketmaster, through
-its Impact affiliate programme, may pay this site a commission on a sale.
-What happens there is covered by Ticketmaster's own privacy policy.</p>
+<p>Every &ldquo;Buy tickets&rdquo; link is a plain address: the home team's
+own ticket seller's page for that team where we know it (for example AXS or
+SeatGeek), otherwise the address Ticketmaster publishes for that event. It is
+used as-is: never rewritten, and never routed through this site or through
+Google.{ticket_measured} Following one takes you to that seller, which then
+knows this site sent you. {affiliate_note} What happens there is covered by
+the seller's own privacy policy.</p>
 <h2>No accounts, no ads, no forms</h2>
 <p>There is nothing to sign up for, no advertising, and no form that collects
 anything.</p>
@@ -539,7 +536,7 @@ def render_league(
     og_image, og_image_alt = LEAGUE_OG_IMAGES.get(slug, (DEFAULT_OG_IMAGE, DEFAULT_OG_IMAGE_ALT))
     return _base(
         title=f"{name} calendar and tickets | {SITE_NAME}",
-        description=f"Subscribe to a {name} calendar and see Ticketmaster ticket price ranges for upcoming games.",
+        description=f"Subscribe once to a {name} calendar: every upcoming game, updated nightly, with a link to buy tickets.",
         canonical_url=f"{base_url}/{slug}/",
         base_url=base_url,
         body=body,
@@ -564,8 +561,8 @@ def render_team(
     body = f"""<nav aria-label="breadcrumb"><a href="/">All leagues</a> &rsaquo; <a href="/{e(league_slug)}/">{e(team['league_name'])}</a></nav>
 <h1>{e(team['team_name'])}</h1>
 <p class="schedule-source-note">{e(team["schedule_source_note"])}</p>
-{incomplete_note}{_next_game_hero(team["games"], team_name=team["team_name"], fetched=fetched)}
-{_subscribe_block(ics_https_url=ics_https, ics_webcal_url=ics_webcal, label=team["team_name"])}
+{incomplete_note}{_subscribe_block(ics_https_url=ics_https, ics_webcal_url=ics_webcal, label=team["team_name"])}
+{_next_game_hero(team["games"], team_name=team["team_name"], fetched=fetched)}
 <h2>Upcoming games</h2>
 {_games_table(team["games"], buy_link_subject=team["team_name"], fetched=fetched)}
 """
@@ -573,8 +570,8 @@ def render_team(
     return _base(
         title=f"{team['team_name']} calendar and tickets | {SITE_NAME}",
         description=(
-            f"Subscribe to the {team['team_name']} ({team['league_name']}) calendar and see "
-            "Ticketmaster ticket price ranges for upcoming games."
+            f"Subscribe once to the {team['team_name']} ({team['league_name']}) calendar: every "
+            "upcoming game, updated nightly, with a link to buy tickets."
         ),
         canonical_url=f"{base_url}/{league_slug}/{team_slug}/",
         base_url=base_url,
@@ -871,14 +868,11 @@ nav[aria-label="breadcrumb"] {
   line-height: 1.05; margin: 0 0 0.3rem; max-width: none;
 }
 .next-game-when, .next-game-venue { margin: 0 0 0.2rem; color: var(--on-navy-muted); font-size: 0.9375rem; max-width: none; }
-.next-game-price { margin: 0.6rem 0; max-width: none; }
-.next-game-price-value { font-family: var(--label-font); font-weight: 700; font-size: 1.3rem; }
-.next-game-price-unavailable { color: var(--on-navy-dim); font-style: italic; font-size: 0.9375rem; }
 .next-game-cta {
   display: inline-block; background: var(--gold); color: var(--navy);
   font-family: var(--label-font); font-weight: 700; letter-spacing: 0.01em;
   text-decoration: none; padding: 0.65rem 1.15rem; border-radius: 0.5rem;
-  margin-top: 0.25rem;
+  margin-top: 0.75rem;
 }
 .next-game-cta:visited { color: var(--navy); }
 .next-game-cta:hover { background: #ffd876; }
@@ -908,8 +902,7 @@ table.games-table thead th {
 table.games-table tbody tr:nth-child(even) { background: var(--surface); }
 table.games-table tbody tr:last-child td { border-bottom: 0; }
 .game-date { font-family: var(--label-font); font-weight: 700; font-variant-numeric: tabular-nums; }
-.price-unavailable { color: var(--muted); font-style: italic; }
-.price-value { font-family: var(--label-font); font-weight: 700; font-variant-numeric: tabular-nums; }
+.ticket-unavailable { color: var(--muted); font-style: italic; }
 
 .sr-caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 """

@@ -425,6 +425,27 @@ def test_snippet_without_a_signal_sets_consent_defaults_config_and_loads_gtag(tm
             assert click["hrefAfter"] == link["href"]
 
 
+def test_ticket_click_counts_every_seller_the_buy_links_can_point_at(tmp_path: Path):
+    """DECISIONS 0013: "Buy tickets" links now also go to the home team's
+    seller (AXS, SeatGeek). The ticket_click matcher is built from
+    sellers.ticket_host_names(), so those clicks count too, and a look-alike
+    host does not."""
+
+    def link(href: str, host: str) -> dict:
+        return {"href": href, "hostname": host, "protocol": "https:", "pathname": "/x", "inMain": True}
+
+    seatgeek = link("https://seatgeek.com/portland-thorns-fc-tickets", "seatgeek.com")
+    axs = link("https://www.axs.com/teams/1104736/las-vegas-aces-tickets", "www.axs.com")
+    lookalike = link("https://notseatgeek.example/x", "notseatgeek.example")
+    results = _run_snippet(
+        tmp_path, ga4_head_snippet(TEST_ID, base_url=BASE_URL), _scenarios(_LOADED[:1], [seatgeek, axs, lookalike])
+    )
+    sg, ax, other = results["no-signal"]["clicks"]
+    assert sg["pushed"] == [["event", "ticket_click", {"link_url": seatgeek["href"], "link_domain": "seatgeek.com"}]]
+    assert ax["pushed"] == [["event", "ticket_click", {"link_url": axs["href"], "link_domain": "www.axs.com"}]]
+    assert other["pushed"] == []
+
+
 # ---------------------------------------------------------------------------
 # 3. Negative controls
 # ---------------------------------------------------------------------------

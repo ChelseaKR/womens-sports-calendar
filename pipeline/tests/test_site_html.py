@@ -50,27 +50,36 @@ def test_no_script_tags_on_any_page():
         assert not SCRIPT_TAG_RE.search(html), f"{page_name} page contains a <script> tag"
 
 
-def test_no_price_rendered_without_a_ticketmaster_event_on_league_page():
-    html = _pages()["league"]
-    # The unpriced game's row must say "not available", and must not have
-    # a dollar-shaped price anywhere near it. Since only one priced game
-    # exists, exactly one price-value span should appear.
-    assert html.count('class="price-value"') == 1
-    assert html.count('class="price-unavailable"') >= 1
-    assert "USD 12.00" in html
-    assert "not available" in html
+_PRICE_WORDING = re.compile(r"price|\$\s?\d|USD|\d+\.\d\d", re.IGNORECASE)
 
 
-def test_no_price_rendered_without_a_ticketmaster_event_on_team_page():
-    html = _pages()["team"]
-    assert html.count('class="price-value"') == 1
-    assert "not available" in html
+def _visible_text(html: str) -> str:
+    return re.sub(r"<[^>]+>", " ", html)
+
+
+def test_no_price_or_price_promise_on_any_page():
+    """DECISIONS 0013: calendar-first, no prices. The fixture includes a game
+    Ticketmaster DID price (USD 12.00-34.00); no page may show it, and no
+    page may promise a price (headline, lede, footer, meta description)."""
+    for name, html in _pages().items():
+        text = _visible_text(html)
+        # Two legitimate mentions: the footer's statement that there are no
+        # prices, and Unrivaled's terms quoted in the not-included panel.
+        allowed = text.replace("This site does not show ticket prices.", "").replace("collecting product prices", "")
+        match = _PRICE_WORDING.search(allowed)
+        assert match is None, f"{name}: {match.group(0)!r} in visible text"
+        for meta in re.findall(
+            r'<meta (?:name|property)="(?:description|og:description|twitter:description)" content="([^"]*)"', html
+        ):
+            assert "price" not in meta.lower(), f"{name}: {meta}"
+        assert "12.00" not in html and "34.00" not in html
 
 
 def test_table_headers_present_with_scope():
     html = _pages()["league"]
     assert '<th scope="col">Date</th>' in html
-    assert '<th scope="col">Price range</th>' in html
+    assert '<th scope="col">Tickets</th>' in html
+    assert "Price" not in html
 
 
 def test_buy_link_text_says_where_it_goes():
@@ -203,8 +212,8 @@ def test_team_description_names_the_team_and_the_league():
     """Brief: a team page's description must name the actual team and
     league, not a generic template repeated everywhere."""
     html = _pages()["team"]
-    assert 'name="description" content="Subscribe to the Minnesota Lynx (WNBA) calendar' in html
-    assert 'property="og:description" content="Subscribe to the Minnesota Lynx (WNBA) calendar' in html
+    assert 'name="description" content="Subscribe once to the Minnesota Lynx (WNBA) calendar' in html
+    assert 'property="og:description" content="Subscribe once to the Minnesota Lynx (WNBA) calendar' in html
 
 
 def test_league_roster_links_use_real_team_names_not_title_cased_slugs():

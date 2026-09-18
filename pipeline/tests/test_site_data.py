@@ -19,34 +19,27 @@ def _game(event_id, **kwargs):
     return normalize_event(raw, league_slug="wnba", tracked_team_slug="indiana-fever", tracked_team_name="Indiana Fever")
 
 
-def test_game_to_dict_price_is_none_not_omitted_when_no_ticketmaster_price():
-    game = _game("EVT1", price_ranges=None)
-    d = game_to_dict(game)
-    assert "price" in d  # key present
-    assert d["price"] is None  # explicit null, never fabricated, never silently dropped
+def test_no_price_is_published_even_when_ticketmaster_sent_one():
+    """DECISIONS 0013: the site shows no prices, so the JSON it renders
+    from carries none -- not even for an event Ticketmaster priced."""
+    priced = _game("EVT-PRICE", price_ranges=[{"type": "standard", "currency": "USD", "min": 5.0, "max": 6.0}])
+    unpriced = _game("EVT-NOPRICE", price_ranges=None)
+    assert priced.price is not None  # the source did carry a price
+    payload = league_data(LEAGUE, [priced, unpriced])
+    serialized = json.dumps(payload)
+    assert '"price"' not in serialized
+    assert "5.0" not in serialized and "6.0" not in serialized
 
 
-def test_game_to_dict_price_present_matches_ticketmaster_values_exactly():
-    game = _game("EVT1", price_ranges=[{"type": "standard", "currency": "USD", "min": 30.0, "max": 200.0}])
-    d = game_to_dict(game)
-    assert d["price"] == {"currency": "USD", "min": 30.0, "max": 200.0}
+def test_buy_is_the_ticketmaster_event_url_when_no_primary_seller_is_known():
+    d = game_to_dict(_game("EVT1", url="https://www.ticketmaster.com/event/EVT1"))
+    assert d["buy"] == {"url": "https://www.ticketmaster.com/event/EVT1", "seller": "Ticketmaster", "home_team": ""}
+    assert d["ticket_url"] == "https://www.ticketmaster.com/event/EVT1"
 
 
-def test_no_price_rendered_without_a_ticketmaster_event():
-    """The compact JSON must never carry a price for an event Ticketmaster
-    did not itself publish one for. This is checked at the data layer
-    because the HTML is templated directly from this JSON with no other
-    place a price could be invented."""
-    no_price_game = _game("EVT-NOPRICE", price_ranges=None)
-    priced_game = _game("EVT-PRICE", price_ranges=[{"type": "standard", "currency": "USD", "min": 5.0, "max": 6.0}])
-    payload = league_data(LEAGUE, [no_price_game, priced_game])
-    by_id = {g["event_id"]: g for g in payload["games"]}
-    assert by_id["EVT-NOPRICE"]["price"] is None
-    assert by_id["EVT-PRICE"]["price"] is not None
-    # Round-trip through JSON serialization the way the pipeline actually writes it.
-    serialized = json.loads(json.dumps(payload))
-    assert serialized["games"] == payload["games"]
-    assert by_id["EVT-NOPRICE"]["price"] is None
+def test_buy_is_null_not_guessed_when_there_is_no_link():
+    d = game_to_dict(_game("EVT1", url=None))
+    assert "buy" in d and d["buy"] is None
 
 
 def test_team_data_only_includes_that_teams_games():

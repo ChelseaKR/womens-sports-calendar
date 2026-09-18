@@ -1,8 +1,9 @@
 """Compact JSON the site renders from. One dict shape, reused for the
 league-level and team-level pages. Absence discipline lives here once so
-every consumer (HTML generator, tests) sees the same rule: a game's price
-key is present and non-null only when Ticketmaster published a price range
-for that specific event -- never omitted-but-implied, never zero.
+every consumer (HTML generator, tests) sees the same rule. The site shows
+no prices (DECISIONS 0013), so no price is published here either. A game's
+`buy` key is present and either the one ticket link (sellers.buy_link) or
+null when there is nowhere to buy. It is never a guessed URL.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from datetime import datetime, timezone
 
 from .config import League, Team
 from .normalize import Game, display_start, unique_by_event_id
+from .sellers import buy_link
 
 
 def game_to_dict(game: Game) -> dict:
@@ -35,16 +37,11 @@ def game_to_dict(game: Game) -> dict:
         "tzid": game.tzid,
         "date_tbd": game.date_tbd,
         "in_calendar_feed": bool(game.start_utc is not None and not game.date_tbd),
-        "price": (
-            {
-                "currency": game.price.currency,
-                "min": game.price.min,
-                "max": game.price.max,
-            }
-            if game.price is not None
-            else None
-        ),
+        # The Ticketmaster event URL, the same one the .ics feeds carry.
         "ticket_url": game.ticket_url,
+        # Where the page's "Buy tickets" link goes: the home team's primary
+        # seller where known, else the event URL (see sellers.py).
+        "buy": buy_link(game),
     }
 
 

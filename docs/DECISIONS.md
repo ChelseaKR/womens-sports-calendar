@@ -32,6 +32,8 @@ One price source, read under its API terms, displayed as the range Ticketmaster
 publishes, never scraped from a checkout page. Where a game has no Ticketmaster
 event, the site says so; it never guesses a price.
 
+*Superseded for display by 0013 (2026-09-17): the site shows no prices.*
+
 ## 0005 — Name and domain: undecided
 
 Owner's call. Default hosting is a subdomain of chelseakr.com.
@@ -232,3 +234,53 @@ no-runtime architecture is unchanged.
 `README.md`, the site footer, the index lede, the new `/privacy/` page
 (linked from every footer) and the repo description were updated so no
 "no tracking" / "no cookies" claim remains false.
+
+## 0013 — Calendar-first, no prices; each ticket link goes to the home team's seller (2026-09-17)
+
+Owner decision, 2026-09-17. The site stops showing ticket prices and stops
+promising them. It leads with the subscribable calendars instead.
+
+Why:
+
+- **The promise was empty everywhere.** The homepage, meta descriptions and
+  social cards promised "the Ticketmaster price range before you click".
+  The live build of 2026-09-17 had a price on 0 of 182 rows (about 105
+  unique games): Ticketmaster Discovery returned no `priceRanges` for any
+  of them. A promise that is empty on every row is the "absence rendered as
+  a value" defect in the headline.
+- **No other price source clears DECISIONS 0003 without contacting
+  someone.** [moved to private strategy notes]
+- **A price shown would have to be the all-in price** under 16 CFR 464.2.
+  Ticketmaster's face-value ranges would not meet that.
+
+What changes:
+
+- **Pages carry no price anywhere:** no price column, no hero price, no
+  price copy, no price in meta descriptions, social cards or the site
+  JSON. Team pages put the subscribe block first.
+- **Each game keeps one plain "Buy tickets" link** (`sellers.py`).
+  - Where the home team's primary seller is known and is not Ticketmaster,
+    the link goes to that team's page at that seller:
+    - AXS: Las Vegas Aces, Los Angeles Sparks;
+    - SeatGeek: Portland Thorns, Utah Royals, Minnesota Frost.
+
+    Each entry records its evidence and the date it was checked. Per-game
+    URLs there are unknown, so the link text names the seller and says it
+    is that team's official seller.
+  - Otherwise the link is Ticketmaster's event URL, labelled with the host
+    it actually points to.
+  - Oakland Soul (SeatGeek) is not a tracked team (USL W League is not
+    added). AUSL's primary seller is the league's own ticketing, with
+    StubHub as its marketplace, so AUSL keeps the event link for now.
+- **Links are plain, with no affiliate IDs.**
+  `sellers.AFFILIATE_LINK_TEMPLATES` is the single place one would be added
+  once [moved to private strategy notes]. The footer's disclosure is rendered from that same table,
+  so it says "affiliate" exactly when a link is one. Today it says the
+  links are plain and the site is not paid for them.
+- **The `.ics` feeds do not change.** They still carry the Ticketmaster
+  event URL and the existing description line. A build from the same data
+  on `main` and on this change produced byte-identical feeds.
+
+Revisit if a price source passes 0003 with an all-in total price that
+allows nightly caching, indexed display, and `.ics` redistribution.
+
