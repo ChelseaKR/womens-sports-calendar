@@ -18,8 +18,14 @@ all (JS-rendered, no accessible text).** Zero leagues pass on their own
 schedule feed. The Ticketmaster Discovery API is the only source that passes,
 and it becomes the *sole* source of game data, not a price overlay joined to a
 separately-fetched schedule — see `docs/DECISIONS.md` 0006. **Leagues examined:
-8. Leagues in: 0 (own schedule). Games sourced: 100% via Ticketmaster Discovery
-API home-game listings, filtered by team keyword.**
+9. Leagues in: 0 (own schedule). Games sourced: 100% via Ticketmaster Discovery
+API home-game listings, filtered by team keyword.** (WPBL, examined
+2026-09-16, is the eighth — licence-wise it is the one outlier with no
+restrictive terms found, but it is still not tracked: see its entry in §1 and
+`docs/DECISIONS.md` 0011 for the actual, dispositive reason — zero
+Ticketmaster coverage. USL W League, examined the same day, is the ninth and
+is not tracked either: see its entry in §1 and `docs/DECISIONS.md` 0014 —
+too little Ticketmaster coverage across its 96 clubs.)
 
 ## 1. League schedule sources — examined, not used
 
@@ -146,6 +152,136 @@ leagues. Not a bypass — it is worse than the leagues' own terms.
 - **Verdict: NOT USED.** No unified feed, and the terms would forbid
   commercial reuse of NCAA Content in any case.
 
+### Addendum, read 2026-09-16: NCAA women's basketball specifically is
+### re-examined and added (Big Ten only) — the "no unified feed" reasoning
+### above was never the actual blocker under this pipeline's model
+
+Re-examined before adding a fifth tracked league, per this repo's
+licence-before-bytes rule (`docs/DECISIONS.md` 0003). The 2026-09-13 entry
+above bundled two different things under one "NOT USED" verdict: (a) NCAA
+Content itself (stats, video, "the NCAA Content") is commercially
+restricted by NCAA.com's own terms, and (b) there is no single schedule
+feed across ~350 schools. (b) reads as disqualifying on its own, but per
+`docs/DECISIONS.md` 0006 **no tracked league's own schedule feed is ever
+used** — WNBA, NWSL, PWHL, and AUSL are all tracked despite an identical
+"no usable own-site feed" finding, because tracking means querying the
+Ticketmaster Discovery API by team name, never reading a league or school's
+own site. So "no unified NCAA feed" was never actually the blocker; the
+real open questions, unchecked in the original entry, were the ones this
+addendum checks:
+
+- **Team identity stability:** unlike AU's non-softball disciplines (weekly
+  captain-redraft, no team persists a season), an NCAA women's basketball
+  team is a university's program — a fixed name, fixed venue, season after
+  season. Structurally this is the WNBA/NWSL/PWHL/AUSL shape, not the
+  excluded-AU-disciplines shape. No re-examination needed here; this was
+  always true and the original entry didn't turn on it.
+- **NCAA's and member schools' own trademark/licensing posture** (checked
+  fresh, since this repo has never queried a *governing body plus its
+  member institutions* before, only single-operator leagues):
+  - `https://www.ncaa.org/sports/2015/4/24/ncaa-org-terms-of-service.aspx`
+    (the canonical NCAA.org terms URL found via search), fetched directly
+    2026-09-16: **redirects to the NCAA.org homepage (HTTP 302)** — the
+    page no longer resolves at that URL, the same "terms page unreachable"
+    outcome already logged for NWSL above. A cached rendering of the same
+    page (via search, not a direct identifying-UA fetch — flagged, weaker
+    provenance than this doc's other entries) shows the same blanket shape
+    as every other league: *"No Content may be reproduced, republished,
+    uploaded, posted, transmitted, distributed, copied, publicly displayed
+    or otherwise used except as provided in these Terms of Use without the
+    written permission of the NCAA,"* limited to *"personal, non-commercial
+    use."* **This changes nothing** — NCAA.org's site content was never
+    going to be read either way, same reasoning as every tracked league.
+  - University of Iowa Athletics licensing page
+    (`https://hawkeyesports.com/licensing`), read 2026-09-16: *"Any product
+    bearing the logos, trademarks, word marks, or having an implied
+    association with the University of Iowa must be licensed."* This
+    governs **merchandise and marks/logos**, not plain-text naming of the
+    team — the site never uses a school's logo, colors, or mascot, only
+    the team's name as text, exactly parallel to how this product already
+    names "Indiana Fever" or "Chicago Sky" without a WNBA team licence.
+  - **Nominative fair use directly covers this.** Trademark counsel
+    commentary on NCAA marks (Stites & Harbison, "How to Use the NCAA's
+    Trademarks without Getting Sued") states plainly: *"Use of individual
+    school names (but not necessarily school colors, school logos or
+    school mascots) fall within an exception to trademark infringement law
+    referred to as 'nominative fair use.'"* The three-part nominative-use
+    test — the product can't be identified without the name, only as much
+    of the mark as needed is used, and nothing suggests sponsorship — is
+    satisfied by construction: a team-name keyword search plus a plain
+    link to that team's own Ticketmaster listing takes only the name, and
+    every purchase link leaves our site for Ticketmaster's own checkout
+    (no sponsorship implied). **No different exposure than the trademarked
+    pro-team names already in this product.**
+  - **Verdict on NCAA/school terms: NOT USED, same as every other league.**
+    Neither NCAA.org, NCAA.com, nor any school's athletics site is read by
+    this pipeline; only its team name is used as a Ticketmaster search
+    keyword and displayed as text.
+- **Ticketmaster coverage — checked empirically, not assumed** (this is the
+  one genuinely new risk this addendum was written to rule in or out:
+  college tickets often sell through a school's own box office —
+  Paciolan/Evenue systems, visible at e.g. `hawkeyesports.evenue.net` and
+  `goduke.evenue.net` — rather than Ticketmaster). Checked via Ticketmaster
+  search and direct fetch, all read 2026-09-16:
+  - Every Big Ten team checked (6 of 18: Iowa, Ohio State, Indiana,
+    Nebraska, Michigan, Rutgers) has its own dedicated Ticketmaster artist
+    page titled `"<School> Womens Basketball"` — e.g.
+    `ticketmaster.com/iowa-hawkeyes-womens-basketball-tickets/artist/849600`,
+    `.../ohio-state-buckeyes-womens-basketball-tickets/artist/849603`,
+    `.../indiana-university-womens-basketball-tickets/artist/849606`,
+    `.../university-of-nebraska-cornhuskers-womens-basketball-tickets/artist/847390`,
+    `.../university-of-michigan-women-s-basketball-tickets/artist/2551036`,
+    `.../rutgers-scarlet-knights-women-s-basketball-tickets` (via
+    StubHub-indexed search; Ticketmaster's own listing carries an artist
+    page too). Iowa's page showed a real dated event (vs. Oregon,
+    1/15/26); Duke (ACC, checked for comparison) showed two real dated
+    events (vs. UConn 11/28/26 at TD Garden; vs. Washington State
+    11/21/26). A direct fetch of Ticketmaster's Rutgers-specific search on
+    2026-09-16 returned zero current listings — the artist page exists but
+    nothing is on sale yet this early in the season for that program,
+    which the pipeline's existing coverage report already treats as a
+    normal per-team zero, not an error (`coverage.py`; the same shape as a
+    WNBA team with no game found on a given build).
+  - **Confirmed as an official channel, not just secondary-market
+    listings:** South Carolina's own athletics department (SEC, checked
+    for comparison, not tracked) states *"Single-game tickets go on sale
+    to the general public via Ticketmaster."* Iowa's own tickets page
+    (`hawkeyesports.com/tickets/wbb`) links to its Evenue box office as one
+    channel; Ticketmaster independently carries listings for the same
+    team regardless, which is all the Discovery API keyword search needs.
+  - This is stronger evidence than the AUSL venue spot-check above (two
+    venues, inferred plausibility) — six Big Ten programs directly
+    confirmed, each with a distinctly-titled artist page, several with
+    real forward-dated 2026-27 events. **Ticketmaster coverage for major-
+    conference NCAA women's basketball is real, not sparse or
+    unreliable**, contrary to the a-priori assumption that college
+    tickets mostly sell through university box offices.
+- **What changed the outcome:** NCAA women's basketball (Big Ten's 18
+  teams for the 2026-27 season) is added as a tracked league
+  (`pipeline/src/wsc_pipeline/config.py`, `docs/DECISIONS.md` 0010), same
+  Ticketmaster-only pattern as every other league. Team names are
+  suffixed "Womens Basketball" in the keyword search — unlike a WNBA/NWSL/
+  PWHL/AUSL city-franchise name, a bare school nickname (e.g. "Iowa
+  Hawkeyes") is shared across every sport that school fields, and
+  Ticketmaster's own artist-page titles already carry the same suffix, so
+  this matches the pattern rather than inventing one.
+- **What is deliberately NOT added, and why (a real, bounded starting
+  scope, not all ~350 Division I programs):** the Big Ten was picked
+  because it is the conference checked here with the most direct,
+  positive Ticketmaster-coverage evidence (6 of 18 teams spot-checked, all
+  with dedicated artist pages) — not because it is uniquely eligible.
+  Coverage and team-roster stability for the other ~332 Division I
+  women's basketball programs, across ~30 other conferences, has not been
+  systematically checked; two non-Big-Ten programs spot-checked for
+  comparison (South Carolina, Duke) also show real Ticketmaster inventory,
+  suggesting the pattern likely extends to other major conferences, but
+  "likely extends" is not the same as checked, and mid-major/low-major
+  programs were not sampled at all. NCAA women's sports other than
+  basketball (soccer, volleyball, softball, etc.) were not examined for
+  Ticketmaster coverage or team-roster stability either. Both remain in
+  `LEAGUES_EXAMINED_NOT_INCLUDED`, not a licensing block — see
+  `pipeline/src/wsc_pipeline/config.py`.
+
 ### Unrivaled (3x3 basketball league)
 
 Checked because research §6 idea 1 named it as a candidate league.
@@ -255,9 +391,99 @@ licence-before-bytes rule (`docs/DECISIONS.md` 0003).
     sites were never going to be read either way, same reasoning as
     every other league in this document).
 
+### WPBL (Women's Pro Baseball League)
+
+Checked 2026-09-16 as a candidate further tracked league — its inaugural season
+started 2026-08-01, so unlike Unrivaled/LOVB/AU it is a *currently playing*
+league, not just announced.
+
+- **What WPBL actually is, confirmed fresh (not assumed):** a real,
+  currently operating independent professional women's baseball league (no
+  MLB affiliation), co-founded by Justine Siegal, the first woman to coach
+  for an MLB organization (then-Oakland Athletics). It is the first
+  professional baseball league for women since the All-American Girls
+  Professional Baseball League dissolved in 1954. Its inaugural 2026 season
+  has four teams with fixed, season-long identities and rosters (players
+  drafted centrally in November 2025, signed to one-season contracts, 15
+  active + 2 inactive per team) — the same "fixed team roster" shape
+  WNBA/NWSL/PWHL/AUSL all have, unlike Athletes Unlimited's other three
+  disciplines, which were correctly excluded above for lacking one:
+  - Boston Hunters (Boston, MA)
+  - New York Heights (New York, NY)
+  - Los Angeles Queens (Los Angeles, CA)
+  - San Francisco Firebells (San Francisco, CA)
+
+  Structural note: unlike every currently-tracked league, WPBL's 2026 season
+  uses a single neutral hub venue — Robin Roberts Stadium in Springfield,
+  Illinois — for every game of every team, rather than each team hosting at
+  its own city's venue. This does not by itself break the pipeline's query
+  mechanism (`pipeline/src/wsc_pipeline/ticketmaster.py` does a team-name
+  keyword search with no venue/city filter, so a hub model would not stop a
+  match), but it is a real structural difference from the pattern worth
+  recording. The league has stated plans to expand to six or eight clubs;
+  not evaluated here since only the four 2026 teams currently exist.
+  Sources: `https://en.wikipedia.org/wiki/Women%27s_Pro_Baseball_League` and
+  `https://www.espn.com/mlb/story/_/id/49533662/2026-womens-pro-baseball-league-where-watch-schedule-more`,
+  both read 2026-09-16.
+- **Terms:** WPBL's own site carries **no Terms of Use / Terms of Service
+  page at all** — `https://www.womensprobaseballleague.com/terms-of-use/`
+  and `/terms-of-service/` both → **HTTP 404**, and the footer (fetched
+  2026-09-16) links only a Privacy Policy, no separate terms page. The
+  Privacy Policy (`https://www.womensprobaseballleague.com/privacy-policy/`,
+  no effective date shown, read 2026-09-16) contains no clause on automated
+  access, scraping, bots, commercial use, or reproduction/republishing —
+  it covers only personal-data handling. `https://www.womensprobaseballleague.com/robots.txt`
+  returned **HTTP 200** with a standard, permissive WordPress default
+  (`Disallow: /wp-admin/` plus a WPForms block; no blanket disallow, no
+  bot-specific rule). This is the **first league in this survey with no
+  readable restriction found anywhere** — every other league examined
+  either has a blanket commercial/automated-use ban or unreadable terms.
+  Per `docs/DECISIONS.md` 0003, "unknown means not used" is about the
+  *absence of an affirmative grant*, not about a ban — but there being
+  nothing to read at all (no terms page exists to grant or deny) is a
+  meaningfully different shape than NWSL's unreadable-JS-shell case, so it
+  is called out separately here rather than folded into "NOT USED — unknown"
+  language that would imply we found and couldn't parse a page. In any
+  case this is **moot regardless of how it's characterized**, per the
+  standing rule (DECISIONS 0006): no league's own site is ever read by this
+  pipeline, WPBL's schedule included — only Ticketmaster is queried, and
+  team names in text are nominative fair use, the same footing every
+  already-tracked team name stands on.
+- **Ticketmaster coverage — checked empirically, not assumed:** WPBL's own
+  tickets page (`https://www.womensprobaseballleague.com/tickets/`, read
+  2026-09-16) names its ticketing partner explicitly: single-game tickets
+  "starting at $22" and group tickets are sold through **TicketReturn**
+  (`ticketreturn.com`), not Ticketmaster — Ticketmaster is not named or
+  linked anywhere on that page. Spot-checked Ticketmaster's own search
+  directly for all four 2026 teams (100% of the league, not a partial
+  sample) plus the bare league name, 2026-09-16:
+  - `ticketmaster.com/search?q=Boston Hunters WPBL` → **0 results**
+  - `ticketmaster.com/search?q=New York Heights WPBL` → **0 results**
+  - `ticketmaster.com/search?q=Los Angeles Queens WPBL` → **0 results**
+  - `ticketmaster.com/search?q=San Francisco Firebells` → **0 results**
+  - `ticketmaster.com/search?q=WPBL` → **0 results**
+  - No listing found for the venue itself either (Robin Roberts Stadium,
+    Springfield, IL) under a Ticketmaster venue page.
+
+  Every result returned Ticketmaster's own "no upcoming events" message,
+  not merely a thin result. This is a clean, total absence, not a sparse
+  one — the opposite of the AUSL spot-check (2026-09-14 addendum above),
+  which found real per-venue inventory before AUSL was added.
+- **Verdict: NOT ADDED.** Team-identity shape holds up (fixed franchises,
+  same as WNBA/NWSL/PWHL/AUSL) and the licence question turns out moot
+  either way (no site is ever read, and WPBL's own terms are in any case
+  the least restrictive found in this survey). The pipeline's entire data
+  model is "Ticketmaster Discovery API event for a tracked team's keyword
+  search, or nothing" (DECISIONS 0006) — with confirmed **zero**
+  Ticketmaster inventory across all four teams and the league name itself,
+  adding WPBL would ship four team pages and `.ics` feeds that can never
+  contain a game or a price, which is exactly the "absence rendered as
+  emptiness presented as if it were coverage" failure mode this repo
+  avoids elsewhere. See `docs/DECISIONS.md` 0011.
+
 ### USL W League
 
-Checked 2026-09-16, considered as a fifth tracked league per the established
+Checked 2026-09-16, considered as a further tracked league per the established
 WNBA/NWSL/PWHL/AUSL pattern (Ticketmaster team-keyword search, never the
 league's own site).
 
@@ -461,9 +687,10 @@ re-reading the league's terms.
   carries the Impact publisher ID, the `url` field the Discovery API already
   returns per event **is** the affiliate link — Impact tracking is applied
   server-side by Ticketmaster, not by any script or wrapper we write. The
-  site renders `event.url` as a plain `<a href>`; nothing runs, nothing sets
-  a cookie on our side (DECISIONS 0002). This is the entire monetisation
-  mechanism.
+  site renders `event.url` as a plain `<a href>`; the link itself needs no
+  script and sets no cookie on our side (DECISIONS 0002). The pages' Google
+  Analytics (DECISIONS 0012) only observes a click on it, never wraps or
+  rewrites it. This is the entire monetisation mechanism.
 - **Revenue rule:** *"Our program rewards partners based on actual sales
   generated, not just traffic referrals."* *"Ticketmaster does not provide
   commission for primary ticket sales during presales or within the initial
@@ -495,22 +722,25 @@ part of this repo's own design (`docs/DECISIONS.md`, README). See
 | PWHL (HockeyTech feed) | schedule, broadcaster | **No** | ToS clause (xi) bans "automated scripts"; personal non-commercial licence | — |
 | NWSL official site | schedule | **No — unknown** | Terms page is a JS shell, unreadable; no machine-readable feed | — |
 | ECAL (NWSL/team calendar sync) | schedule | **No** | Personal-use-only + explicit data-mining/robots ban | — |
-| NCAA women's | schedule | **No** | No unified feed; ToS bans commercial exploitation of NCAA Content | — |
+| NCAA women's (own site/feed) | schedule | **No** | No unified feed; ToS bans commercial exploitation of NCAA Content | — |
 | Unrivaled | schedule | **No** | Automated-collection ban + explicit "commercial purpose... collecting product prices" ban | — |
 | LOVB | schedule | **No** | Commercial-use + data-mining/robots ban | — |
 | Athletes Unlimited | schedule | **No** | Automated-access ban + commercial-exploitation ban | — |
+| WPBL | schedule | **No — moot** | No terms page exists at all (least-restrictive site found, but no league site is ever read); **not tracked anyway — zero Ticketmaster coverage across all 4 teams, confirmed 2026-09-16** | — |
 | USL W League (uslsoccer.com terms) | schedule | **No** | Automated-collection-for-commercial-purpose ban + personal/noncommercial content licence; moot anyway — not added regardless, for coverage reasons (see §1 addendum) | — |
 | **Ticketmaster Discovery API** | event id, venue, date/time, price range, purchase URL | **Yes — sole source** | No ban on affiliate-monetised display of price ranges; nightly caching is "reasonable periods"; we never replicate Ticketmaster.com | 1 req/s self-imposed (published: 2–5 req/s conflicting, 5000/day agreed); attribution shown though not required |
 | Impact (Ticketmaster affiliate) | plain affiliate URL, applied server-side to `event.url` | **Yes** | Sanctioned monetisation route per TM's own FAQ | Impact publisher ID configured in TM developer account; approval discretionary |
 
-**Leagues examined: 8 (WNBA, PWHL, NWSL, NCAA women's, Unrivaled, LOVB,
-Athletes Unlimited, USL W League). Leagues whose own schedule is used: 0.**
-USL W League is additionally the only examined league where a Ticketmaster
-team-keyword approach was checked and rejected on coverage grounds rather
-than left unexamined — see §1's addendum, dated 2026-09-16. All game,
-venue, date, and price data in this product comes from the Ticketmaster
-Discovery API, per league via team-name filtering — see `docs/DECISIONS.md`
-0006 and `pipeline/README.md` for the mechanism.
+**Leagues examined: 9 (WNBA, PWHL, NWSL, NCAA women's, Unrivaled, LOVB,
+Athletes Unlimited, WPBL, USL W League). Leagues whose own schedule is used:
+0.** All game, venue, date, and price data in this product comes from the
+Ticketmaster Discovery API, per league via team-name filtering — see `docs/DECISIONS.md`
+0006 and `pipeline/README.md` for the mechanism. WPBL is examined but not
+tracked: see its §1 entry — the blocker is zero Ticketmaster coverage, not
+licensing.
+USL W League is examined but not tracked for the same kind of reason: a
+16-club Ticketmaster spot-check across its 96 clubs found none with
+confirmed, correctly scoped coverage (§1 addendum, dated 2026-09-16).
 
 ## 6. What remains unknown
 

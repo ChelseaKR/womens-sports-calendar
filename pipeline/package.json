@@ -1,0 +1,11 @@
+{
+  "private": true,
+  "name": "wsc-pipeline-a11y",
+  "version": "1.0.0",
+  "description": "Accessibility test tooling for `make a11y`, pinned and lockfiled: pa11y-ci (HTML_CodeSniffer + axe runners), and puppeteer + axe-core for scripts/a11y_browser_checks.mjs. No runtime JS dependency -- the pipeline itself is pure Python (see pyproject.toml).",
+  "devDependencies": {
+    "axe-core": "4.11.4",
+    "pa11y-ci": "4.1.1",
+    "puppeteer": "24.43.1"
+  }
+}

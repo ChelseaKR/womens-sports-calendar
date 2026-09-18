@@ -1,0 +1,22 @@
+# Waivers for osv-scanner (SECURITY-AND-SUPPLY-CHAIN-STANDARD §3-4: SEC-10
+# waiver hygiene, SEC-16 unfixable HIGH/CRITICAL). Every entry has a reason,
+# an expiry, and a VEX statement in vex.cdx.json. An expired entry stops
+# suppressing and the gate fails again, which forces the quarterly review.
+#
+# extract-zip 2.0.1 has no fixed release. It reaches this repository only as
+# a development dependency (pa11y-ci -> puppeteer -> @puppeteer/browsers),
+# which uses it to unpack the Chrome-for-Testing archive that puppeteer
+# downloads over HTTPS from Google's storage when the CI cache is cold.
+# Nothing it touches is deployed: the site and the .ics feeds are built by
+# the Python pipeline alone. Exploiting either advisory needs an attacker-
+# controlled zip archive; the one archive it opens is Google's.
+
+[[IgnoredVulns]]
+id = "GHSA-7pqw-9j4j-h8q3"  # CVE-2026-19693, extract-zip symlink arbitrary file write
+ignoreUntil = 2026-12-16T00:00:00Z
+reason = "No fix released; dev-only (puppeteer browser download for the a11y gate); only opens Google's Chrome-for-Testing archive. See pipeline/vex.cdx.json."
+
+[[IgnoredVulns]]
+id = "GHSA-jmr9-qjv8-65gv"  # CVE-2026-56876, extract-zip symlink path traversal
+ignoreUntil = 2026-12-16T00:00:00Z
+reason = "No fix released; dev-only (puppeteer browser download for the a11y gate); only opens Google's Chrome-for-Testing archive. See pipeline/vex.cdx.json."

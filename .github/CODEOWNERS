@@ -1,0 +1,29 @@
+# CI-CD-STANDARD §6 (CICD-17) / CODE-QUALITY-STANDARD §7 (CQ-39).
+# One maintainer today, so this routes review requests rather than adding a
+# second approver; the ruleset in .github/rulesets/main.json records
+# require_code_owner_review: false for that reason (CI-CD-STANDARD §5.1).
+*                                   @ChelseaKR
+
+# Workflow edits are poisoned-pipeline risk; rulesets are the merge policy.
+/.github/workflows/                 @ChelseaKR
+/.github/scripts/                   @ChelseaKR
+/.github/rulesets/                  @ChelseaKR
+/.github/CODEOWNERS                 @ChelseaKR
+
+# Supply-chain and policy files.
+/renovate.json                      @ChelseaKR
+/SECURITY.md                        @ChelseaKR
+/DEFINITION_OF_DONE.md              @ChelseaKR
+/.pre-commit-config.yaml            @ChelseaKR
+/pipeline/uv.lock                   @ChelseaKR
+/pipeline/package-lock.json         @ChelseaKR
+
+# Guardrails: the fail-closed build (a failed or empty fetch never publishes),
+# the absence discipline, the published-feed validator, the a11y gate config
+# and the licensing record every data source is checked against.
+/pipeline/src/wsc_pipeline/build.py        @ChelseaKR
+/pipeline/src/wsc_pipeline/normalize.py    @ChelseaKR
+/pipeline/src/wsc_pipeline/validate_ics.py @ChelseaKR
+/pipeline/pa11y-ci.config.json             @ChelseaKR
+/docs/LICENSES-AND-ATTRIBUTION.md          @ChelseaKR
+/docs/adr/                                 @ChelseaKR

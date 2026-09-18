@@ -1,0 +1,10 @@
+{
+  "private": true,
+  "name": "wsc-perf",
+  "version": "1.0.0",
+  "description": "Lighthouse, pinned and lockfiled, for `make perf` (PERFORMANCE-STANDARD, OBSERVABILITY-STANDARD §8, ACCESSIBILITY-STANDARD A11Y-02). A separate package from ../package.json so the performance and accessibility tooling change independently. Development tooling only.",
+  "type": "module",
+  "devDependencies": {
+    "lighthouse": "13.4.1"
+  }
+}

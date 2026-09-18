@@ -1,0 +1,31 @@
+{
+  "meta": {
+    "commit": "1c95aeb35dcf4ca60bc134663351bc48bdac3995",
+    "date": "2026-09-18",
+    "environment": "GitHub-hosted ubuntu-latest runner, ci.yml `verify` job, run https://github.com/ChelseaKR/womens-sports-calendar/actions/runs/35313653626 (numbers as that run's log printed them)",
+    "tools": {
+      "lighthouse": "13.4.1",
+      "chrome": "the Chrome for Testing build pinned by puppeteer 24.43.1 (../package-lock.json)",
+      "node": "22"
+    },
+    "notes": "PERFORMANCE-STANDARD §2 schema. The regression metrics are the worst page across perf/lighthouse.json's paths: the lowest performance score, the slowest LCP, the heaviest page. null = not applicable here: p95_ms (k6; the site is static files on GitHub Pages, no route of ours runs), llm_* (no LLM), js_kb_gzip (no external script; the only script is an inline loader counted in the page weight). CLS and TBT are gated by absolute budgets only: in CI they measure 0 to 0.005 and 0 ms, and 10% of (nearly) zero is not a usable tolerance."
+  },
+  "metrics": {
+    "p95_ms": null,
+    "llm_first_token_ms": null,
+    "llm_full_response_ms": null,
+    "js_kb_gzip": null,
+    "lighthouse_performance": 1.0,
+    "lcp_ms": 1580,
+    "total_byte_weight_kb": 120
+  },
+  "direction": {
+    "p95_ms": "lower_is_better",
+    "llm_first_token_ms": "lower_is_better",
+    "llm_full_response_ms": "lower_is_better",
+    "js_kb_gzip": "lower_is_better",
+    "lighthouse_performance": "higher_is_better",
+    "lcp_ms": "lower_is_better",
+    "total_byte_weight_kb": "lower_is_better"
+  }
+}
