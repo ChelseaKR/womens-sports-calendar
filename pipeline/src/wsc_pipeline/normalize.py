@@ -14,11 +14,14 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import Any
 from zoneinfo import ZoneInfo
 
-_VS_SPLIT = re.compile(r"\s+(?:vs\.?|v\.?|at|@)\s+", re.IGNORECASE)
+# "Home vs Away" (Ticketmaster's convention) or "Away at Home" / "Away @
+# Home" (the sports convention for "at": the first team is the visitor).
+_VS_SPLIT = re.compile(r"\s+(vs\.?|v\.?|at|@)\s+", re.IGNORECASE)
+_AWAY_FIRST_SEPARATORS = frozenset({"at", "@"})
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
 _MIN_MATCH_LEN = 4
 
@@ -50,22 +53,47 @@ class Game:
     price: PriceRange | None
     ticket_url: str | None
     raw_event_name: str
+    # True only when home_team/away_team came from the event name's own
+    # separator ("Home vs Away", "Away at Home"). Parsed from the two
+    # _embedded.attractions instead, the pair is right but which of them is
+    # at home is not known: nothing may then call either one the home team
+    # (structured_data.py, site_data.py's home-game flag).
+    home_away_known: bool = False
+    # Ticketmaster's venue street address, postcode and country code, used
+    # only as the structured-data address. None when Ticketmaster sent none.
+    venue_street: str | None = None
+    venue_postal_code: str | None = None
+    venue_country: str | None = None
+    # Ticketmaster's dates.status.code ("onsale", "offsale", "cancelled",
+    # "postponed", "rescheduled"), lowercased; None when it sent none.
+    status_code: str | None = None
+
+
+def parse_matchup(event_name: str, attractions: list[dict[str, Any]]) -> tuple[str | None, str | None, bool]:
+    """(home, away, home_away_known). Ticketmaster's convention (confirmed
+    against a real PWHL sample in research, and by every WNBA listing on
+    the live site: "Seattle Storm vs Las Vegas Aces" is played in Seattle)
+    is "Home Team vs. Away Team" in the event name. "Away at Home" and
+    "Away @ Home" name the visitor first. When the name has no separator,
+    exactly two _embedded.attractions give the pair, in an order that says
+    nothing about who is at home, so home_away_known is False."""
+    match = _VS_SPLIT.search(event_name)
+    if match:
+        first, second = event_name[: match.start()].strip() or None, event_name[match.end() :].strip() or None
+        if first and second:
+            if match.group(1).lower() in _AWAY_FIRST_SEPARATORS:
+                return second, first, True
+            return first, second, True
+    if len(attractions) == 2:
+        names = [a.get("name") for a in attractions if a.get("name")]
+        if len(names) == 2:
+            return names[0], names[1], False
+    return None, None, False
 
 
 def parse_teams(event_name: str, attractions: list[dict[str, Any]]) -> tuple[str | None, str | None]:
-    """Best-effort home/away split. Ticketmaster convention (confirmed
-    against a real PWHL sample in research) is "Home Team vs. Away Team" in
-    the event name; _embedded.attractions, when present with exactly two
-    entries, is used as a cross-check and fallback in that order."""
-    home: str | None = None
-    away: str | None = None
-    parts = _VS_SPLIT.split(event_name, maxsplit=1)
-    if len(parts) == 2:
-        home, away = parts[0].strip() or None, parts[1].strip() or None
-    if (home is None or away is None) and len(attractions) == 2:
-        names = [a.get("name") for a in attractions if a.get("name")]
-        if len(names) == 2:
-            home, away = names[0], names[1]
+    """(home, away) from parse_matchup, without the order flag."""
+    home, away, _known = parse_matchup(event_name, attractions)
     return home, away
 
 
@@ -212,10 +240,13 @@ def normalize_event(
         return None
 
     attractions = embedded.get("attractions") or []
-    home, away = parse_teams(raw.get("name", ""), attractions)
+    home, away, home_away_known = parse_matchup(raw.get("name", ""), attractions)
 
-    city = venue.get("city", {})
-    state = venue.get("state", {})
+    city = venue.get("city") or {}
+    state = venue.get("state") or {}
+    address = venue.get("address") or {}
+    country = venue.get("country") or {}
+    status = _text((dates.get("status") or {}).get("code"))
 
     return Game(
         event_id=event_id,
@@ -236,7 +267,19 @@ def normalize_event(
         price=_parse_price(raw.get("priceRanges")),
         ticket_url=safe_ticket_url(raw.get("url")),
         raw_event_name=raw.get("name", ""),
+        home_away_known=home_away_known,
+        venue_street=_text(address.get("line1")),
+        venue_postal_code=_text(venue.get("postalCode")),
+        venue_country=_text(country.get("countryCode")),
+        status_code=status.lower() if status else None,
     )
+
+
+def _text(value: object) -> str | None:
+    """A non-blank string, stripped; None for anything else."""
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
 
 
 def unique_by_event_id(games: Iterable[Game]) -> list[Game]:
@@ -267,10 +310,53 @@ def display_start(game: Game) -> str:
     silently swaps a TBD game's absence for a fabricated time."""
     if game.date_tbd or game.start_local_date is None:
         return "Date TBD"
-    date_str = game.start_local_date.isoformat()
-    if game.time_tba or not game.start_local_time:
-        return f"{date_str} (time TBA)"
-    return f"{date_str} {game.start_local_time}" + (f" {game.tzid}" if game.tzid else "")
+    day = display_date(game.start_local_date)
+    local_time = parse_local_time(game.start_local_time)
+    if game.time_tba or local_time is None:
+        return f"{day} (time TBA)"
+    zone = zone_for(game.tzid)
+    # The venue's own zone abbreviation for that date ("PDT", "MST"), from
+    # Ticketmaster's venue timezone; "local time" when it sent none.
+    abbr = datetime.combine(game.start_local_date, local_time, tzinfo=zone).tzname() if zone else None
+    return f"{day}, {display_time(local_time)} {abbr or 'local time'}"
+
+
+def display_date(d: date) -> str:
+    """ "Sun, Sep 20, 2026". Locale-independent: %a and %b are English
+    under the C locale the pipeline runs in."""
+    return f"{d:%a}, {d:%b} {d.day}, {d.year}"
+
+
+def display_time(t: time) -> str:
+    """ "6:00 PM" from a local wall-clock time."""
+    return f"{t.hour % 12 or 12}:{t.minute:02d} {'AM' if t.hour < 12 else 'PM'}"
+
+
+def parse_local_time(value: str | None) -> time | None:
+    """Ticketmaster's dates.start.localTime ("19:00:00") as a time, or None
+    when absent or unparseable -- never a default time."""
+    if not value:
+        return None
+    try:
+        return time.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def local_start(game: Game) -> datetime | None:
+    """The exact start instant in the venue's own time zone, or None unless
+    every part of it is known: a real (not TBD) date, a published time (not
+    TBA), Ticketmaster's UTC instant, and a resolvable venue time zone. This
+    is the one test for "known date and time" that the structured data uses;
+    nothing here ever fills a gap with a default."""
+    if game.date_tbd or game.time_tba or game.start_utc is None or parse_local_time(game.start_local_time) is None:
+        return None
+    if game.start_utc.tzinfo is None:  # an instant with no offset is not an instant
+        return None
+    zone = zone_for(game.tzid)
+    if zone is None:
+        return None
+    return game.start_utc.astimezone(zone)
 
 
 def zone_for(tzid: str | None) -> ZoneInfo | None:

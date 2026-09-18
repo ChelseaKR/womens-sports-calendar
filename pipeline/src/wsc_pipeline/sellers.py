@@ -137,8 +137,10 @@ def seller_label_for_url(url: str) -> str:
 def home_team_seller(game: Game) -> tuple[config.Team, Seller] | None:
     """The primary seller of this game's home team, if one is recorded.
     Only the home team counts: an Aces game at Seattle is sold by Seattle's
-    seller, not by AXS."""
-    if not game.home_team:
+    seller, not by AXS. When the event name does not say which side is at
+    home (the teams came from Ticketmaster's attraction list), no team's
+    seller is assumed: the link stays the event's own listing."""
+    if not game.home_team or not game.home_away_known:
         return None
     for (league_slug, team_slug), seller in PRIMARY_SELLERS.items():
         if league_slug != game.league_slug:

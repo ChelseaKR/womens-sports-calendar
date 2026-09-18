@@ -12,7 +12,9 @@ from .conftest import make_raw_event
 LEAGUE = LEAGUES[0]  # wnba
 TEAM = LEAGUE.teams[0]
 
-SCRIPT_TAG_RE = re.compile(r"<script\b", re.IGNORECASE)
+# An executable <script>: anything but a JSON-LD data block, which browsers
+# never run (structured_data.py).
+SCRIPT_TAG_RE = re.compile(r"<script\b(?![^>]*\btype=\"application/ld\+json\")", re.IGNORECASE)
 
 
 def _game(event_id, **kwargs):
@@ -30,7 +32,35 @@ def _pages():
     # unpriced games above, so the populated-games-table pa11y check in
     # `make a11y` (see pipeline/README.md) covers all three cell shapes.
     date_tbd = _game("EVT-TBD", date_time=None, local_date="2026-08-01", local_time=None, date_tbd=True)
-    games = [priced, unpriced, date_tbd]
+    # The tracked team at home (the next-home-game hero and a "Home" label),
+    # away and cancelled (an "Away" label and a status), and a game whose
+    # date is known but not its time -- so the a11y sweep covers every cell
+    # shape a real team page can show.
+    home = _game(
+        "EVT-HOME",
+        name=f"{TEAM.name} vs Seattle Storm",
+        date_time="2026-06-10T00:00:00Z",
+        local_date="2026-06-09",
+        local_time="19:00:00",
+        venue_name="Target Center",
+        venue_city="Minneapolis",
+        venue_state="MN",
+        timezone="America/Chicago",
+    )
+    away_cancelled = _game(
+        "EVT-AWAY",
+        name=f"Seattle Storm vs {TEAM.name}",
+        date_time="2026-06-12T02:00:00Z",
+        local_date="2026-06-11",
+        local_time="19:00:00",
+        status="cancelled",
+        venue_name="Climate Pledge Arena",
+        venue_city="Seattle",
+        venue_state="WA",
+        timezone="America/Los_Angeles",
+    )
+    time_tba = _game("EVT-TBA", date_time=None, local_date="2026-06-20", local_time=None, time_tba=True)
+    games = [priced, unpriced, date_tbd, home, away_cancelled, time_tba]
     league_payload = league_data(LEAGUE, games)
     team_payload = team_data(TEAM, LEAGUE, games)
     # A fetched build states when it fetched (site_data.provenance); a fixed
@@ -212,15 +242,15 @@ def test_titles_use_the_product_name_never_the_repo_slug():
         title = re.search(r"<title>(.*?)</title>", html).group(1)
         assert "Next Home Game" in title
         assert "womens-sports-calendar" not in html
-    assert "<title>Minnesota Lynx calendar and tickets | Next Home Game</title>" in pages["team"]
+    assert "<title>Minnesota Lynx 2026 schedule: add to your calendar | Next Home Game</title>" in pages["team"]
 
 
 def test_team_description_names_the_team_and_the_league():
     """Brief: a team page's description must name the actual team and
     league, not a generic template repeated everywhere."""
     html = _pages()["team"]
-    assert 'name="description" content="Subscribe once to the Minnesota Lynx (WNBA) calendar' in html
-    assert 'property="og:description" content="Subscribe once to the Minnesota Lynx (WNBA) calendar' in html
+    assert 'name="description" content="Minnesota Lynx 2026 schedule (WNBA): add every game to Google Calendar' in html
+    assert 'property="og:description" content="Minnesota Lynx 2026 schedule (WNBA): add every game' in html
 
 
 def test_league_roster_links_use_real_team_names_not_title_cased_slugs():

@@ -49,9 +49,11 @@ says the schedule was not fetched, never "no games". With a key
 - `site/` — where the deployed output logically lives; see `site/README.md`
   for why the generator itself is in `pipeline/`. The built output
   (`pipeline/dist/`, gitignored, rebuilt every run) is one page per league and
-  team: the subscribe link first, then the next games, each with one plain
-  ticket link (`pipeline/src/wsc_pipeline/sellers.py`) and no prices, plus
-  `/privacy/`. The only script is one inline
+  team: the subscribe buttons (Google Calendar, Apple Calendar, Outlook)
+  first, then the next home game and the upcoming games, each with one
+  plain ticket link (`pipeline/src/wsc_pipeline/sellers.py`) and no prices,
+  plus `/privacy/`, `sitemap.xml` and `robots.txt`. Pages carry schema.org
+  JSON-LD (a data block, never run). The only script that runs is one inline
   Google Analytics 4 loader per page, emitted only while
   `pipeline/src/wsc_pipeline/analytics.py`'s `GA4_MEASUREMENT_ID` is set
   (it is: `G-YKGPZ76LVE`); it loads nothing under Global Privacy Control,
@@ -72,9 +74,12 @@ registered 2026-09-14 (Amazon Registrar, Route 53 DNS), the apex points at
 GitHub Pages, the Pages custom domain is set and its certificate is issued,
 and `pages.yml` deploys nightly. `www.nexthomegame.com` now has its `CNAME`
 to `chelseakr.github.io`, but GitHub's certificate still covers only the
-apex, so `https://www` fails. Still open, all owner steps: "Enforce HTTPS"
-is off (plain `http://` is served without a redirect), and `SITE_BASE_URL`
-is unset (the build's default, `https://nexthomegame.com`, is what is used).
+apex, so `https://www` fails (checked 2026-09-18). "Enforce HTTPS" is on:
+`http://` and `http://www` both redirect to `https://nexthomegame.com/`.
+`SITE_BASE_URL` is unset (the build's default, `https://nexthomegame.com`,
+is what is used). Still open, owner steps: the `https://www` certificate,
+and verifying the Google Search Console Domain property (a DNS TXT record
+in the Route 53 zone) and submitting `https://nexthomegame.com/sitemap.xml`.
 
 ## Not yet decided
 

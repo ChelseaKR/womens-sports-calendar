@@ -27,8 +27,11 @@ make verify
 It runs every check CI runs, in the same order, from the repository root:
 the lockfile drift check, ruff, ruff format, mypy --strict, the
 marker check, the tests with an 85% branch-coverage floor, a wheel build, a
-degraded build of the site, HTML validation, `.ics` validation, the
-accessibility sweep over every page, and pip-audit. CI runs exactly this
+degraded build of the site, HTML validation, `.ics` validation, the search
+checks (sitemap, robots.txt, titles, structured data: `make validate-seo`),
+the same HTML, `.ics` and search checks on a populated fixture site
+(`make validate-fixture-site`), the accessibility sweep over every page, and
+pip-audit. CI runs exactly this
 target (`.github/workflows/ci.yml`). If `make verify` is green locally, the
 `verify` check should be green too. The security scans (gitleaks, Semgrep,
 OSV-Scanner) run in `.github/workflows/security.yml`.

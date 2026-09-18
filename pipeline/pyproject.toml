@@ -64,6 +64,11 @@ allowed-confusables = ["‘", "’", "–"]
 # pipeline root on sys.path before importing the package and the shared test
 # fixtures, so those imports necessarily follow code.
 "scripts/render_a11y_fixtures.py" = ["E402"]
+"scripts/build_fixture_site.py" = ["E402"]
+# Parses only the sitemap.xml the build it validates has just written into
+# the directory it was given -- never XML from anyone else -- so S314's
+# untrusted-XML concern (entity expansion) does not arise.
+"src/wsc_pipeline/validate_seo.py" = ["S314"]
 "scripts/check_a11y_coverage.py" = ["E402"]
 
 [tool.ruff.lint.mccabe]

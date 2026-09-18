@@ -127,6 +127,16 @@ jobs:
           set -euo pipefail
           make validate-ics
 
+      # What search engines read, on the real fetched build: sitemap and
+      # robots.txt agree with the pages, every <lastmod> matches the
+      # lastmod.json the next build compares against, and every SportsEvent
+      # describes a listed game with a known date and time. A failure stops
+      # the job here; the last good deploy stays live.
+      - name: make validate-seo
+        run: |
+          set -euo pipefail
+          make validate-seo
+
       - name: Print the coverage report to the job summary
         run: |
           set -euo pipefail

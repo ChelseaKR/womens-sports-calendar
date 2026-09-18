@@ -40,7 +40,11 @@ BASE_URL = "https://nexthomegame.com"
 HOST = "nexthomegame.com"
 GPC_GUARD = "if (n.globalPrivacyControl === true) return;"
 DNT_GUARD = 'if (dnt === "1" || dnt === "yes") return;'
-GA_MARKERS = ("<script", "googletagmanager", "gtag", "dataLayer", "google-analytics", TEST_ID)
+GA_MARKERS = ("googletagmanager", "gtag", "dataLayer", "google-analytics", TEST_ID)
+# A <script> element a browser runs: anything but a JSON-LD structured-data
+# block (<script type="application/ld+json">, structured_data.py), which is
+# data for search engines and never executes.
+EXECUTABLE_SCRIPT_RE = re.compile(r"<script\b(?![^>]*\btype=\"application/ld\+json\")", re.IGNORECASE)
 EEA_UK_CH = {
     "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE", "IT", "LV",
     "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE", "IS", "LI", "NO", "GB", "CH",
@@ -80,9 +84,13 @@ def _assert_guarded_ga(html: str, ga4_id: str) -> None:
     """The page carries exactly one <script>, in <head>, and it is exactly
     the guarded loader: the hostname, GPC and DNT guards all return before
     dataLayer, the gtag.js request, or the click listener exist."""
-    scripts = re.findall(r"<script\b.*?</script>", html, flags=re.IGNORECASE | re.DOTALL)
-    assert len(scripts) == 1, f"expected exactly one <script>, found {len(scripts)}"
-    assert len(re.findall(r"<script\b", html, flags=re.IGNORECASE)) == 1
+    scripts = [
+        m
+        for m in re.findall(r"<script\b.*?</script>", html, flags=re.IGNORECASE | re.DOTALL)
+        if EXECUTABLE_SCRIPT_RE.match(m)
+    ]
+    assert len(scripts) == 1, f"expected exactly one executable <script>, found {len(scripts)}"
+    assert len(EXECUTABLE_SCRIPT_RE.findall(html)) == 1
     script = scripts[0]
     assert script + "\n</head>" in html, "the GA loader must close out <head>"
     first_effect = min(
@@ -115,6 +123,7 @@ def test_a_build_with_no_id_emits_no_ga_on_any_page(tmp_path: Path, unset):
     pages = _html_pages(out_dir)
     assert set(pages) == _expected_pages()
     for path, html in pages.items():
+        assert not EXECUTABLE_SCRIPT_RE.search(html), f"{path} has an executable <script> with no GA4 ID set"
         for marker in GA_MARKERS:
             assert marker not in html, f"{path} contains {marker!r} with no GA4 ID set"
         assert "This site runs no analytics" in html, path
@@ -213,7 +222,7 @@ def test_main_with_the_id_unset_emits_nothing_and_says_so(tmp_path: Path, monkey
     out_dir = tmp_path / "dist"
     assert build_module.main(["--out", str(out_dir), "--base-url", BASE_URL]) == 0
     for path, html in _html_pages(out_dir).items():
-        assert "<script" not in html, path
+        assert not EXECUTABLE_SCRIPT_RE.search(html), path
     assert "GA4_MEASUREMENT_ID is empty" in capsys.readouterr().err
 
 

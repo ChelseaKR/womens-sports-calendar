@@ -1,4 +1,4 @@
-.PHONY: install install-a11y test build verify clean a11y
+.PHONY: install install-a11y test build verify clean a11y validate-html validate-ics validate-seo validate-fixture-site
 .PHONY: lint format-check typecheck markers wheel audit
 
 # Recipes run under bash with errexit, nounset and pipefail. .SHELLFLAGS needs
@@ -132,6 +132,30 @@ validate-html: install
 validate-ics:
 	uv run python -m wsc_pipeline.validate_ics dist
 
+# What search engines read: robots.txt, a sitemap that lists exactly the
+# built pages with truthful <lastmod> dates, one title/description/H1 and a
+# self-canonical per page, and structured data that says no more than the
+# page's own data -- no SportsEvent for a date- or time-TBD game, none on a
+# build that fetched nothing. Run by `make verify` and, against the real
+# fetched build, by pages.yml before deploy -- see
+# src/wsc_pipeline/validate_seo.py.
+validate-seo:
+	uv run python -m wsc_pipeline.validate_seo dist
+
+# The same HTML, feed and structured-data validators on a populated site.
+# `make verify`'s own build has no Ticketmaster key, so its pages never carry
+# a game, a next-game hero, a fetch time or a SportsEvent, and a validator
+# that only ever sees that build cannot fail on any of them (the 2026-09-18
+# nightly deploy failed validate-html on a fetch time no CI build had
+# printed). scripts/build_fixture_site.py runs the real build over canned
+# Ticketmaster listings (tests/fixture_site.py) into dist-fixture/.
+validate-fixture-site: install
+	rm -rf dist-fixture
+	uv run python scripts/build_fixture_site.py dist-fixture
+	uv run html5validator --root dist-fixture
+	uv run python -m wsc_pipeline.validate_ics dist-fixture
+	uv run python -m wsc_pipeline.validate_seo dist-fixture
+
 # Real, CI-enforced accessibility gate -- runs pa11y (WCAG2AA) against every
 # HTML page the build actually produced (index, league pages, team pages),
 # not a one-time manual check. Requires Node/npx (see .github/workflows/ci.yml).
@@ -204,7 +228,7 @@ a11y: install install-a11y build
 	node scripts/a11y_browser_checks.mjs a11y-browser-results.json $$urls; \
 	uv run python scripts/check_a11y_browser_report.py a11y-browser-results.json $$urls
 
-verify: install lint format-check typecheck markers test wheel build validate-html validate-ics a11y audit
+verify: install lint format-check typecheck markers test wheel build validate-html validate-ics validate-seo validate-fixture-site a11y audit
 
 clean:
-	rm -rf dist dist.tmp .pytest_cache .venv node_modules pa11y-ci-results.json a11y-browser-results.json
+	rm -rf dist dist.tmp dist-fixture .pytest_cache .venv node_modules pa11y-ci-results.json a11y-browser-results.json

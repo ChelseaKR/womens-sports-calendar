@@ -19,11 +19,11 @@ import json
 import os
 import shutil
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from importlib.metadata import version as package_version
 from pathlib import Path
 
-from . import analytics, config, ics, site, site_data
+from . import analytics, config, ics, site, site_data, sitemap
 from .coverage import BuildCoverage, compute_league_coverage, render_report
 from .normalize import Game, normalize_event, team_is_participant, unique_by_event_id
 from .ticketmaster import DiscoveryClient, TicketmasterFetchError
@@ -119,6 +119,7 @@ def build(
     api_key: str | None,
     affiliate_id: str | None,
     ga4_id: str | None = None,
+    previous_state: dict[str, sitemap.PageState] | None = None,
 ) -> BuildCoverage:
     """Fetches and writes to a temp directory first, then atomically
     replaces --out only on full success. A fetch failure raises before the
@@ -131,6 +132,11 @@ def build(
     data/*.json are written without it, so they are byte-identical whether
     or not an ID is set. None or "" emits no analytics at all; a malformed
     ID raises ValueError here, before anything is fetched or written.
+
+    previous_state is the live site's lastmod.json (main() reads it;
+    sitemap.py has the rules): what each page's sitemap <lastmod> is
+    carried over from. None means no history, so no schedule page gets a
+    lastmod -- never the build time in its place.
     """
     ga4_id = analytics.measurement_id(ga4_id)
     api_key_present = bool(api_key)
@@ -140,7 +146,11 @@ def build(
         games, truncated, mismatched, requests_made, bytes_received = [], {}, {}, 0, 0
     # When the listings were read (DATA-GOVERNANCE-STANDARD DG-02). None when
     # nothing was fetched: a degraded build states no fetch time at all.
-    fetched_at = datetime.now(UTC) if api_key_present else None
+    # Whole seconds, everywhere it is published: the page's <time datetime>
+    # allows at most three fractional digits (the 2026-09-18 nightly deploy
+    # failed on six, #37), and it is also every changed page's sitemap
+    # <lastmod>, which validate_seo holds to whole seconds.
+    fetched_at = datetime.now(UTC).replace(microsecond=0) if api_key_present else None
 
     tmp_dir = out_dir.with_name(out_dir.name + ".tmp")
     if tmp_dir.exists():
@@ -167,11 +177,12 @@ def build(
         api_key_present=api_key_present,
     )
 
-    _write_ics(tmp_dir, games_by_league, api_key_present)
-    _write_data(tmp_dir, base_url, games_by_league, api_key_present, truncated, fetched_at=fetched_at)
+    _write_ics(tmp_dir, base_url, games_by_league, api_key_present)
+    fingerprints = _write_data(tmp_dir, base_url, games_by_league, api_key_present, truncated, fetched_at=fetched_at)
     _write_html(tmp_dir, base_url, games_by_league, api_key_present, truncated, ga4_id, fetched_at=fetched_at)
     _write_static(tmp_dir)
-    _write_sitemap_and_robots(tmp_dir, base_url)
+    state = sitemap.next_state(fingerprints, previous_state, fetched_at)
+    _write_sitemap_and_robots(tmp_dir, base_url, state)
     _write_version(tmp_dir, fetched_at)
 
     (tmp_dir / "COVERAGE.txt").write_text(render_report(coverage) + "\n", encoding="utf-8")
@@ -182,15 +193,17 @@ def build(
     return coverage
 
 
-def _write_ics(out_dir: Path, games_by_league: dict[str, list[Game]], fetched: bool) -> None:
+def _write_ics(out_dir: Path, base_url: str, games_by_league: dict[str, list[Game]], fetched: bool) -> None:
     for lg in config.LEAGUES:
         games = games_by_league[lg.slug]
-        cal = ics.league_calendar(lg.slug, lg.name, games, fetched=fetched)
+        cal = ics.league_calendar(lg.slug, lg.name, games, fetched=fetched, base_url=base_url)
         (out_dir / "ics" / f"{lg.slug}.ics").write_bytes(cal.to_ical())
         team_dir = out_dir / "ics" / lg.slug
         team_dir.mkdir(exist_ok=True)
         for team in lg.teams:
-            team_cal = ics.team_calendar(team.slug, team.name, games, fetched=fetched)
+            team_cal = ics.team_calendar(
+                team.slug, team.name, games, fetched=fetched, base_url=base_url, league_slug=lg.slug
+            )
             (team_dir / f"{team.slug}.ics").write_bytes(team_cal.to_ical())
 
 
@@ -202,13 +215,19 @@ def _write_data(
     truncated: dict[str, set[str]],
     *,
     fetched_at: datetime | None = None,
-) -> None:
+) -> dict[str, str]:
+    """Writes data/*.json and returns each schedule page's fingerprint
+    (sitemap.fingerprint), keyed by its site path: the league and team
+    pages render from exactly these payloads, and the home page from the
+    per-league counts in site.json."""
     data_dir = out_dir / "data"
     provenance = site_data.provenance(fetched_at)
+    fingerprints: dict[str, str] = {}
     for lg in config.LEAGUES:
         games = games_by_league[lg.slug]
         incomplete = truncated.get(lg.slug, set())
         payload = site_data.league_data(lg, games, fetched=api_key_present, possibly_incomplete_teams=incomplete)
+        fingerprints[f"/{lg.slug}/"] = sitemap.fingerprint(payload)
         payload.update(provenance)
         (data_dir / f"{lg.slug}.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
         team_dir = data_dir / lg.slug
@@ -217,6 +236,7 @@ def _write_data(
             team_payload = site_data.team_data(
                 team, lg, games, fetched=api_key_present, possibly_incomplete=team.slug in incomplete
             )
+            fingerprints[f"/{lg.slug}/{team.slug}/"] = sitemap.fingerprint(team_payload)
             team_payload.update(provenance)
             (team_dir / f"{team.slug}.json").write_text(json.dumps(team_payload, indent=2), encoding="utf-8")
 
@@ -226,8 +246,10 @@ def _write_data(
         api_key_present=api_key_present,
         not_included=list(config.LEAGUES_EXAMINED_NOT_INCLUDED),
     )
+    fingerprints["/"] = sitemap.fingerprint({"leagues": summary["leagues"]})
     summary.update(provenance)
     (data_dir / "site.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    return fingerprints
 
 
 def _write_html(
@@ -313,16 +335,22 @@ def _write_static(out_dir: Path) -> None:
         shutil.copyfile(src, fonts_dir / name)
 
 
-def _write_sitemap_and_robots(out_dir: Path, base_url: str) -> None:
-    urls = [f"{base_url}/", f"{base_url}{site.PRIVACY_PATH}", f"{base_url}{site.ACCESSIBILITY_PATH}"]
+def _write_sitemap_and_robots(out_dir: Path, base_url: str, state: dict[str, sitemap.PageState]) -> None:
+    """sitemap.xml (every indexable page; the 404 is not one), robots.txt,
+    and lastmod.json, the state the next build compares against."""
+    entries: list[tuple[str, str | date | None]] = [
+        ("/", state["/"].changed_at),
+        (site.PRIVACY_PATH, site.PRIVACY_UPDATED),
+        (site.ACCESSIBILITY_PATH, site.ACCESSIBILITY_UPDATED),
+    ]
     for lg in config.LEAGUES:
-        urls.append(f"{base_url}/{lg.slug}/")
+        entries.append((f"/{lg.slug}/", state[f"/{lg.slug}/"].changed_at))
         for team in lg.teams:
-            urls.append(f"{base_url}/{lg.slug}/{team.slug}/")
-    body = "\n".join(f"  <url><loc>{u}</loc></url>" for u in urls)
-    sitemap = f'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n{body}\n</urlset>\n'
-    (out_dir / "sitemap.xml").write_text(sitemap, encoding="utf-8")
-    (out_dir / "robots.txt").write_text(f"User-agent: *\nAllow: /\nSitemap: {base_url}/sitemap.xml\n", encoding="utf-8")
+            path = f"/{lg.slug}/{team.slug}/"
+            entries.append((path, state[path].changed_at))
+    (out_dir / "sitemap.xml").write_text(sitemap.render_sitemap(base_url, entries), encoding="utf-8")
+    (out_dir / "robots.txt").write_text(sitemap.render_robots(base_url), encoding="utf-8")
+    (out_dir / sitemap.STATE_PATH).write_text(sitemap.render_state(state), encoding="utf-8")
 
 
 def _write_version(out_dir: Path, fetched_at: datetime | None) -> None:
@@ -388,9 +416,19 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
 
+    # The live site's own record of when each page last changed (sitemap.py).
+    # Read only for a build that will fetch listings: a degraded build
+    # records no dates, so it has nothing to compare.
+    previous_state = sitemap.fetch_previous_state(args.base_url) if api_key else None
+
     try:
         coverage = build(
-            out_dir=args.out, base_url=args.base_url, api_key=api_key, affiliate_id=affiliate_id, ga4_id=ga4_id
+            out_dir=args.out,
+            base_url=args.base_url,
+            api_key=api_key,
+            affiliate_id=affiliate_id,
+            ga4_id=ga4_id,
+            previous_state=previous_state,
         )
     except TicketmasterFetchError as exc:
         print(f"BUILD FAILED: {exc}", file=sys.stderr)

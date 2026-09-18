@@ -114,3 +114,42 @@ def test_dtstart_present_on_every_included_event():
     cal = build_calendar([game], cal_name="Test")
     event = cal.walk("VEVENT")[0]
     assert event.get("dtstart") is not None
+
+
+def test_team_feed_names_itself_and_links_back_to_its_page():
+    from wsc_pipeline.ics import team_calendar
+
+    game = _game("EVT-LINK")
+    cal = team_calendar(
+        "indiana-fever", "Indiana Fever", [game], base_url="https://nexthomegame.com", league_slug="wnba"
+    )
+    page = "https://nexthomegame.com/wnba/indiana-fever/"
+    assert str(cal["x-wr-calname"]) == "Indiana Fever (Next Home Game)"
+    assert str(cal["name"]) == "Indiana Fever (Next Home Game)"
+    assert page in str(cal["x-wr-caldesc"]) and page in str(cal["description"])
+    assert str(cal["url"]) == page
+    assert str(cal["x-published-ttl"]) == "P1D"
+    assert cal["refresh-interval"].params["VALUE"] == "DURATION"
+    event = cal.walk("VEVENT")[0]
+    assert f"More games and calendars: {page}" in str(event["description"])
+
+
+def test_the_link_back_never_touches_a_uid():
+    """Subscribers keep their events across this change: the UID is the
+    same with or without a page link, under any base URL."""
+    from wsc_pipeline.ics import league_calendar
+
+    game = _game("EVT-STABLE")
+    uids = {
+        str(league_calendar("wnba", "WNBA", [game], base_url=base).walk("VEVENT")[0]["uid"])
+        for base in (None, "https://nexthomegame.com", "https://example.org")
+    }
+    assert uids == {make_uid("EVT-STABLE")} == {"tm-EVT-STABLE@womens-sports-calendar.invalid"}
+
+
+def test_an_unfetched_feed_still_says_why_it_is_empty_and_links_back():
+    from wsc_pipeline.ics import league_calendar
+
+    cal = league_calendar("wnba", "WNBA", [], fetched=False, base_url="https://nexthomegame.com")
+    desc = str(cal["x-wr-caldesc"])
+    assert desc.startswith("Not fetched") and "https://nexthomegame.com/wnba/" in desc

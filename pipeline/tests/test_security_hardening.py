@@ -91,7 +91,12 @@ def test_hostile_ticketmaster_strings_render_as_text_not_markup() -> None:
     pages = _rendered_pages()
     for name, html in pages.items():
         assert HOSTILE.replace('"', "&quot;").replace("<", "&lt;").replace(">", "&gt;") in html, name
-        assert not re.search(r"<script\b", html, re.IGNORECASE), f"{name}: raw <script> reached the page"
+        # The page's own JSON-LD block is the only <script> allowed, and it
+        # escapes "<" and ">", so the hostile "</script><script>" cannot
+        # close it and open a new one.
+        scripts = re.findall(r"<script\b[^>]*>", html, re.IGNORECASE)
+        assert scripts in ([], ['<script type="application/ld+json">']), f"{name}: raw <script> reached the page"
+        assert html.count("</script>") == len(scripts), f"{name}: a hostile string closed a <script>"
         assert "<img src=x" not in html, f"{name}: raw <img> reached the page"
 
 

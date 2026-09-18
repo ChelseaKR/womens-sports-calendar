@@ -10,6 +10,21 @@ from __future__ import annotations
 
 import pytest
 
+from wsc_pipeline import sitemap
+
+# The real reader of the live site's data/lastmod.json, kept before the
+# autouse fixture below replaces it, for the tests that exercise it against
+# a mock transport.
+REAL_FETCH_PREVIOUS_STATE = sitemap.fetch_previous_state
+
+
+@pytest.fixture(autouse=True)
+def _no_live_site_reads(monkeypatch):
+    """No test reads the live nexthomegame.com: build.main() fetches the
+    previous lastmod manifest whenever an API key is set, and several tests
+    set a fake one."""
+    monkeypatch.setattr(sitemap, "fetch_previous_state", lambda base_url, **kwargs: None)
+
 
 def make_raw_event(
     *,
@@ -27,6 +42,10 @@ def make_raw_event(
     timezone: str | None = "America/Indiana/Indianapolis",
     attractions: list[str] | None = None,
     url: str | None = "https://www.ticketmaster.com/event/EVT1",
+    venue_street: str | None = None,
+    venue_postal_code: str | None = None,
+    venue_country: str | None = None,
+    status: str | None = None,
 ) -> dict:
     raw: dict = {
         "id": event_id,
@@ -44,6 +63,8 @@ def make_raw_event(
         },
         "_embedded": {},
     }
+    if status is not None:
+        raw["dates"]["status"] = {"code": status}
     if price_ranges is not None:
         raw["priceRanges"] = price_ranges
     venues = []
@@ -57,6 +78,12 @@ def make_raw_event(
             }
         )
     if venues:
+        if venue_street:
+            venues[0]["address"] = {"line1": venue_street}
+        if venue_postal_code:
+            venues[0]["postalCode"] = venue_postal_code
+        if venue_country:
+            venues[0]["country"] = {"countryCode": venue_country}
         raw["_embedded"]["venues"] = venues
     if attractions:
         raw["_embedded"]["attractions"] = [{"name": a} for a in attractions]

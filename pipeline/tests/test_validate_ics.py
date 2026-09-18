@@ -96,3 +96,22 @@ def test_unparseable_feed_fails(tmp_path: Path, monkeypatch):
     (dist / "ics" / f"{WNBA.slug}.ics").write_text("<html>not a calendar</html>", encoding="utf-8")
     with pytest.raises(validate_ics.FeedError):
         validate_ics.validate_dist(dist)
+
+
+@pytest.mark.parametrize(
+    "prop,value,match",
+    [
+        ("url", "https://nexthomegame.com/nwsl/", "is not this calendar's page"),
+        ("x-wr-caldesc", "Ticketmaster-listed games.", "does not link"),
+    ],
+)
+def test_feed_that_does_not_link_back_to_its_page_fails(tmp_path: Path, monkeypatch, prop, value, match):
+    dist = _built(tmp_path, monkeypatch, with_games=True)
+    feed = dist / "ics" / WNBA.slug / f"{TEAM_A.slug}.ics"
+    cal = Calendar.from_ical(feed.read_bytes())
+    before = str(cal[prop])
+    cal[prop] = value
+    feed.write_bytes(cal.to_ical())
+    assert str(Calendar.from_ical(feed.read_bytes())[prop]) != before  # the sabotage landed
+    with pytest.raises(validate_ics.FeedError, match=match):
+        validate_ics.validate_dist(dist)

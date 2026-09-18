@@ -52,7 +52,8 @@ def test_every_data_file_and_the_build_stamp_carry_source_and_fetch_time(
     monkeypatch.setattr(build_module, "fetch_all_games", lambda api_key: _fetched())
     monkeypatch.setenv("GITHUB_SHA", "0123456789abcdef0123456789abcdef01234567")
     out = tmp_path / "dist"
-    before = datetime.now().astimezone()
+    # Whole seconds: the fetch time is stored without fractions (build.py).
+    before = datetime.now().astimezone().replace(microsecond=0)
     build_module.build(out_dir=out, base_url=BASE_URL, api_key="fake-key", affiliate_id=None)
 
     files = _data_files(out)
@@ -62,6 +63,10 @@ def test_every_data_file_and_the_build_stamp_carry_source_and_fetch_time(
     assert len(fetched_at) == 1, "every file of one build states the same fetch time"
     (stamp,) = fetched_at
     assert isinstance(stamp, str) and datetime.fromisoformat(stamp) >= before
+    # No fractional seconds: the fetch time is also each changed page's
+    # sitemap <lastmod>, which validate_seo holds to whole seconds (and the
+    # six digits datetime.now() carries once failed the nightly deploy, #37).
+    assert datetime.fromisoformat(stamp).microsecond == 0 and "." not in stamp
     assert {payload["source"] for payload in files.values()} == {site_data.SOURCE_ID}
 
     built = json.loads((out / "version.json").read_text())

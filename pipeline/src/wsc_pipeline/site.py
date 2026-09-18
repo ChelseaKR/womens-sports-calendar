@@ -1,9 +1,13 @@
-"""Static HTML generator. The only script on any page is the guarded Google
-Analytics 4 loader from analytics.py (DECISIONS 0012, superseding 0002), and
-only when analytics.GA4_MEASUREMENT_ID is set: with no ID, every page emitted
-here contains zero <script> elements; with one, exactly one inline <script>
-that honours Global Privacy Control and Do Not Track -- both checked by
-tests/test_site_html.py and tests/test_analytics.py. Nothing else here is
+"""Static HTML generator. The only script that runs on any page is the
+guarded Google Analytics 4 loader from analytics.py (DECISIONS 0012,
+superseding 0002), and only when analytics.GA4_MEASUREMENT_ID is set: with
+no ID, no page emitted here contains an executable <script>; with one,
+exactly one inline <script> that honours Global Privacy Control and Do Not
+Track -- both checked by tests/test_site_html.py and tests/test_analytics.py.
+The other <script> element a page may carry is a
+<script type="application/ld+json"> structured-data block
+(structured_data.py): data for search engines, which browsers never
+execute and which loads nothing. Nothing else here is
 third-party: STYLE_CSS's @font-face rules point at self-hosted files under
 pipeline/assets/fonts/ (copied into dist/fonts/ by build.py), never a Google
 Fonts <link>. The privacy copy (footer note and /privacy/) is rendered from
@@ -25,8 +29,12 @@ from collections.abc import Mapping
 from datetime import UTC, date, datetime
 from html import escape as e
 from typing import Any
+from urllib.parse import quote, urlencode
 
+from . import structured_data
 from .analytics import GA4_DATA_RETENTION, ga4_head_snippet, measurement_id
+from .ics import calendar_name
+from .normalize import display_date
 from .sellers import affiliate_links_active
 
 CSS_PATH = "/style.css"
@@ -40,6 +48,19 @@ ACCESSIBILITY_STATUS = (
     "No human assistive-technology review has been done yet."
 )
 ACCESSIBILITY_CONTACT_URL = "https://chelseakr.com/contact"
+# The "Updated" date printed on /privacy/ and /accessibility/, and their
+# sitemap <lastmod>: one value each, so the two cannot disagree. Change it
+# whenever that page's text changes.
+PRIVACY_UPDATED = date(2026, 9, 17)
+ACCESSIBILITY_UPDATED = date(2026, 9, 17)
+# One-click subscribe links. Each takes the feed's webcal:// address; Google
+# and Outlook then fetch the feed themselves and keep it subscribed.
+# Google's "add by URL" prompt:
+GOOGLE_SUBSCRIBE_URL = "https://calendar.google.com/calendar/u/0/r?cid="
+# Outlook's "Subscribe from web" dialog, for personal (Outlook.com) and for
+# work or school (Microsoft 365) accounts:
+OUTLOOK_COM_SUBSCRIBE_URL = "https://outlook.live.com/calendar/0/addfromweb/?"
+OUTLOOK_365_SUBSCRIBE_URL = "https://outlook.office.com/calendar/0/addfromweb/?"
 # The name visitors see: the header brand, <title> suffix, and og:site_name
 # all use this one string. It was the repo slug ("womens-sports-calendar")
 # in <title>/og:site_name while the header already said "Next Home Game",
@@ -97,7 +118,10 @@ def _base(
     og_image_alt: str = DEFAULT_OG_IMAGE_ALT,
     noindex: bool = False,
     ga4_id: str | None = None,
+    jsonld: str = "",
 ) -> str:
+    """jsonld is a structured_data.script_block(); it goes last in <head>
+    before the GA4 loader, which must close <head> (tests/test_analytics.py)."""
     image_url = f"{base_url}/{og_image}"
     analytics_head = ga4_head_snippet(ga4_id, base_url=base_url)
     robots_meta = '<meta name="robots" content="noindex">\n' if noindex else ""
@@ -134,7 +158,7 @@ def _base(
 <meta name="twitter:description" content="{e(description)}">
 <meta name="twitter:image" content="{e(image_url)}">
 <meta name="twitter:image:alt" content="{e(og_image_alt)}">
-{analytics_head}</head>
+{jsonld}{analytics_head}</head>
 <body>
 <a class="skip-link" href="#main">Skip to main content</a>
 <header class="site-header">
@@ -205,23 +229,62 @@ know it, and otherwise to the game's Ticketmaster listing.
 """
 
 
-def _subscribe_block(*, ics_https_url: str, ics_webcal_url: str, label: str) -> str:
+def _webcal(ics_https_url: str) -> str:
+    return ics_https_url.replace("https://", "webcal://", 1).replace("http://", "webcal://", 1)
+
+
+def subscribe_links(*, ics_https_url: str, cal_name: str) -> dict[str, str]:
+    """The one-click subscribe URL for each calendar app, all pointing at the
+    same feed. Apple Calendar opens webcal:// itself; Google and Outlook are
+    handed the webcal:// address through their own "add by URL" pages."""
+    webcal = _webcal(ics_https_url)
+    outlook_query = urlencode({"url": webcal, "name": cal_name})
+    return {
+        "google": GOOGLE_SUBSCRIBE_URL + quote(webcal, safe=""),
+        "apple": webcal,
+        "outlook_com": OUTLOOK_COM_SUBSCRIBE_URL + outlook_query,
+        "outlook_365": OUTLOOK_365_SUBSCRIBE_URL + outlook_query,
+    }
+
+
+def _subscribe_block(*, ics_https_url: str, subject: str, cal_name: str) -> str:
+    """One button per calendar app. Kept short so the next-game hero below
+    it still starts above the fold on a phone; the raw feed address and the
+    by-hand steps are further down the page (_other_apps_block)."""
+    links = subscribe_links(ics_https_url=ics_https_url, cal_name=cal_name)
     return f"""<section class="subscribe" aria-labelledby="subscribe-heading">
-<h2 id="subscribe-heading">Subscribe to {e(label)}</h2>
-<p><a class="subscribe-cta" href="{e(ics_webcal_url)}">Subscribe in your calendar app</a>
-(most calendar apps open <code>webcal://</code> links automatically) &mdash;
-or use the direct feed URL:
+<h2 id="subscribe-heading">Add {e(subject)} to your calendar</h2>
+<p>Subscribe once: new games and time changes reach your calendar on their
+own. The calendar is rebuilt every night.</p>
+<ul class="subscribe-buttons">
+<li><a class="subscribe-cta" href="{e(links["google"])}">Add to Google Calendar</a></li>
+<li><a class="subscribe-cta" href="{e(links["apple"])}">Add to Apple Calendar</a></li>
+<li><a class="subscribe-cta" href="{e(links["outlook_com"])}">Add to Outlook.com</a></li>
+<li><a class="subscribe-cta" href="{e(links["outlook_365"])}">Add to Outlook for work or school</a></li>
+</ul>
+<p class="subscribe-feed">Another app? <a href="#other-apps-heading">Use the calendar address</a>.</p>
+</section>
+"""
+
+
+def _other_apps_block(*, ics_https_url: str) -> str:
+    """The feed's own address and the by-hand steps, for any calendar app
+    the buttons do not cover, or a button that does not open."""
+    return f"""<section class="other-apps" aria-labelledby="other-apps-heading">
+<h2 id="other-apps-heading">Other calendar apps</h2>
+<p>Subscribe to this address (most calendar apps also open
+<code>webcal://</code> links):
 <a href="{e(ics_https_url)}">{e(ics_https_url)}</a></p>
 <ul class="subscribe-instructions">
-<li><strong>iPhone/iPad:</strong> Settings &rsaquo; Calendar &rsaquo; Accounts &rsaquo; Add Account &rsaquo; Other &rsaquo; Add Subscribed Calendar, then paste the feed URL above.</li>
-<li><strong>Google Calendar:</strong> on the left, next to &ldquo;Other calendars,&rdquo; select the + icon &rsaquo; From URL, then paste the feed URL above.</li>
-<li><strong>Outlook:</strong> Add calendar &rsaquo; Subscribe from web, then paste the feed URL above.</li>
+<li><strong>iPhone/iPad:</strong> Settings &rsaquo; Calendar &rsaquo; Accounts &rsaquo; Add Account &rsaquo; Other &rsaquo; Add Subscribed Calendar, then paste the address above.</li>
+<li><strong>Google Calendar:</strong> on the left, next to &ldquo;Other calendars,&rdquo; select the + icon &rsaquo; From URL, then paste the address above.</li>
+<li><strong>Outlook:</strong> Add calendar &rsaquo; Subscribe from web, then paste the address above.</li>
 </ul>
 </section>
 """
 
 
-def _buy_link(game: dict[str, Any], matchup: str, *, css_class: str = "") -> str | None:
+def _buy_link(game: Mapping[str, Any], matchup: str, *, css_class: str = "") -> str | None:
     """The one "Buy tickets" link for a game, from site_data's `buy`
     (sellers.buy_link), with link text naming where it goes. None when
     there is nowhere to buy; callers say so in words. No price is ever
@@ -236,7 +299,7 @@ def _buy_link(game: dict[str, Any], matchup: str, *, css_class: str = "") -> str
     return f'<a{class_attr} href="{e(buy["url"])}">{e(text)}</a>'
 
 
-def _matchup_text(game: dict[str, Any]) -> str:
+def _matchup_text(game: Mapping[str, Any]) -> str:
     """ "Home vs Away" when both were parsed; otherwise Ticketmaster's own
     event name. Never "TBD vs TBD": the live site showed that for events
     whose names carry no "vs" (e.g. "Washington Spirit Premium
@@ -273,31 +336,80 @@ def _possibly_incomplete_note(subject: str) -> str:
     )
 
 
-def _next_game_hero(games: list[dict[str, Any]], *, team_name: str, fetched: bool = True) -> str:
-    """The dominant visual moment on a team page: the actual next home
-    game (games[0] -- site_data.py already sorts soonest-first), or, when
-    Ticketmaster has nothing listed right now, a plain, honest empty
-    state. Never a fabricated date standing in for a real one, and never
-    "none listed" when this build did not look (fetched=False)."""
-    if not fetched:
+def _when_html(game: Mapping[str, Any]) -> str:
+    """The game's date and time as the page shows them, in a <time> element
+    whose datetime is only ever what is known: the full start with its UTC
+    offset, just the date when the time is TBA, and no <time> at all when
+    the date is TBD. A Ticketmaster status (cancelled, postponed,
+    rescheduled) is said in words next to it."""
+    shown = e(game["start_display"])
+    machine = game.get("start_local_datetime") or (None if game.get("date_tbd") else game.get("start_local_date"))
+    when = f'<time datetime="{e(machine)}">{shown}</time>' if machine else shown
+    status = game.get("status")
+    if status:
+        when += f' <strong class="game-status">{e(status)}</strong>'
+    return when
+
+
+def _feed_note(game: Mapping[str, Any]) -> str:
+    """Why a listed game is not in the calendar feed yet: its date is TBD,
+    or its date is known but its start time is not."""
+    if game["in_calendar_feed"]:
+        return ""
+    if game.get("date_tbd") or not game.get("start_local_date"):
+        return " (date TBD &mdash; not yet in the calendar feed)"
+    return " (not yet in the calendar feed)"
+
+
+def _venue_text(game: Mapping[str, Any]) -> str:
+    return ", ".join(p for p in (game["venue_name"], game["venue_city"], game["venue_state"]) if p) or (
+        "Venue not available"
+    )
+
+
+def _home_away_tag(game: Mapping[str, Any]) -> str:
+    """ "Home" / "Away" on a team page's rows, only when the event name said
+    which side was at home (site_data.tracked_team_is_home)."""
+    flag = game.get("tracked_team_is_home")
+    if flag is None:
+        return ""
+    label = "Home" if flag else "Away"
+    return f' <span class="home-away home-away--{label.lower()}">{label}</span>'
+
+
+def _next_game_hero(team: Mapping[str, Any]) -> str:
+    """The dominant visual moment on a team page, right under the subscribe
+    buttons and above the fold on a phone: the soonest listed home game. When no listed game is known to be at
+    home, it says so and shows the next listed game under a label that
+    says what it is. Never a fabricated date standing in for a real one,
+    and never "none listed" when this build did not look (fetched=False)."""
+    team_name = team["team_name"]
+    games = team["games"]
+    if not team.get("fetched", True):
         return f"""<section class="next-game next-game--empty" aria-labelledby="next-game-heading">
-<h2 id="next-game-heading" class="sr-caption">Next home game</h2>
+<h2 id="next-game-heading" class="next-game-label">Next home game</h2>
 <p class="next-game-empty-msg">{e(NOT_FETCHED_MSG)}</p>
 </section>
 """
     if not games:
         return f"""<section class="next-game next-game--empty" aria-labelledby="next-game-heading">
-<h2 id="next-game-heading" class="sr-caption">Next home game</h2>
+<h2 id="next-game-heading" class="next-game-label">Next home game</h2>
 <p class="next-game-empty-msg">No {e(team_name)} games are listed by
 Ticketmaster right now. Subscribe above and the next one will show up in
 your calendar automatically &mdash; nothing to check back for.</p>
 </section>
 """
-    g = games[0]
+    home = next((g for g in games if g["event_id"] == team.get("next_home_event_id")), None)
+    note = ""
+    if home is not None:
+        g, label = home, "Next home game"
+    else:
+        g = games[0]
+        label = "Next game, away" if g.get("tracked_team_is_home") is False else "Next listed game"
+        note = f'<p class="next-game-note">No {e(team_name)} home game is listed by Ticketmaster right now.</p>\n'
     month_day = _month_day(g["start_local_date"])
     matchup = _matchup_text(g)
-    venue = ", ".join(p for p in (g["venue_name"], g["venue_city"], g["venue_state"]) if p) or "Venue not available"
-    when = e(g["start_display"]) + ("" if g["in_calendar_feed"] else " (date TBD &mdash; not yet in the calendar feed)")
+    when = _when_html(g) + _feed_note(g)
     if month_day:
         month, day = month_day
         date_chip = f'<div class="next-game-date" aria-hidden="true"><span class="next-game-month">{e(month)}</span><span class="next-game-day">{e(day)}</span></div>'
@@ -307,19 +419,21 @@ your calendar automatically &mdash; nothing to check back for.</p>
         '<p class="next-game-cta next-game-cta--unavailable">No ticket link published for this game yet</p>'
     )
     return f"""<section class="next-game" aria-labelledby="next-game-heading">
-<h2 id="next-game-heading" class="sr-caption">Next home game</h2>
-{date_chip}
+<h2 id="next-game-heading" class="next-game-label">{label}</h2>
+{note}{date_chip}
 <div class="next-game-details">
 <p class="next-game-matchup">{e(matchup)}</p>
 <p class="next-game-when">{when}</p>
-<p class="next-game-venue">{e(venue)}</p>
+<p class="next-game-venue">{e(_venue_text(g))}</p>
 {cta}
 </div>
 </section>
 """
 
 
-def _games_table(games: list[dict[str, Any]], *, buy_link_subject: str, fetched: bool = True) -> str:
+def _games_table(
+    games: list[dict[str, Any]], *, buy_link_subject: str, fetched: bool = True, home_away: bool = False
+) -> str:
     if not fetched:
         return f'<p class="no-games-message">{e(NOT_FETCHED_MSG)}</p>'
     if not games:
@@ -327,14 +441,14 @@ def _games_table(games: list[dict[str, Any]], *, buy_link_subject: str, fetched:
     rows = []
     for g in games:
         matchup = _matchup_text(g)
-        venue = ", ".join(p for p in (g["venue_name"], g["venue_city"], g["venue_state"]) if p) or "Venue not available"
-        date_note = "" if g["in_calendar_feed"] else " (date TBD &mdash; not yet in the calendar feed)"
+        date_note = _feed_note(g)
         buy = _buy_link(g, matchup) or '<span class="ticket-unavailable">no ticket link published yet</span>'
+        tag = _home_away_tag(g) if home_away else ""
         rows.append(
             "<tr>"
-            f'<td><span class="game-date">{e(g["start_display"])}</span>{date_note}</td>'
-            f"<td>{e(matchup)}</td>"
-            f"<td>{e(venue)}</td>"
+            f'<td><span class="game-date">{_when_html(g)}</span>{date_note}</td>'
+            f"<td>{e(matchup)}{tag}</td>"
+            f"<td>{e(_venue_text(g))}</td>"
             f"<td>{buy}</td>"
             "</tr>"
         )
@@ -355,6 +469,37 @@ def _games_table(games: list[dict[str, Any]], *, buy_link_subject: str, fetched:
 </table>
 </div>
 """
+
+
+def _schedule_heading(subject: str, season: str | None) -> str:
+    """ "Las Vegas Aces 2026 schedule"; the year only when the listed games
+    say which one (site_data.season_label)."""
+    return f"{subject} {season} schedule" if season else f"{subject} schedule"
+
+
+def _about_schedule(note: str) -> str:
+    """The page's schedule-source note, after the games: why the league's
+    own schedule is not used and where these listings come from."""
+    return f"""<section class="about-schedule" aria-labelledby="about-schedule-heading">
+<h2 id="about-schedule-heading">About this schedule</h2>
+<p class="schedule-source-note">{e(note)}</p>
+</section>
+"""
+
+
+def _breadcrumb(trail: list[tuple[str, str]], current: str) -> str:
+    """The visible trail: links for the ancestors, then the current page as
+    plain text."""
+    links = [f'<a href="{e(href)}">{e(name)}</a>' for name, href in trail]
+    links.append(f'<span aria-current="page">{e(current)}</span>')
+    return f'<nav aria-label="breadcrumb">{" &rsaquo; ".join(links)}</nav>'
+
+
+def _league_list_text(names: list[str]) -> str:
+    """ "WNBA, NWSL, PWHL, AUSL or NCAA Women's Basketball (Big Ten)"."""
+    if len(names) <= 1:
+        return "".join(names)
+    return f"{', '.join(names[:-1])} or {names[-1]}"
 
 
 def render_index(
@@ -384,11 +529,12 @@ def render_index(
     not_included_items = "\n".join(
         f"<li><strong>{e(item['name'])}:</strong> {e(item['reason'])}</li>" for item in not_included
     )
-    body = f"""<h1>Women's pro sports calendars you subscribe to once</h1>
-<p class="lede">Pick a league or a team and add its calendar to your
-phone or computer. Every upcoming game shows up on its own, updated
-nightly, with a link to buy tickets from the team's seller. No account,
-no ads.</p>
+    league_names = _league_list_text([lg["name"] for lg in leagues])
+    body = f"""<h1>Women's sports schedules for your calendar</h1>
+<p class="lede">Pick a league or a team and add its schedule to Google
+Calendar, Apple Calendar or Outlook. Every listed game shows up on its own,
+updated nightly, with a link to buy tickets from the team's seller. No
+account, no ads.</p>
 <h2>Leagues</h2>
 <ul class="league-strip">
 {league_links}
@@ -406,12 +552,16 @@ them):</p>
 </section>
 """
     return _base(
-        title=f"{SITE_NAME}: women's pro sports calendars and tickets",
-        description="Subscribe once to a calendar for your women's pro sports league or team: every upcoming game, updated nightly, with a link to buy tickets.",
+        title=f"{SITE_NAME}: women's sports schedules for Google, Apple and Outlook calendars",
+        description=(
+            f"Add your {league_names} team's schedule to Google Calendar, Apple Calendar or "
+            "Outlook. Subscribe once and every game updates nightly. No account."
+        ),
         canonical_url=f"{base_url}/",
         base_url=base_url,
         body=body,
         ga4_id=ga4_id,
+        jsonld=structured_data.script_block([structured_data.website(name=SITE_NAME, base_url=base_url)]),
     )
 
 
@@ -518,7 +668,7 @@ anything.</p>
 <p>Pages and calendar feeds are served by GitHub Pages. Like any web host,
 GitHub receives each request's IP address and browser details; this site has
 no access to those logs.</p>
-<p>Updated 2026-09-17.</p>
+<p>Updated {e(display_date(PRIVACY_UPDATED))}.</p>
 """
     return _base(
         title=f"Privacy | {SITE_NAME}",
@@ -568,7 +718,7 @@ ticket seller. Those sites are outside this statement.</li>
 <a href="{e(ACCESSIBILITY_CONTACT_URL)}">the contact page at chelseakr.com</a>:
 say which page and what happened. A problem that stops you finding a team,
 subscribing to a calendar or following a ticket link is fixed first.</p>
-<p>Updated 2026-09-17.</p>
+<p>Updated {e(display_date(ACCESSIBILITY_UPDATED))}.</p>
 """
     return _base(
         title=f"Accessibility | {SITE_NAME}",
@@ -588,8 +738,10 @@ def render_league(
 ) -> str:
     slug = league["league_slug"]
     name = league["league_name"]
+    season = league.get("season")
+    fetched = league.get("fetched", True)
     ics_https = f"{base_url}/ics/{slug}.ics"
-    ics_webcal = ics_https.replace("https://", "webcal://").replace("http://", "webcal://")
+    page_url = f"{base_url}/{slug}/"
     # The team's real name ("Gotham FC", "UCLA Bruins Womens Basketball"),
     # not a title-cased slug ("Gotham Fc", "Ucla Bruins ...") -- this list is
     # the league page's only internal link to each team page.
@@ -603,28 +755,52 @@ def render_league(
     incomplete_note = (
         _possibly_incomplete_note(", ".join(team_name(t) for t in incomplete)) + "\n" if incomplete else ""
     )
-    body = f"""<nav aria-label="breadcrumb"><a href="/">All leagues</a></nav>
-<h1>{e(name)}</h1>
-<p class="schedule-source-note">{e(league["schedule_source_note"])}</p>
-{incomplete_note}{_subscribe_block(ics_https_url=ics_https, ics_webcal_url=ics_webcal, label=f"all of {name}")}
-<h2>Upcoming games</h2>
-{_freshness_note(league)}{_games_table(league["games"], buy_link_subject=name, fetched=league.get("fetched", True))}
-<h2>Teams</h2>
+    heading = _schedule_heading(name, season)
+    body = f"""{_breadcrumb([("All leagues", "/")], name)}
+<h1>{e(heading)}</h1>
+<p class="lede">Every {e(name)} game Ticketmaster lists, with its date, time
+and venue. Add the whole league to your calendar, or pick a team below for
+just its games.</p>
+{_subscribe_block(ics_https_url=ics_https, subject=f"the {name} schedule", cal_name=calendar_name(name))}
+<h2>{e(name)} team schedules</h2>
 <ul class="team-roster">
 {team_links}
 </ul>
-"""
+<h2>Upcoming games</h2>
+{incomplete_note}{_freshness_note(league)}{_games_table(league["games"], buy_link_subject=name, fetched=fetched)}
+{_other_apps_block(ics_https_url=ics_https)}{_about_schedule(league["schedule_source_note"])}"""
     og_image, og_image_alt = LEAGUE_OG_IMAGES.get(slug, (DEFAULT_OG_IMAGE, DEFAULT_OG_IMAGE_ALT))
+    nodes = [
+        structured_data.breadcrumbs([("All leagues", f"{base_url}/"), (name, page_url)]),
+        *structured_data.sports_events(league["games"], sport=league.get("sport", ""), fetched=fetched),
+    ]
     return _base(
-        title=f"{name} calendar and tickets | {SITE_NAME}",
-        description=f"Subscribe once to a {name} calendar: every upcoming game, updated nightly, with a link to buy tickets.",
-        canonical_url=f"{base_url}/{slug}/",
+        title=f"{heading}: add to your calendar | {SITE_NAME}",
+        description=(
+            f"{heading}: add every game to Google Calendar, Apple Calendar or Outlook, or just "
+            "your team's, with dates, times and venues, updated nightly."
+        ),
+        canonical_url=page_url,
         base_url=base_url,
         body=body,
         og_image=og_image,
         og_image_alt=og_image_alt,
         ga4_id=ga4_id,
+        jsonld=structured_data.script_block(nodes),
     )
+
+
+def _team_description(team: Mapping[str, Any], heading: str) -> str:
+    """The meta description: the schedule, the three calendar apps, and the
+    next home game when one is listed with a real date."""
+    text = (
+        f"{heading} ({team['league_name']}): add every game to Google Calendar, Apple Calendar "
+        "or Outlook, updated nightly."
+    )
+    home = next((g for g in team["games"] if g["event_id"] == team.get("next_home_event_id")), None)
+    if home is not None and not home.get("date_tbd") and home.get("away_team"):
+        text += f" Next home game: {home['start_display']} vs {home['away_team']}."
+    return text
 
 
 def render_team(
@@ -635,31 +811,45 @@ def render_team(
 ) -> str:
     league_slug = team["league_slug"]
     team_slug = team["team_slug"]
+    team_name = team["team_name"]
+    league_name = team["league_name"]
     ics_https = f"{base_url}/ics/{league_slug}/{team_slug}.ics"
-    ics_webcal = ics_https.replace("https://", "webcal://").replace("http://", "webcal://")
+    page_url = f"{base_url}/{league_slug}/{team_slug}/"
     fetched = team.get("fetched", True)
-    incomplete_note = _possibly_incomplete_note(team["team_name"]) + "\n" if team.get("possibly_incomplete") else ""
-    body = f"""<nav aria-label="breadcrumb"><a href="/">All leagues</a> &rsaquo; <a href="/{e(league_slug)}/">{e(team["league_name"])}</a></nav>
-<h1>{e(team["team_name"])}</h1>
-<p class="schedule-source-note">{e(team["schedule_source_note"])}</p>
-{incomplete_note}{_subscribe_block(ics_https_url=ics_https, ics_webcal_url=ics_webcal, label=team["team_name"])}
-{_next_game_hero(team["games"], team_name=team["team_name"], fetched=fetched)}
+    incomplete_note = _possibly_incomplete_note(team_name) + "\n" if team.get("possibly_incomplete") else ""
+    heading = _schedule_heading(team_name, team.get("season"))
+    body = f"""{_breadcrumb([("All leagues", "/"), (league_name, f"/{league_slug}/")], team_name)}
+<h1>{e(heading)}</h1>
+<p class="lede">Every {e(team_name)} ({e(league_name)}) game Ticketmaster
+lists, home and away, with its date, time and venue.</p>
+{_subscribe_block(ics_https_url=ics_https, subject=f"the {team_name} schedule", cal_name=calendar_name(team_name))}
+{_next_game_hero(team)}
 <h2>Upcoming games</h2>
-{_freshness_note(team)}{_games_table(team["games"], buy_link_subject=team["team_name"], fetched=fetched)}
-"""
+{incomplete_note}{_freshness_note(team)}{_games_table(team["games"], buy_link_subject=team_name, fetched=fetched, home_away=True)}
+{_other_apps_block(ics_https_url=ics_https)}{_about_schedule(team["schedule_source_note"])}"""
     og_image, og_image_alt = LEAGUE_OG_IMAGES.get(league_slug, (DEFAULT_OG_IMAGE, DEFAULT_OG_IMAGE_ALT))
-    return _base(
-        title=f"{team['team_name']} calendar and tickets | {SITE_NAME}",
-        description=(
-            f"Subscribe once to the {team['team_name']} ({team['league_name']}) calendar: every "
-            "upcoming game, updated nightly, with a link to buy tickets."
+    nodes = [
+        structured_data.breadcrumbs(
+            [("All leagues", f"{base_url}/"), (league_name, f"{base_url}/{league_slug}/"), (team_name, page_url)]
         ),
-        canonical_url=f"{base_url}/{league_slug}/{team_slug}/",
+        structured_data.sports_team(
+            name=team_name,
+            page_url=page_url,
+            sport=team.get("sport", ""),
+            organization=team.get("organization_name", ""),
+        ),
+        *structured_data.sports_events(team["games"], sport=team.get("sport", ""), fetched=fetched),
+    ]
+    return _base(
+        title=f"{heading}: add to your calendar | {SITE_NAME}",
+        description=_team_description(team, heading),
+        canonical_url=page_url,
         base_url=base_url,
         body=body,
         og_image=og_image,
         og_image_alt=og_image_alt,
         ga4_id=ga4_id,
+        jsonld=structured_data.script_block(nodes),
     )
 
 
@@ -755,6 +945,10 @@ STYLE_CSS = """\
   --link: #0b1f3a;
   --link-visited: #7a4a00;
   --focus: #0b1f3a;
+  /* subscribe-button outline: the button's own navy on paper; in dark mode
+     the on-navy dim blue, so four navy buttons on the navy-tinted box stay
+     distinct (#8fa8cf on #101c30: 7.04:1) */
+  --cta-border: #0b1f3a;
 
   /* chrome tokens -- header, footer, hero, subscribe box: always navy */
   --on-navy-fg: #ffffff;
@@ -780,6 +974,7 @@ STYLE_CSS = """\
     --link: #8fc0ff;
     --link-visited: #e8c37a;
     --focus: #f4c94c;
+    --cta-border: #8fa8cf;
   }
 }
 
@@ -943,7 +1138,7 @@ nav[aria-label="breadcrumb"] {
 /* The feed URL is one long unbroken token (".../ics/<league>/<team>.ics");
    without a break opportunity it pushed team pages to 350-430 CSS px wide at
    a 320 px viewport, failing WCAG 1.4.10 Reflow. */
-.subscribe p a { overflow-wrap: anywhere; }
+.subscribe p a, .other-apps p a { overflow-wrap: anywhere; }
 .subscribe-instructions { padding-left: 1.1rem; font-size: 0.9375rem; }
 .subscribe-instructions li { margin-bottom: 0.5rem; }
 .subscribe-cta {
@@ -954,6 +1149,12 @@ nav[aria-label="breadcrumb"] {
 }
 .subscribe-cta:visited { color: var(--on-navy-fg); }
 .subscribe-cta:hover { background: #132a4d; }
+.subscribe-buttons {
+  list-style: none; margin: 0.75rem 0 1rem; padding: 0;
+  display: flex; flex-wrap: wrap; gap: 0.5rem;
+}
+.subscribe-buttons .subscribe-cta { margin-bottom: 0; border: 1px solid var(--cta-border); }
+.subscribe-feed { font-size: 0.9375rem; }
 
 /* ---- team page hero: the actual next home game ---- */
 .next-game {
@@ -987,6 +1188,14 @@ nav[aria-label="breadcrumb"] {
 .next-game-cta--unavailable {
   background: none; color: var(--on-navy-dim); font-style: italic; padding: 0; font-size: 0.9375rem;
 }
+.next-game h2.next-game-label {
+  flex: 1 0 100%; margin: 0; padding: 0; border-top: 0;
+  font-family: var(--label-font); font-weight: 700; font-size: 0.95rem;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--on-navy-muted);
+}
+.next-game--empty .next-game-label { margin-bottom: 0.5rem; }
+.next-game-note { flex: 1 0 100%; margin: 0; color: var(--on-navy-muted); font-size: 0.9375rem; max-width: none; }
+.next-game .game-status { color: var(--on-navy-fg); }
 .next-game--empty { display: block; }
 .next-game-empty-msg { color: var(--on-navy-muted); max-width: 36rem; margin: 0; }
 .next-game a:focus-visible { outline-color: var(--on-navy-focus); }
@@ -1011,6 +1220,14 @@ table.games-table tbody tr:nth-child(even) { background: var(--surface); }
 table.games-table tbody tr:last-child td { border-bottom: 0; }
 .game-date { font-family: var(--label-font); font-weight: 700; font-variant-numeric: tabular-nums; }
 .ticket-unavailable { color: var(--muted); font-style: italic; }
+.game-status { font-weight: 700; }
+.home-away {
+  display: inline-block; margin-left: 0.4rem; padding: 0 0.45rem;
+  border: 1px solid var(--border); border-radius: 999px;
+  font-family: var(--label-font); font-weight: 700; font-size: 0.8125rem;
+  color: var(--muted); white-space: nowrap;
+}
+.home-away--home { color: var(--ink); border-color: var(--ink); }
 
 .sr-caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 """

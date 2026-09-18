@@ -51,6 +51,11 @@ class League:
     teams: tuple[Team, ...]
     schedule_source_used: bool = False
     schedule_source_note: str = ""
+    # For structured data (structured_data.py): the sport as schema.org's
+    # free-text `sport`, and the real name of the organisation the teams
+    # belong to (a league, or the Big Ten Conference). Empty = not stated.
+    sport: str = ""
+    organization_name: str = ""
 
 
 # Other teams whose names contain a tracked team's name, found in live
@@ -100,6 +105,8 @@ LEAGUES: tuple[League, ...] = (
             "machine-readable feed exists. Games below are Ticketmaster "
             "Discovery API listings for WNBA teams, not a WNBA feed."
         ),
+        sport="Basketball",
+        organization_name="Women's National Basketball Association",
     ),
     League(
         slug="nwsl",
@@ -130,6 +137,8 @@ LEAGUES: tuple[League, ...] = (
             "are Ticketmaster Discovery API listings for NWSL teams, not "
             "an NWSL feed."
         ),
+        sport="Soccer",
+        organization_name="National Women's Soccer League",
     ),
     League(
         slug="pwhl",
@@ -157,6 +166,8 @@ LEAGUES: tuple[League, ...] = (
             "Ticketmaster Discovery API listings for PWHL teams, not the "
             "PWHL/HockeyTech feed."
         ),
+        sport="Ice hockey",
+        organization_name="Professional Women's Hockey League",
     ),
     League(
         slug="ausl",
@@ -178,6 +189,8 @@ LEAGUES: tuple[League, ...] = (
             "auprosports.com's terms. Games below are Ticketmaster "
             "Discovery API listings for AUSL teams, not an AUSL feed."
         ),
+        sport="Softball",
+        organization_name="Athletes Unlimited Softball League",
     ),
     League(
         slug="ncaaw-big-ten",
@@ -217,6 +230,8 @@ LEAGUES: tuple[League, ...] = (
             "school's nickname alone spans every sport it fields. Limited "
             "to the Big Ten's 18 teams, not all ~350 Division I programs."
         ),
+        sport="Basketball",
+        organization_name="Big Ten Conference",
     ),
 )
 

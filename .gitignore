@@ -3,6 +3,9 @@ pipeline/.venv/
 pipeline/node_modules/
 pipeline/dist/
 pipeline/dist.tmp/
+pipeline/dist-fixture/
+pipeline/dist-fixture.tmp/
+pipeline/dist-fixture-first/
 pipeline/.pytest_cache/
 pipeline/**/__pycache__/
 pipeline/*.egg-info/

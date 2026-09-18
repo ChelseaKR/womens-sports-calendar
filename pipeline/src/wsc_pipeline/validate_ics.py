@@ -10,8 +10,9 @@ publish a broken or inconsistent feed:
    (ics/<league>.ics) and one per tracked team (ics/<league>/<team>.ics),
    per wsc_pipeline.config. A missing file is a subscribe link that 404s.
 2. Every feed parses as RFC 5545 (icalendar), declares VERSION:2.0, a
-   PRODID and an X-WR-CALNAME, and every VEVENT has UID, DTSTAMP, DTSTART
-   and SUMMARY.
+   PRODID, an X-WR-CALNAME, and a URL that is its own page on the site,
+   which its X-WR-CALDESC also links to (so a subscriber can always find
+   the way back); and every VEVENT has UID, DTSTAMP, DTSTART and SUMMARY.
 3. No UID repeats within one feed (a repeat is a duplicate entry in the
    subscriber's calendar).
 4. Each feed carries exactly the games its page shows as in the calendar
@@ -41,19 +42,21 @@ class FeedError(ValueError):
     pass
 
 
-def _expected_feeds(dist: Path) -> list[tuple[Path, Path]]:
-    """(feed path, matching data JSON path) for every feed the site links."""
-    pairs = []
+def _expected_feeds(dist: Path) -> list[tuple[Path, Path, str]]:
+    """(feed path, matching data JSON path, its page's site path) for every
+    feed the site links."""
+    triples = []
     for league in config.LEAGUES:
-        pairs.append((dist / "ics" / f"{league.slug}.ics", dist / "data" / f"{league.slug}.json"))
+        triples.append((dist / "ics" / f"{league.slug}.ics", dist / "data" / f"{league.slug}.json", f"/{league.slug}/"))
         for team in league.teams:
-            pairs.append(
+            triples.append(
                 (
                     dist / "ics" / league.slug / f"{team.slug}.ics",
                     dist / "data" / league.slug / f"{team.slug}.json",
+                    f"/{league.slug}/{team.slug}/",
                 )
             )
-    return pairs
+    return triples
 
 
 def _parse_calendar(feed: Path) -> Calendar:
@@ -67,10 +70,19 @@ def _parse_calendar(feed: Path) -> Calendar:
         raise FeedError(f"{feed}: does not parse as iCalendar: {exc}") from exc
     if str(cal.get("version")) != "2.0":
         raise FeedError(f"{feed}: VCALENDAR must declare VERSION:2.0")
-    for prop in ("prodid", "x-wr-calname"):
+    for prop in ("prodid", "x-wr-calname", "x-wr-caldesc", "url"):
         if cal.get(prop) is None:
             raise FeedError(f"{feed}: VCALENDAR is missing {prop.upper()}")
     return cal
+
+
+def _check_links_back(feed: Path, cal: Calendar, page_path: str) -> None:
+    """The calendar's URL is its own page, and its description links there."""
+    url = str(cal.get("url"))
+    if not url.startswith(("https://", "http://")) or not url.endswith(page_path):
+        raise FeedError(f"{feed}: URL {url!r} is not this calendar's page ({page_path})")
+    if url not in str(cal.get("x-wr-caldesc")):
+        raise FeedError(f"{feed}: X-WR-CALDESC does not link to {url}")
 
 
 def _event_uids(feed: Path, cal: Calendar) -> list[str]:
@@ -104,9 +116,10 @@ def _check_matches_page(feed: Path, data: Path, uids: list[str]) -> None:
         )
 
 
-def validate_feed(feed: Path, data: Path) -> int:
+def validate_feed(feed: Path, data: Path, page_path: str) -> int:
     """Returns the number of VEVENTs; raises FeedError on any problem."""
     cal = _parse_calendar(feed)
+    _check_links_back(feed, cal, page_path)
     uids = _event_uids(feed, cal)
     _check_matches_page(feed, data, uids)
     return len(uids)
@@ -117,8 +130,8 @@ def validate_dist(dist: Path) -> tuple[int, int]:
     feeds = 0
     league_events = 0
     league_feeds = {dist / "ics" / f"{lg.slug}.ics" for lg in config.LEAGUES}
-    for feed, data in _expected_feeds(dist):
-        n = validate_feed(feed, data)
+    for feed, data, page_path in _expected_feeds(dist):
+        n = validate_feed(feed, data, page_path)
         feeds += 1
         if feed in league_feeds:
             league_events += n

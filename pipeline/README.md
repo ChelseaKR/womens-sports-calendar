@@ -12,7 +12,7 @@ and the static site into `dist/`.
 
 ```sh
 uv sync --extra dev
-uv run pytest -q                 # 158 tests; negative controls described below
+uv run pytest -q                 # the whole suite; negative controls described below
 
 # Degraded mode (no key) -- always safe, always produces a valid site:
 uv run python -m wsc_pipeline.build --out dist --base-url https://nexthomegame.com
@@ -39,15 +39,23 @@ used (requests, bytes).
   contract — `build.py` lets it propagate rather than swallowing it into a
   silently-thinned result.
 - `normalize.py` — turns a raw Discovery API event into a `Game`. Parses
-  home/away teams from the event name (falling back to `_embedded.attractions`),
-  extracts venue/date/TZID, and extracts a price range *only* when
+  home/away teams from the event name ("Home vs Away", or "Away at Home"),
+  falling back to `_embedded.attractions` for the pair only — then
+  `home_away_known` is false and nothing calls either team the home side —
+  and extracts venue (name, city, state, street, postcode, country), date,
+  TZID and Ticketmaster's status code, and extracts a price range *only* when
   Ticketmaster published `priceRanges` with real `min`/`max` values —
   otherwise `price=None`, never a fabricated 0 or omitted-but-implied
   value. That price now reaches only the `.ics` event description, which
   is unchanged; no page or JSON shows it (DECISIONS 0013). No broadcaster
   field exists anywhere in this pipeline: no
   licensed source carries one.
-- `ics.py` — RFC 5545 `.ics` emission. UIDs are derived deterministically
+- `ics.py` — RFC 5545 `.ics` emission. Each calendar is named
+  "\<team or league\> (Next Home Game)" (`X-WR-CALNAME` and RFC 7986
+  `NAME`), says what it holds and links back to its page (`X-WR-CALDESC`,
+  `DESCRIPTION`, `URL`, and a last line in every event's description), and
+  asks apps to refresh daily (`REFRESH-INTERVAL`, `X-PUBLISHED-TTL`). None
+  of that reaches a UID. UIDs are derived deterministically
   from the Ticketmaster event id (`tm-<event_id>@womens-sports-calendar.invalid`),
   so re-subscribing or a nightly rebuild never duplicates entries.
   `check_no_duplicate_uids` raises on any collision within one calendar.
@@ -84,9 +92,16 @@ used (requests, bytes).
   with Google signals and ad personalisation off; and records
   `ticket_click` / `calendar_subscribe` events without touching the links.
   The `.ics` feeds and `data/*.json` never see the ID.
-- `site.py` — the static HTML generator. No `<script>` element on any page
-  except that GA4 loader (checked by `tests/test_site_html.py` and
-  `tests/test_analytics.py`), `<link rel="canonical">`,
+- `site.py` — the static HTML generator. No executable `<script>` on any
+  page except that GA4 loader (checked by `tests/test_site_html.py` and
+  `tests/test_analytics.py`); the one other `<script>` is a JSON-LD data
+  block that browsers never run (`structured_data.py`). League and team
+  pages are titled "\<name\> \<season\> schedule: add to your calendar",
+  with the season taken from the listed games' dates (`site_data.season_label`,
+  none when no game is dated), and carry one subscribe button each for
+  Google Calendar, Apple Calendar and Outlook (personal and work) above the
+  next-home-game hero, which shows the soonest listed game the event name
+  says is at home. Also `<link rel="canonical">`,
   a favicon (SVG primary + PNG/apple-touch-icon fallbacks), Open Graph and
   Twitter Card tags — including a real `og:image` per page (the site-wide
   default on the index, a per-league card on every league and team page,
@@ -97,6 +112,20 @@ used (requests, bytes).
   literal, non-euphemistic privacy note in the footer that links
   `/privacy/`, and the privacy page itself. Both are rendered from the GA4
   ID, so they say "no analytics" exactly when a build has none.
+- `structured_data.py` — schema.org JSON-LD: `WebSite` on the home page,
+  `BreadcrumbList` on league and team pages, `SportsTeam` on team pages, and
+  a `SportsEvent` for each listed game whose date, time and home side are
+  all published — never for a date-TBD or time-TBA game, never with a start
+  time filled in, and none on a build that fetched nothing. `eventStatus`
+  only when Ticketmaster says cancelled, postponed or rescheduled, which
+  the page then shows too.
+- `sitemap.py` — `sitemap.xml`, `robots.txt` and `lastmod.json`. A page's
+  `<lastmod>` is when its schedule last changed, found by comparing this
+  build's content fingerprints with the live site's own `lastmod.json`;
+  unknown means no `<lastmod>`, never the build time.
+- `validate_seo.py` — `make validate-seo`: sitemap, robots.txt, titles,
+  descriptions, canonicals and every structured-data node checked against
+  the page's own data, before deploy.
 - `build.py` — the orchestrator/CLI (`python -m wsc_pipeline.build`).
   Writes to a temp directory and only atomically replaces `--out` on full
   success, so a failed fetch never leaves a partial/broken build where a

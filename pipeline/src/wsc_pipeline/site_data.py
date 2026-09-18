@@ -12,11 +12,23 @@ from datetime import UTC, date, datetime
 from typing import Any
 
 from .config import League, Team
-from .normalize import Game, display_start, unique_by_event_id
+from .normalize import Game, display_start, local_start, team_is_participant, unique_by_event_id
 from .sellers import buy_link
+
+# Ticketmaster dates.status.code values that mean the listed date is not
+# simply going ahead. Shown next to the date on the page and, in the
+# structured data, as eventStatus; any other code (onsale, offsale) states
+# nothing about whether the game is on, so it is not shown as a status.
+NOTABLE_STATUSES = {
+    "cancelled": "Cancelled",
+    "canceled": "Cancelled",
+    "postponed": "Postponed",
+    "rescheduled": "Rescheduled",
+}
 
 
 def game_to_dict(game: Game) -> dict[str, Any]:
+    start = local_start(game)
     return {
         "event_id": game.event_id,
         # Ticketmaster's own event name -- what the page shows when home/away
@@ -36,7 +48,23 @@ def game_to_dict(game: Game) -> dict[str, Any]:
         "start_local_date": game.start_local_date.isoformat() if game.start_local_date else None,
         "tzid": game.tzid,
         "date_tbd": game.date_tbd,
+        "time_tba": game.time_tba,
+        # The exact start in the venue's time zone with its UTC offset
+        # ("2026-09-20T18:00:00-07:00"), or None unless the date, the time
+        # and the zone are all published (normalize.local_start). The only
+        # start time the structured data and <time datetime> ever use.
+        "start_local_datetime": start.isoformat(timespec="seconds") if start else None,
         "in_calendar_feed": bool(game.start_utc is not None and not game.date_tbd),
+        # Whether home_team/away_team are known to be in that order (the
+        # event name said so), rather than just the two teams involved.
+        "home_away_known": game.home_away_known,
+        # Street, postcode and country for the structured-data address.
+        "venue_street": game.venue_street,
+        "venue_postal_code": game.venue_postal_code,
+        "venue_country": game.venue_country,
+        # "Cancelled" / "Postponed" / "Rescheduled" when Ticketmaster says
+        # so, else None (see NOTABLE_STATUSES).
+        "status": NOTABLE_STATUSES.get(game.status_code or ""),
         # The Ticketmaster event URL, the same one the .ics feeds carry.
         "ticket_url": game.ticket_url,
         # Where the page's "Buy tickets" link goes: the home team's primary
@@ -57,7 +85,16 @@ def team_data(
     API key): an empty `games` list then means "not checked", never "no
     games", and every consumer must say so. `possibly_incomplete` is True
     when Ticketmaster had more result pages than the client reads."""
-    team_games = [g for g in games if g.tracked_team_slug == team.slug]
+    team_games = sorted((g for g in games if g.tracked_team_slug == team.slug), key=_sort_key)
+    game_dicts = []
+    for g in team_games:
+        d = game_to_dict(g)
+        d["tracked_team_is_home"] = tracked_team_is_home(team, g)
+        game_dicts.append(d)
+    next_home = next(
+        (d for d in game_dicts if d["tracked_team_is_home"] is True and d["status"] != "Cancelled"),
+        None,
+    )
     return {
         "team_slug": team.slug,
         "team_name": team.name,
@@ -65,10 +102,45 @@ def team_data(
         "league_name": league.name,
         "schedule_source_used": league.schedule_source_used,
         "schedule_source_note": league.schedule_source_note,
+        "sport": league.sport,
+        "organization_name": league.organization_name,
         "fetched": fetched,
         "possibly_incomplete": possibly_incomplete,
-        "games": [game_to_dict(g) for g in sorted(team_games, key=_sort_key)],
+        "season": season_label(team_games) if fetched else None,
+        # The event_id of the soonest listed home game, or None when no
+        # listed game is known to be at home.
+        "next_home_event_id": next_home["event_id"] if next_home else None,
+        "games": game_dicts,
     }
+
+
+def tracked_team_is_home(team: Team, game: Game) -> bool | None:
+    """True/False when the event name says who is at home and one side is
+    this team; None when that is not known (the teams came from Ticketmaster's
+    attraction list, or neither parsed side is this team). Never guessed
+    from the venue or the city."""
+    if not game.home_away_known or not game.home_team or not game.away_team:
+        return None
+    if team_is_participant(team.name, {"name": game.home_team}, team.not_this_team):
+        return True
+    if team_is_participant(team.name, {"name": game.away_team}, team.not_this_team):
+        return False
+    return None
+
+
+def season_label(games: list[Game]) -> str | None:
+    """The season the listed games span, from their real dates: "2026" when
+    they all fall in one year, "2026-27" across two, "2026-2028" wider. None
+    when no listed game has a real date -- a year is never assumed."""
+    years = sorted({g.start_local_date.year for g in games if g.start_local_date and not g.date_tbd})
+    if not years:
+        return None
+    first, last = years[0], years[-1]
+    if first == last:
+        return str(first)
+    if last == first + 1:
+        return f"{first}-{last % 100:02d}"
+    return f"{first}-{last}"
 
 
 def league_data(
@@ -84,6 +156,8 @@ def league_data(
     return {
         "league_slug": league.slug,
         "league_name": league.name,
+        "season": season_label(league_games) if fetched else None,
+        "sport": league.sport,
         "schedule_source_used": league.schedule_source_used,
         "schedule_source_note": league.schedule_source_note,
         "fetched": fetched,
@@ -94,8 +168,20 @@ def league_data(
     }
 
 
-def _sort_key(game: Game) -> tuple[bool, bool, datetime | None, date | None]:
-    return (game.date_tbd, game.start_utc is None, game.start_utc, game.start_local_date)
+def _sort_key(game: Game) -> tuple[bool, bool, date | None, bool, datetime | None, str]:
+    """Soonest first by the local date, then by the start instant: a
+    time-TBA game sits among the games of its own date (after the timed
+    ones), not after every timed game in the season. Date-TBD games last.
+    The event id breaks ties, so the order (and the page's sitemap
+    fingerprint) does not depend on the order Ticketmaster answered in."""
+    return (
+        game.date_tbd,
+        game.start_local_date is None,
+        game.start_local_date,
+        game.start_utc is None,
+        game.start_utc,
+        game.event_id,
+    )
 
 
 def site_summary(
