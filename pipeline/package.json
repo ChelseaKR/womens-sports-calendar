@@ -1,0 +1,9 @@
+{
+  "private": true,
+  "name": "wsc-pipeline-a11y",
+  "version": "1.0.0",
+  "description": "pa11y-ci, pinned and lockfiled, for `make a11y`. No runtime JS dependency -- the pipeline itself is pure Python (see pyproject.toml); this is the accessibility-check tooling only.",
+  "devDependencies": {
+    "pa11y-ci": "4.1.1"
+  }
+}

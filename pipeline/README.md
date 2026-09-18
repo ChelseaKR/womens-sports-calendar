@@ -118,16 +118,25 @@ CI re-runs.
 Also run (not part of `pytest`, but part of `make verify` and so CI-gated on
 every push/PR, not a one-time manual check):
 
-- `make validate-html` — `html5validator` against every generated page (0
-  errors across all 54 pages in the degraded, no-API-key build CI runs).
-- `make a11y` — `pa11y --standard WCAG2AA` against every generated page (the
-  same 54) **plus** two fixture pages rendered with a populated games table
-  (a priced game, an unpriced game, and a date-TBD game together — the exact
-  shape `tests/test_site_html.py::_pages()` builds and asserts on, reused via
+- `make validate-html` — `html5validator` against every generated page (73
+  pages in the degraded, no-API-key build CI runs: the index, 5 league pages,
+  67 team pages).
+- `make a11y` — `pa11y --standard WCAG2AA` (via `pa11y-ci`, 5 pages at a
+  time) against every generated page (the same 73) **plus** two fixture
+  pages rendered with a populated games table (a priced game, an unpriced
+  game, and a date-TBD game together — the exact shape
+  `tests/test_site_html.py::_pages()` builds and asserts on, reused via
   `scripts/render_a11y_fixtures.py` rather than duplicated) — these two exist
   because the degraded build CI runs never has a non-empty games table to
-  check. **56/56 pages pass, 0 issues, as of this pipeline's last run** — see
-  `pipeline/Makefile`'s `a11y` target for exactly what runs.
+  check. 75 pages in all — see `pipeline/Makefile`'s `a11y` target and
+  `pipeline/pa11y-ci.config.json` for exactly what runs. The URL list is
+  rebuilt from `find dist -name '*.html'` on every run, and
+  `scripts/check_a11y_coverage.py` then fails the gate unless pa11y-ci's own
+  JSON report names every URL it was handed, all passing, and that list
+  covers every index/league/team page `wsc_pipeline.config` says the build
+  must produce, so a faster sweep can't quietly check fewer pages.
+  `make a11y` installs its own npm dependency (`make install-a11y`); plain
+  `make install`, which the nightly deploy runs, is Python-only.
 
 No human screen-reader walkthrough has been performed (this is a brand-new
 private product, not yet public); that stays a manually-tracked open item,

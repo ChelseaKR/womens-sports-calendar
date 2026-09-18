@@ -41,12 +41,28 @@ jobs:
           python-version: "3.12"
           enable-cache: true
 
-      # Node/npx is only needed for `make a11y`'s `npx pa11y` step below --
-      # the pipeline itself has no JS dependency.
+      # Node/npm is only needed for `make a11y`'s pa11y-ci step below -- the
+      # pipeline itself has no JS dependency. `cache: npm` caches npm's
+      # download cache (keyed on pipeline/package-lock.json), so `npm ci` in
+      # `make install-a11y` installs pa11y-ci/puppeteer from local tarballs
+      # instead of re-downloading them on every run.
       - name: Set up Node (for pa11y)
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: pipeline/package-lock.json
+
+      # `cache: npm` above only caches npm's own package-download cache --
+      # puppeteer (pa11y-ci's browser-automation dependency) separately
+      # downloads its own ~150MB+ Chromium binary into ~/.cache/puppeteer
+      # via a postinstall script, every time that directory is empty. Keyed
+      # on pipeline/package-lock.json, which pins the puppeteer version.
+      - name: Cache Puppeteer's Chromium download
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/puppeteer
+          key: puppeteer-${{ runner.os }}-${{ hashFiles('pipeline/package-lock.json') }}
 
       # `make verify` (install -> test -> build -> validate-html -> a11y) is
       # the same target a human runs locally, so local and CI can't diverge.

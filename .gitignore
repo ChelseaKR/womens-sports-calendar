@@ -1,8 +1,10 @@
 .DS_Store
 pipeline/.venv/
+pipeline/node_modules/
 pipeline/dist/
 pipeline/dist.tmp/
 pipeline/.pytest_cache/
 pipeline/**/__pycache__/
 pipeline/*.egg-info/
 pipeline/.coverage
+pipeline/pa11y-ci-results.json
