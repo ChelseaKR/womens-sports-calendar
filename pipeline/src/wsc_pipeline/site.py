@@ -21,7 +21,8 @@ not replaced -- see the palette comment on STYLE_CSS below.
 
 from __future__ import annotations
 
-from datetime import date
+from collections.abc import Mapping
+from datetime import UTC, date, datetime
 from html import escape as e
 from typing import Any
 
@@ -607,7 +608,7 @@ def render_league(
 <p class="schedule-source-note">{e(league["schedule_source_note"])}</p>
 {incomplete_note}{_subscribe_block(ics_https_url=ics_https, ics_webcal_url=ics_webcal, label=f"all of {name}")}
 <h2>Upcoming games</h2>
-{_games_table(league["games"], buy_link_subject=name, fetched=league.get("fetched", True))}
+{_freshness_note(league)}{_games_table(league["games"], buy_link_subject=name, fetched=league.get("fetched", True))}
 <h2>Teams</h2>
 <ul class="team-roster">
 {team_links}
@@ -644,7 +645,7 @@ def render_team(
 {incomplete_note}{_subscribe_block(ics_https_url=ics_https, ics_webcal_url=ics_webcal, label=team["team_name"])}
 {_next_game_hero(team["games"], team_name=team["team_name"], fetched=fetched)}
 <h2>Upcoming games</h2>
-{_games_table(team["games"], buy_link_subject=team["team_name"], fetched=fetched)}
+{_freshness_note(team)}{_games_table(team["games"], buy_link_subject=team["team_name"], fetched=fetched)}
 """
     og_image, og_image_alt = LEAGUE_OG_IMAGES.get(league_slug, (DEFAULT_OG_IMAGE, DEFAULT_OG_IMAGE_ALT))
     return _base(
@@ -659,6 +660,23 @@ def render_team(
         og_image=og_image,
         og_image_alt=og_image_alt,
         ga4_id=ga4_id,
+    )
+
+
+def _freshness_note(payload: Mapping[str, object]) -> str:
+    """When these listings were read from Ticketmaster, stated on the page
+    (DATA-GOVERNANCE-STANDARD DG-04): if the nightly build stops, readers can
+    see the date instead of taking an old list as current. Empty when the
+    build fetched nothing -- that case already says so -- or when no fetch
+    time was recorded."""
+    fetched_at = payload.get("fetched_at")
+    if not payload.get("fetched", True) or not fetched_at:
+        return ""
+    when = datetime.fromisoformat(str(fetched_at)).astimezone(UTC)
+    shown = f"{when:%A} {when.day} {when:%B %Y}, {when:%H:%M} UTC"
+    return (
+        f'<p class="schedule-source-note data-freshness">Listings as of <time datetime="{e(str(fetched_at))}">'
+        f"{e(shown)}</time>, from Ticketmaster. They are refreshed every night.</p>\n"
     )
 
 

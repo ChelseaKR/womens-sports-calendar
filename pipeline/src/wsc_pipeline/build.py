@@ -15,9 +15,12 @@ broken build as today's, we just don't overwrite a good one with a bad one.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import sys
+from datetime import UTC, datetime
+from importlib.metadata import version as package_version
 from pathlib import Path
 
 from . import analytics, config, ics, site, site_data
@@ -135,6 +138,9 @@ def build(
         games, truncated, mismatched, requests_made, bytes_received = fetch_all_games(api_key)  # may raise
     else:
         games, truncated, mismatched, requests_made, bytes_received = [], {}, {}, 0, 0
+    # When the listings were read (DATA-GOVERNANCE-STANDARD DG-02). None when
+    # nothing was fetched: a degraded build states no fetch time at all.
+    fetched_at = datetime.now(UTC) if api_key_present else None
 
     tmp_dir = out_dir.with_name(out_dir.name + ".tmp")
     if tmp_dir.exists():
@@ -162,10 +168,11 @@ def build(
     )
 
     _write_ics(tmp_dir, games_by_league, api_key_present)
-    _write_data(tmp_dir, base_url, games_by_league, api_key_present, truncated)
-    _write_html(tmp_dir, base_url, games_by_league, api_key_present, truncated, ga4_id)
+    _write_data(tmp_dir, base_url, games_by_league, api_key_present, truncated, fetched_at=fetched_at)
+    _write_html(tmp_dir, base_url, games_by_league, api_key_present, truncated, ga4_id, fetched_at=fetched_at)
     _write_static(tmp_dir)
     _write_sitemap_and_robots(tmp_dir, base_url)
+    _write_version(tmp_dir, fetched_at)
 
     (tmp_dir / "COVERAGE.txt").write_text(render_report(coverage) + "\n", encoding="utf-8")
 
@@ -193,14 +200,16 @@ def _write_data(
     games_by_league: dict[str, list[Game]],
     api_key_present: bool,
     truncated: dict[str, set[str]],
+    *,
+    fetched_at: datetime | None = None,
 ) -> None:
-    import json
-
     data_dir = out_dir / "data"
+    provenance = site_data.provenance(fetched_at)
     for lg in config.LEAGUES:
         games = games_by_league[lg.slug]
         incomplete = truncated.get(lg.slug, set())
         payload = site_data.league_data(lg, games, fetched=api_key_present, possibly_incomplete_teams=incomplete)
+        payload.update(provenance)
         (data_dir / f"{lg.slug}.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
         team_dir = data_dir / lg.slug
         team_dir.mkdir(exist_ok=True)
@@ -208,6 +217,7 @@ def _write_data(
             team_payload = site_data.team_data(
                 team, lg, games, fetched=api_key_present, possibly_incomplete=team.slug in incomplete
             )
+            team_payload.update(provenance)
             (team_dir / f"{team.slug}.json").write_text(json.dumps(team_payload, indent=2), encoding="utf-8")
 
     summary = site_data.site_summary(
@@ -216,6 +226,7 @@ def _write_data(
         api_key_present=api_key_present,
         not_included=list(config.LEAGUES_EXAMINED_NOT_INCLUDED),
     )
+    summary.update(provenance)
     (data_dir / "site.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
 
 
@@ -226,6 +237,8 @@ def _write_html(
     api_key_present: bool,
     truncated: dict[str, set[str]],
     ga4_id: str | None,
+    *,
+    fetched_at: datetime | None = None,
 ) -> None:
     leagues_summary = [
         {
@@ -262,6 +275,7 @@ def _write_html(
         games = games_by_league[lg.slug]
         incomplete = truncated.get(lg.slug, set())
         league_payload = site_data.league_data(lg, games, fetched=api_key_present, possibly_incomplete_teams=incomplete)
+        league_payload.update(site_data.provenance(fetched_at))
         league_dir = out_dir / lg.slug
         league_dir.mkdir(exist_ok=True)
         (league_dir / "index.html").write_text(
@@ -271,6 +285,7 @@ def _write_html(
             team_payload = site_data.team_data(
                 team, lg, games, fetched=api_key_present, possibly_incomplete=team.slug in incomplete
             )
+            team_payload.update(site_data.provenance(fetched_at))
             team_dir = league_dir / team.slug
             team_dir.mkdir(exist_ok=True)
             (team_dir / "index.html").write_text(
@@ -308,6 +323,21 @@ def _write_sitemap_and_robots(out_dir: Path, base_url: str) -> None:
     sitemap = f'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n{body}\n</urlset>\n'
     (out_dir / "sitemap.xml").write_text(sitemap, encoding="utf-8")
     (out_dir / "robots.txt").write_text(f"User-agent: *\nAllow: /\nSitemap: {base_url}/sitemap.xml\n", encoding="utf-8")
+
+
+def _write_version(out_dir: Path, fetched_at: datetime | None) -> None:
+    """dist/version.json: which source commit and pipeline version built the
+    live site, and when (RELEASE-AND-VERSIONING-STANDARD §5.3 build stamp).
+    `commit` is GITHUB_SHA in Actions and null elsewhere, never a guess.
+    scripts/check_live_freshness.py reads `fetched_at` to raise the
+    staleness alarm."""
+    stamp = {
+        "commit": os.environ.get("GITHUB_SHA") or None,
+        "pipeline_version": package_version("wsc-pipeline"),
+        "built_at": datetime.now(UTC).isoformat(),
+        **site_data.provenance(fetched_at),
+    }
+    (out_dir / "version.json").write_text(json.dumps(stamp, indent=2) + "\n", encoding="utf-8")
 
 
 def main(argv: list[str] | None = None) -> int:

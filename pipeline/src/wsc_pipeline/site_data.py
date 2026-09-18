@@ -122,3 +122,14 @@ def site_summary(
         ],
         "leagues_examined_not_included": not_included,
     }
+
+
+# The one data source (docs/data/ticketmaster-discovery-api.md).
+SOURCE_ID = "ticketmaster-discovery-api"
+
+
+def provenance(fetched_at: datetime | None) -> dict[str, str | None]:
+    """Source and machine-readable fetch time for every published data file
+    and page payload (DATA-GOVERNANCE-STANDARD DG-02). `fetched_at` is null
+    when the build fetched nothing -- never a made-up time."""
+    return {"source": SOURCE_ID, "fetched_at": fetched_at.isoformat() if fetched_at else None}

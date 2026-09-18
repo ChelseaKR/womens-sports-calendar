@@ -158,11 +158,15 @@ def test_ga_never_reaches_the_ics_feeds_or_data_and_they_are_unchanged(tmp_path:
         }
 
     def comparable(name: str, data: bytes):
-        # site.json stamps its own build time (site_data.site_summary); every
-        # other byte, and every byte of every .ics feed, must match.
-        if name == "data/site.json":
+        # site.json stamps its own build time (site_data.site_summary), and
+        # every data file records when its listings were fetched
+        # (site_data.provenance); every other byte, and every byte of every
+        # .ics feed, must match.
+        if name.startswith("data/") and name.endswith(".json"):
             parsed = json.loads(data)
-            assert parsed.pop("generated_at")
+            assert parsed.pop("fetched_at")
+            if name == "data/site.json":
+                assert parsed.pop("generated_at")
             return parsed
         return data
 

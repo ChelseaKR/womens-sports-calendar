@@ -33,6 +33,10 @@ def _pages():
     games = [priced, unpriced, date_tbd]
     league_payload = league_data(LEAGUE, games)
     team_payload = team_data(TEAM, LEAGUE, games)
+    # A fetched build states when it fetched (site_data.provenance); a fixed
+    # time here puts that line on the fixture pages the a11y sweep checks.
+    for payload in (league_payload, team_payload):
+        payload["fetched_at"] = "2026-06-01T08:31:00+00:00"
     leagues_summary = [{"slug": lg.slug, "name": lg.name, "games_count": 2} for lg in LEAGUES]
     return {
         "index": render_index(
