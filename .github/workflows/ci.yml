@@ -69,8 +69,8 @@ jobs:
       # No TICKETMASTER_API_KEY is available to pull_request runs from a
       # fork by design (GitHub never exposes secrets there), and PR CI has
       # no business hitting the live Discovery API anyway. This exercises
-      # the degraded-mode path -- the same path a missing repo secret
-      # exercises in production -- and proves the build stays green,
+      # the degraded-mode path (pages say "not fetched"; the deploy
+      # workflow refuses to publish it) and proves the build stays green,
       # produces valid HTML, and passes a real WCAG2AA pa11y check (both
       # the degraded-mode dist/ pages and two fixture pages with a
       # populated games table -- see pipeline/Makefile's `a11y` target).

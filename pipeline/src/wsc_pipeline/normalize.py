@@ -94,7 +94,18 @@ def _phrase_match(a: str, b: str) -> bool:
     return shorter in longer
 
 
-def team_is_participant(team_name: str, raw_event: dict) -> bool:
+def _without_phrases(text: str, phrases: tuple[str, ...]) -> str:
+    """text, normalized for matching, with every whole-word occurrence of
+    each phrase removed."""
+    out = _normalize_for_match(text)
+    for phrase in phrases:
+        norm = _normalize_for_match(phrase)
+        if norm:
+            out = re.sub(rf"(?<![a-z0-9]){re.escape(norm)}(?![a-z0-9])", " ", out)
+    return out
+
+
+def team_is_participant(team_name: str, raw_event: dict, not_this_team: tuple[str, ...] = ()) -> bool:
     """Validates that a Discovery API keyword-search result actually names
     the searched team as a participant, instead of trusting the keyword
     match blindly.
@@ -112,6 +123,12 @@ def team_is_participant(team_name: str, raw_event: dict) -> bool:
     clubs). This checks what the event itself says -- its own name and
     attractions -- never the venue, never the city, so a keyword-search
     false positive can be dropped without ever entering the site's data.
+
+    `not_this_team` names other teams whose names contain team_name (config
+    KEYWORD_COLLISIONS, e.g. "Monterey Bay FC" for "Bay FC"); they are
+    removed from each candidate before matching, so their games no longer
+    match while a real game against them ("Bay FC vs Monterey Bay FC")
+    still does.
     """
     embedded = raw_event.get("_embedded", {})
     attractions = embedded.get("attractions") or []
@@ -119,6 +136,8 @@ def team_is_participant(team_name: str, raw_event: dict) -> bool:
     home, away = parse_teams(name, attractions)
     candidates = [c for c in (name, home, away) if c]
     candidates.extend(a.get("name") for a in attractions if a.get("name"))
+    if not_this_team:
+        candidates = [_without_phrases(c, not_this_team) for c in candidates]
     return any(_phrase_match(team_name, c) for c in candidates)
 
 
@@ -217,6 +236,29 @@ def normalize_event(
         ticket_url=raw.get("url"),
         raw_event_name=raw.get("name", ""),
     )
+
+
+def unique_by_event_id(games) -> list[Game]:
+    """One Game per Ticketmaster event, first occurrence kept, order kept.
+
+    Why this exists: fetch_all_games runs one keyword search per tracked
+    team, so a game between two tracked teams (e.g. Atlanta Dream vs
+    Connecticut Sun) comes back twice -- once from each team's search -- as
+    two Game records that differ only in tracked_team_slug. Team-level
+    views need both records (the game belongs on each team's page and
+    feed). Every league-level view -- the league page, the league JSON,
+    the index count, the coverage report, the league .ics -- must use this
+    so the game is listed and counted once. The live build of 2026-09-17
+    listed 58 WNBA rows for 29 real games and 105 NWSL rows for 57.
+    """
+    seen: set[str] = set()
+    out: list[Game] = []
+    for g in games:
+        if g.event_id in seen:
+            continue
+        seen.add(g.event_id)
+        out.append(g)
+    return out
 
 
 def display_start(game: Game) -> str:

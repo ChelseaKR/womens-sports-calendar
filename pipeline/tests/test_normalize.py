@@ -207,3 +207,38 @@ def test_team_is_participant_rejects_shared_city_different_league():
         venue_state="TX",
     )
     assert team_is_participant("Minnesota Frost", raw) is False
+
+
+# -- Monterey Bay FC (USL Championship, men's) on NWSL Bay FC's page: seen
+# live 2026-09-17, six games. Event names below are the live ones.
+
+
+def _bay_fc():
+    from wsc_pipeline.config import LEAGUES
+
+    return next(t for lg in LEAGUES for t in lg.teams if t.slug == "bay-fc")
+
+
+def test_monterey_bay_fc_games_are_not_bay_fc_games():
+    bay_fc = _bay_fc()
+    assert bay_fc.not_this_team == ("Monterey Bay FC",)
+    for name in (
+        "Monterey Bay FC vs Lexington SC",
+        "Orange County SC vs Monterey Bay FC- Hispanic Heritage Night",
+        "New Mexico United vs Monterey Bay FC",
+        "Monterey Bay FC vs Las Vegas Lights FC",
+    ):
+        raw = make_raw_event(name=name)
+        assert team_is_participant(bay_fc.name, raw, bay_fc.not_this_team) is False, name
+        # and without the exclusion, the phrase check alone lets it through
+        assert team_is_participant(bay_fc.name, raw) is True, name
+
+
+def test_real_bay_fc_games_still_match_with_the_exclusion():
+    bay_fc = _bay_fc()
+    for name in (
+        "Bay FC vs Racing Louisville FC",
+        "Angel City FC vs Bay FC",
+        "Bay FC vs Monterey Bay FC",  # a real meeting of the two still belongs to Bay FC
+    ):
+        assert team_is_participant(bay_fc.name, make_raw_event(name=name), bay_fc.not_this_team) is True, name

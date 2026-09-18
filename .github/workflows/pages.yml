@@ -6,17 +6,19 @@
 #
 # Secrets: TICKETMASTER_API_KEY and TICKETMASTER_AFFILIATE_ID are repo
 # secrets Chelsea creates (see docs/LICENSES-AND-ATTRIBUTION.md §6 and the
-# pipeline README for the exact `gh secret set` commands). Without
-# TICKETMASTER_API_KEY, wsc_pipeline.build still exits 0 and produces a
-# valid, deployable site with an explicit "no key configured" notice on
-# every page and zero games -- it never errors into an empty/broken site,
-# and this workflow still deploys that (honest, if empty) result. A real
-# fetch failure (bad key, API outage, non-200 after retries) makes the
-# build step fail, and the job stops before Pages is ever touched --
-# whatever was last published stays live. That is the "a stale build is
-# never published as current" rule in practice: we never relabel an old or
-# broken build as today's, we only ever replace a good deploy with another
-# good one.
+# pipeline README for the exact `gh secret set` commands). This workflow
+# builds with --require-api-key: without TICKETMASTER_API_KEY the build
+# step fails and nothing is deployed. A no-key build fetches nothing, and
+# publishing it would replace every subscriber's calendar with an empty
+# one -- read by every calendar app as "no games", which is a claim the
+# build never checked. (Local and PR CI builds still run in degraded mode;
+# its pages say "not fetched", never "no games".) Likewise a real fetch
+# failure (bad key, API outage, non-200 after retries) or a build that
+# finds zero games across every tracked team makes the build step fail,
+# and the job stops before Pages is ever touched -- whatever was last
+# published stays live. That is the "a stale build is never published as
+# current" rule in practice: we never relabel an old or broken build as
+# today's, we only ever replace a good deploy with another good one.
 #
 # Every action is pinned to a commit, not a tag, per the portfolio's
 # security standard -- a tag can move, a pinned SHA cannot.
@@ -83,15 +85,15 @@ jobs:
       - name: make test
         run: make test
 
-      # A missing TICKETMASTER_API_KEY is handled inside the pipeline
-      # itself (degraded mode, exit 0, explicit notice) -- it is not
-      # special-cased here. A genuine fetch failure makes this step fail
-      # and the job stops before Configure/Upload/Deploy Pages run.
+      # --require-api-key: a missing TICKETMASTER_API_KEY fails this step
+      # instead of producing a degraded, fetched-nothing site. Any fetch
+      # failure also fails it. Either way the job stops before
+      # Configure/Upload/Deploy Pages run.
       - name: make build
         env:
           TICKETMASTER_API_KEY: ${{ secrets.TICKETMASTER_API_KEY }}
           TICKETMASTER_AFFILIATE_ID: ${{ secrets.TICKETMASTER_AFFILIATE_ID }}
-        run: make build BASE_URL="${{ vars.SITE_BASE_URL || 'https://nexthomegame.com' }}"
+        run: make build BASE_URL="${{ vars.SITE_BASE_URL || 'https://nexthomegame.com' }}" BUILD_FLAGS=--require-api-key
 
       - name: make validate-html
         run: make validate-html

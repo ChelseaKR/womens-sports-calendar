@@ -1,8 +1,11 @@
 """Pipeline entrypoint: fetch -> normalize -> emit .ics + JSON + static site.
 
-Exit code contract (checked by CI): 0 = a full site was written to --out and
-is safe to publish, including the degraded no-API-key mode. Non-zero = a
-fetch genuinely failed; --out is not written (or is left incomplete) and the
+Exit code contract (checked by CI): 0 = a full site was written to --out.
+With an API key that site is safe to publish; without one (degraded mode,
+allowed only when --require-api-key is not given) nothing was fetched and
+every page says so, and the deploy workflow never publishes it. Non-zero =
+a fetch genuinely failed, found zero games across every tracked team, or
+--require-api-key was given without a key; --out is not written and the
 caller (GitHub Actions) must not deploy it -- Pages then keeps serving
 whatever the last successful run published, which is the "a stale build is
 never published as current" rule in practice: we never relabel an old or
@@ -19,7 +22,7 @@ from pathlib import Path
 
 from . import config, ics, site, site_data
 from .coverage import BuildCoverage, LeagueCoverage, compute_league_coverage, render_report
-from .normalize import Game, normalize_event, team_is_participant
+from .normalize import Game, normalize_event, team_is_participant, unique_by_event_id
 from .ticketmaster import DiscoveryClient, TicketmasterFetchError
 
 DEFAULT_BASE_URL = "https://nexthomegame.com"
@@ -79,7 +82,7 @@ def fetch_all_games(api_key: str) -> tuple[list[Game], dict[str, set[str]], dict
             if team_truncated:
                 truncated[league.slug].add(team.slug)
             for raw in raw_events:
-                if not team_is_participant(team.name, raw):
+                if not team_is_participant(team.name, raw, team.not_this_team):
                     mismatched[league.slug].add(team.slug)
                     continue
                 game = normalize_event(
@@ -91,6 +94,17 @@ def fetch_all_games(api_key: str) -> tuple[list[Game], dict[str, set[str]], dict
                 if game is not None:
                     games.append(game)
         budget = client.budget
+    if not games:
+        # Every tracked team across every league at once coming back empty
+        # is not an off-season (the five leagues' seasons never all pause
+        # together) -- it is what a silently broken query or API change
+        # looks like. Publishing it would empty every subscriber's
+        # calendar as if there were no games, so it fails like any other
+        # fetch failure and the last good deploy stays live.
+        raise TicketmasterFetchError(
+            f"0 games found across all {sum(len(lg.teams) for lg in config.LEAGUES)} "
+            "tracked teams -- treated as a failed fetch, not as 'no games'"
+        )
     return games, truncated, mismatched, budget.requests_made, budget.bytes_received
 
 
@@ -133,9 +147,9 @@ def build(*, out_dir: Path, base_url: str, api_key: str | None, affiliate_id: st
         api_key_present=api_key_present,
     )
 
-    _write_ics(tmp_dir, games_by_league)
-    _write_data(tmp_dir, base_url, games_by_league, api_key_present)
-    _write_html(tmp_dir, base_url, games_by_league, api_key_present)
+    _write_ics(tmp_dir, games_by_league, api_key_present)
+    _write_data(tmp_dir, base_url, games_by_league, api_key_present, truncated)
+    _write_html(tmp_dir, base_url, games_by_league, api_key_present, truncated)
     _write_static(tmp_dir)
     _write_sitemap_and_robots(tmp_dir, base_url)
 
@@ -147,30 +161,39 @@ def build(*, out_dir: Path, base_url: str, api_key: str | None, affiliate_id: st
     return coverage
 
 
-def _write_ics(out_dir: Path, games_by_league: dict[str, list[Game]]) -> None:
+def _write_ics(out_dir: Path, games_by_league: dict[str, list[Game]], fetched: bool) -> None:
     for lg in config.LEAGUES:
         games = games_by_league[lg.slug]
-        cal = ics.league_calendar(lg.slug, lg.name, games)
+        cal = ics.league_calendar(lg.slug, lg.name, games, fetched=fetched)
         (out_dir / "ics" / f"{lg.slug}.ics").write_bytes(cal.to_ical())
         team_dir = out_dir / "ics" / lg.slug
         team_dir.mkdir(exist_ok=True)
         for team in lg.teams:
-            team_cal = ics.team_calendar(team.slug, team.name, games)
+            team_cal = ics.team_calendar(team.slug, team.name, games, fetched=fetched)
             (team_dir / f"{team.slug}.ics").write_bytes(team_cal.to_ical())
 
 
-def _write_data(out_dir: Path, base_url: str, games_by_league: dict[str, list[Game]], api_key_present: bool) -> None:
+def _write_data(
+    out_dir: Path,
+    base_url: str,
+    games_by_league: dict[str, list[Game]],
+    api_key_present: bool,
+    truncated: dict[str, set[str]],
+) -> None:
     import json
 
     data_dir = out_dir / "data"
     for lg in config.LEAGUES:
         games = games_by_league[lg.slug]
-        payload = site_data.league_data(lg, games)
+        incomplete = truncated.get(lg.slug, set())
+        payload = site_data.league_data(lg, games, fetched=api_key_present, possibly_incomplete_teams=incomplete)
         (data_dir / f"{lg.slug}.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
         team_dir = data_dir / lg.slug
         team_dir.mkdir(exist_ok=True)
         for team in lg.teams:
-            team_payload = site_data.team_data(team, lg, games)
+            team_payload = site_data.team_data(
+                team, lg, games, fetched=api_key_present, possibly_incomplete=team.slug in incomplete
+            )
             (team_dir / f"{team.slug}.json").write_text(json.dumps(team_payload, indent=2), encoding="utf-8")
 
     summary = site_data.site_summary(
@@ -182,9 +205,21 @@ def _write_data(out_dir: Path, base_url: str, games_by_league: dict[str, list[Ga
     (data_dir / "site.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
 
 
-def _write_html(out_dir: Path, base_url: str, games_by_league: dict[str, list[Game]], api_key_present: bool) -> None:
+def _write_html(
+    out_dir: Path,
+    base_url: str,
+    games_by_league: dict[str, list[Game]],
+    api_key_present: bool,
+    truncated: dict[str, set[str]],
+) -> None:
     leagues_summary = [
-        {"slug": lg.slug, "name": lg.name, "games_count": len(games_by_league[lg.slug])}
+        {
+            "slug": lg.slug,
+            "name": lg.name,
+            # None, not 0, when nothing was fetched: "0 upcoming games" would
+            # state a fact this build never checked.
+            "games_count": len(unique_by_event_id(games_by_league[lg.slug])) if api_key_present else None,
+        }
         for lg in config.LEAGUES
     ]
     (out_dir / "index.html").write_text(
@@ -195,17 +230,21 @@ def _write_html(out_dir: Path, base_url: str, games_by_league: dict[str, list[Ga
         ),
         encoding="utf-8",
     )
+    (out_dir / "404.html").write_text(site.render_not_found(leagues=leagues_summary, base_url=base_url), encoding="utf-8")
 
     for lg in config.LEAGUES:
         games = games_by_league[lg.slug]
-        league_payload = site_data.league_data(lg, games)
+        incomplete = truncated.get(lg.slug, set())
+        league_payload = site_data.league_data(lg, games, fetched=api_key_present, possibly_incomplete_teams=incomplete)
         league_dir = out_dir / lg.slug
         league_dir.mkdir(exist_ok=True)
         (league_dir / "index.html").write_text(
             site.render_league(league=league_payload, base_url=base_url), encoding="utf-8"
         )
         for team in lg.teams:
-            team_payload = site_data.team_data(team, lg, games)
+            team_payload = site_data.team_data(
+                team, lg, games, fetched=api_key_present, possibly_incomplete=team.slug in incomplete
+            )
             team_dir = league_dir / team.slug
             team_dir.mkdir(exist_ok=True)
             (team_dir / "index.html").write_text(
@@ -251,9 +290,27 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", default="dist", type=Path)
     parser.add_argument("--base-url", default=os.environ.get("SITE_BASE_URL", DEFAULT_BASE_URL))
+    parser.add_argument(
+        "--require-api-key",
+        action="store_true",
+        help=(
+            "fail instead of building in degraded (no-key) mode. The deploy "
+            "workflow passes this: a no-key build has fetched nothing, and "
+            "publishing its empty calendars would empty every subscriber's "
+            "calendar as if there were no games."
+        ),
+    )
     args = parser.parse_args(argv)
 
     api_key = os.environ.get("TICKETMASTER_API_KEY") or None
+    if args.require_api_key and not api_key:
+        print(
+            "BUILD FAILED: --require-api-key was given but TICKETMASTER_API_KEY "
+            "is not set. Nothing was fetched, so nothing was written to --out; "
+            "an unfetched build is never published as a real schedule.",
+            file=sys.stderr,
+        )
+        return 1
     affiliate_id = os.environ.get("TICKETMASTER_AFFILIATE_ID") or None
     if not affiliate_id:
         print(

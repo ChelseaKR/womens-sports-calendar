@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .config import League, Team
-from .normalize import Game
+from .normalize import Game, unique_by_event_id
 
 
 @dataclass
@@ -70,14 +70,17 @@ def compute_league_coverage(
     mismatched_team_slugs: set[str] | None = None,
 ) -> LeagueCoverage:
     teams_with_games = {g.tracked_team_slug for g in games}
+    # Games are counted once per event; teams_with_games above still uses
+    # every per-team record, since a head-to-head game counts for both teams.
+    unique_games = unique_by_event_id(games)
     return LeagueCoverage(
         league_slug=league.slug,
         league_name=league.name,
         teams_configured=len(league.teams),
         teams_with_games=len(teams_with_games & {t.slug for t in league.teams}),
-        games_total=len(games),
-        games_with_price=sum(1 for g in games if g.price is not None),
-        games_date_tbd=sum(1 for g in games if g.date_tbd),
+        games_total=len(unique_games),
+        games_with_price=sum(1 for g in unique_games if g.price is not None),
+        games_date_tbd=sum(1 for g in unique_games if g.date_tbd),
         teams_truncated=sorted(truncated_team_slugs),
         teams_with_mismatched_events=sorted(mismatched_team_slugs or set()),
     )
@@ -88,14 +91,15 @@ def render_report(coverage: BuildCoverage) -> str:
     if not coverage.api_key_present:
         lines.append(
             "TICKETMASTER_API_KEY not configured. Build proceeded in "
-            "degraded mode: 0 leagues fetched, calendars emitted empty "
-            "with an explicit notice. This is not a failed build."
+            "degraded mode: nothing was fetched, so every page says "
+            "'not fetched' (never 'no games') and every calendar is empty "
+            "with a not-fetched description. Fine for local/PR checks; the "
+            "deploy workflow refuses to publish this (--require-api-key)."
         )
         lines.append("")
 
     lines.append(
-        f"Leagues examined for licensing: 7 "
-        f"(see docs/LICENSES-AND-ATTRIBUTION.md). Leagues configured and "
+        f"Leagues examined for licensing: 7. Leagues configured and "
         f"queried this build: {coverage.leagues_examined}. Leagues with "
         f"at least one game found: {coverage.leagues_with_games}."
     )

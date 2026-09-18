@@ -23,7 +23,11 @@ from datetime import date
 from html import escape as e
 
 CSS_PATH = "/style.css"
-SITE_NAME = "womens-sports-calendar"
+# The name visitors see: the header brand, <title> suffix, and og:site_name
+# all use this one string. It was the repo slug ("womens-sports-calendar")
+# in <title>/og:site_name while the header already said "Next Home Game",
+# the domain's name (nexthomegame.com, DECISIONS 0007).
+SITE_NAME = "Next Home Game"
 
 # The site-wide default social card, and one per tracked league (see
 # wsc_pipeline.config.LEAGUES) -- hand-authored SVG rendered to a 1200x630
@@ -74,8 +78,13 @@ def _base(
     og_type: str = "website",
     og_image: str = DEFAULT_OG_IMAGE,
     og_image_alt: str = DEFAULT_OG_IMAGE_ALT,
+    noindex: bool = False,
 ) -> str:
     image_url = f"{base_url}/{og_image}"
+    robots_meta = '<meta name="robots" content="noindex">\n' if noindex else ""
+    # A noindexed page (the 404) carries no canonical: pointing it at another
+    # URL would declare it a duplicate of a page it is not.
+    canonical_link = "" if noindex else f'<link rel="canonical" href="{e(canonical_url)}">\n'
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -83,9 +92,8 @@ def _base(
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name='impact-site-verification' content='672c11dd-230b-463d-b029-e09ce84f1050'>
 <title>{e(title)}</title>
-<meta name="description" content="{e(description)}">
-<link rel="canonical" href="{e(canonical_url)}">
-<meta name="theme-color" content="#0b1f3a">
+{robots_meta}<meta name="description" content="{e(description)}">
+{canonical_link}<meta name="theme-color" content="#0b1f3a">
 <link rel="preload" href="/fonts/public-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/big-shoulders-display-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="{CSS_PATH}">
@@ -111,7 +119,7 @@ def _base(
 <body>
 <a class="skip-link" href="#main">Skip to main content</a>
 <header class="site-header">
-<a class="brand" href="/"><img class="brand-mark" src="/favicon.svg" alt="" width="28" height="28">Next Home Game</a>
+<a class="brand" href="/"><img class="brand-mark" src="/favicon.svg" alt="" width="28" height="28">{e(SITE_NAME)}</a>
 </header>
 <main id="main">
 {body}
@@ -178,7 +186,14 @@ def _price_cell(price: dict | None) -> str:
 
 
 def _matchup_text(game: dict) -> str:
-    return f"{game['home_team'] or 'TBD'} vs {game['away_team'] or 'TBD'}"
+    """"Home vs Away" when both were parsed; otherwise Ticketmaster's own
+    event name. Never "TBD vs TBD": the live site showed that for events
+    whose names carry no "vs" (e.g. "Washington Spirit Premium
+    Experiences", tournament listings), stating two unknown teams when the
+    real listing name was right there."""
+    if game["home_team"] and game["away_team"]:
+        return f"{game['home_team']} vs {game['away_team']}"
+    return game.get("event_name") or "Event name not published by Ticketmaster"
 
 
 def _month_day(iso_date: str | None) -> tuple[str, str] | None:
@@ -192,11 +207,33 @@ def _month_day(iso_date: str | None) -> tuple[str, str] | None:
     return (d.strftime("%b").upper(), str(d.day))
 
 
-def _next_game_hero(games: list[dict], *, team_name: str) -> str:
+NOT_FETCHED_MSG = (
+    "This build did not fetch a schedule from Ticketmaster, so no games are "
+    "shown. That is not the same as there being no games."
+)
+
+
+def _possibly_incomplete_note(subject: str) -> str:
+    return (
+        '<p class="schedule-source-note schedule-incomplete-note">'
+        f"Ticketmaster returned more matching listings for {e(subject)} than this "
+        "build reads, so this list and its calendar feed may be missing later "
+        "games.</p>"
+    )
+
+
+def _next_game_hero(games: list[dict], *, team_name: str, fetched: bool = True) -> str:
     """The dominant visual moment on a team page: the actual next home
     game (games[0] -- site_data.py already sorts soonest-first), or, when
     Ticketmaster has nothing listed right now, a plain, honest empty
-    state. Never a fabricated date standing in for a real one."""
+    state. Never a fabricated date standing in for a real one, and never
+    "none listed" when this build did not look (fetched=False)."""
+    if not fetched:
+        return f"""<section class="next-game next-game--empty" aria-labelledby="next-game-heading">
+<h2 id="next-game-heading" class="sr-caption">Next home game</h2>
+<p class="next-game-empty-msg">{e(NOT_FETCHED_MSG)}</p>
+</section>
+"""
     if not games:
         return f"""<section class="next-game next-game--empty" aria-labelledby="next-game-heading">
 <h2 id="next-game-heading" class="sr-caption">Next home game</h2>
@@ -240,7 +277,9 @@ automatically &mdash; nothing to check back for.</p>
 """
 
 
-def _games_table(games: list[dict], *, buy_link_subject: str) -> str:
+def _games_table(games: list[dict], *, buy_link_subject: str, fetched: bool = True) -> str:
+    if not fetched:
+        return f'<p class="no-games-message">{e(NOT_FETCHED_MSG)}</p>'
     if not games:
         return '<p class="no-games-message">No upcoming games found from Ticketmaster right now.</p>'
     rows = []
@@ -290,8 +329,12 @@ def render_index(
     league_rows = []
     for lg in leagues:
         count = lg["games_count"]
-        live = count > 0
-        count_label = f"{count} upcoming game" if count == 1 else f"{count} upcoming games"
+        live = bool(count)
+        if count is None:
+            # Not fetched this build -- never "0 upcoming games".
+            count_label = "schedule not fetched"
+        else:
+            count_label = f"{count} upcoming game" if count == 1 else f"{count} upcoming games"
         row_class = "league-row league-row--live" if live else "league-row"
         league_rows.append(
             f'<li class="{row_class}"><a class="league-row-link" href="/{e(lg["slug"])}/">'
@@ -324,11 +367,35 @@ them):</p>
 </section>
 """
     return _base(
-        title="womens-sports-calendar",
+        title=f"{SITE_NAME}: women's pro sports calendars and tickets",
         description="Subscribable calendars and ticket-price ranges for women's pro sports leagues, from the Ticketmaster Discovery API.",
         canonical_url=f"{base_url}/",
         base_url=base_url,
         body=body,
+    )
+
+
+def render_not_found(*, leagues: list[dict], base_url: str) -> str:
+    """dist/404.html, which GitHub Pages serves for any missing path --
+    without it, a stale or mistyped link lands on GitHub's own "Page not
+    found · GitHub Pages" page, with no way back to this site. noindex, and
+    kept out of the sitemap."""
+    league_links = "\n".join(f'<li><a href="/{e(lg["slug"])}/">{e(lg["name"])}</a></li>' for lg in leagues)
+    body = f"""<h1>Page not found</h1>
+<p class="lede">There is no page at this address. Team and league calendars
+are listed below, or start from <a href="/">the home page</a>.</p>
+<h2>Leagues</h2>
+<ul class="team-roster">
+{league_links}
+</ul>
+"""
+    return _base(
+        title=f"Page not found | {SITE_NAME}",
+        description="There is no page at this address.",
+        canonical_url=f"{base_url}/",
+        base_url=base_url,
+        body=body,
+        noindex=True,
     )
 
 
@@ -341,15 +408,27 @@ def render_league(
     name = league["league_name"]
     ics_https = f"{base_url}/ics/{slug}.ics"
     ics_webcal = ics_https.replace("https://", "webcal://").replace("http://", "webcal://")
+    # The team's real name ("Gotham FC", "UCLA Bruins Womens Basketball"),
+    # not a title-cased slug ("Gotham Fc", "Ucla Bruins ...") -- this list is
+    # the league page's only internal link to each team page.
+    team_names = league.get("team_names") or {}
+
+    def team_name(slug_: str) -> str:
+        return team_names.get(slug_) or slug_.replace("-", " ").title()
+
     team_links = "\n".join(
-        f'<li><a href="/{e(slug)}/{e(t)}/">{e(t.replace("-", " ").title())}</a></li>' for t in league["teams"]
+        f'<li><a href="/{e(slug)}/{e(t)}/">{e(team_name(t))}</a></li>' for t in league["teams"]
+    )
+    incomplete = league.get("possibly_incomplete_teams") or []
+    incomplete_note = (
+        _possibly_incomplete_note(", ".join(team_name(t) for t in incomplete)) + "\n" if incomplete else ""
     )
     body = f"""<nav aria-label="breadcrumb"><a href="/">All leagues</a></nav>
 <h1>{e(name)}</h1>
 <p class="schedule-source-note">{e(league["schedule_source_note"])}</p>
-{_subscribe_block(ics_https_url=ics_https, ics_webcal_url=ics_webcal, label=f"all of {name}")}
+{incomplete_note}{_subscribe_block(ics_https_url=ics_https, ics_webcal_url=ics_webcal, label=f"all of {name}")}
 <h2>Upcoming games</h2>
-{_games_table(league["games"], buy_link_subject=name)}
+{_games_table(league["games"], buy_link_subject=name, fetched=league.get("fetched", True))}
 <h2>Teams</h2>
 <ul class="team-roster">
 {team_links}
@@ -357,7 +436,7 @@ def render_league(
 """
     og_image, og_image_alt = LEAGUE_OG_IMAGES.get(slug, (DEFAULT_OG_IMAGE, DEFAULT_OG_IMAGE_ALT))
     return _base(
-        title=f"{name} calendar and tickets",
+        title=f"{name} calendar and tickets | {SITE_NAME}",
         description=f"Subscribe to a {name} calendar and see Ticketmaster ticket price ranges for upcoming games.",
         canonical_url=f"{base_url}/{slug}/",
         base_url=base_url,
@@ -376,17 +455,19 @@ def render_team(
     team_slug = team["team_slug"]
     ics_https = f"{base_url}/ics/{league_slug}/{team_slug}.ics"
     ics_webcal = ics_https.replace("https://", "webcal://").replace("http://", "webcal://")
+    fetched = team.get("fetched", True)
+    incomplete_note = _possibly_incomplete_note(team["team_name"]) + "\n" if team.get("possibly_incomplete") else ""
     body = f"""<nav aria-label="breadcrumb"><a href="/">All leagues</a> &rsaquo; <a href="/{e(league_slug)}/">{e(team['league_name'])}</a></nav>
 <h1>{e(team['team_name'])}</h1>
 <p class="schedule-source-note">{e(team["schedule_source_note"])}</p>
-{_next_game_hero(team["games"], team_name=team["team_name"])}
+{incomplete_note}{_next_game_hero(team["games"], team_name=team["team_name"], fetched=fetched)}
 {_subscribe_block(ics_https_url=ics_https, ics_webcal_url=ics_webcal, label=team["team_name"])}
 <h2>Upcoming games</h2>
-{_games_table(team["games"], buy_link_subject=team["team_name"])}
+{_games_table(team["games"], buy_link_subject=team["team_name"], fetched=fetched)}
 """
     og_image, og_image_alt = LEAGUE_OG_IMAGES.get(league_slug, (DEFAULT_OG_IMAGE, DEFAULT_OG_IMAGE_ALT))
     return _base(
-        title=f"{team['team_name']} calendar and tickets",
+        title=f"{team['team_name']} calendar and tickets | {SITE_NAME}",
         description=(
             f"Subscribe to the {team['team_name']} ({team['league_name']}) calendar and see "
             "Ticketmaster ticket price ranges for upcoming games."

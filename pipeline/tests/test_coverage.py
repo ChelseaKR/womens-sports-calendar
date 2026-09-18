@@ -57,7 +57,8 @@ def test_render_report_degraded_mode_notes_missing_key():
     coverage = BuildCoverage(leagues=[], requests_made=0, bytes_received=0, api_key_present=False)
     report = render_report(coverage)
     assert "TICKETMASTER_API_KEY not configured" in report
-    assert "not a failed build" in report
+    assert "never 'no games'" in report
+    assert "--require-api-key" in report
 
 
 def test_compute_league_coverage_records_mismatched_teams():

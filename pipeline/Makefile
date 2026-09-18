@@ -22,8 +22,12 @@ install-a11y:
 test:
 	uv run pytest -q
 
+# BUILD_FLAGS is empty for local/CI builds (degraded no-key mode allowed);
+# the deploy workflow sets BUILD_FLAGS=--require-api-key.
+BUILD_FLAGS ?=
+
 build:
-	uv run python -m wsc_pipeline.build --out dist --base-url $(BASE_URL)
+	uv run python -m wsc_pipeline.build --out dist --base-url $(BASE_URL) $(BUILD_FLAGS)
 
 # html5validator is a pinned dev dependency (pyproject.toml), synced by
 # `make install` -- plain `uv run` reuses that venv. It used to be pulled in

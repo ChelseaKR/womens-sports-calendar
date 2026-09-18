@@ -64,6 +64,9 @@ separately.
 
 Not registered yet — that is an owner step (registrar, DNS, GitHub Pages
 custom-domain configuration, `SITE_BASE_URL` repo variable), not done here.
+*Status, 2026-09-17:* registered 2026-09-14 and live on GitHub Pages; see
+README "Where it runs" for what is still open (www record, HTTPS
+enforcement).
 Placeholder `calendar.chelseakr.com` references in the pipeline's default
 `--base-url`, CI, and docs are updated to `https://nexthomegame.com`
 accordingly; production behavior does not change until the repo variable is

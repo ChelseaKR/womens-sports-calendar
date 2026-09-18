@@ -179,7 +179,18 @@ def test_league_and_team_pages_use_their_own_league_og_image():
 
 def test_og_site_name_present():
     for html in _pages().values():
-        assert '<meta property="og:site_name" content="womens-sports-calendar">' in html
+        assert '<meta property="og:site_name" content="Next Home Game">' in html
+
+
+def test_titles_use_the_product_name_never_the_repo_slug():
+    """The live site's <title> and og:site_name read "womens-sports-calendar"
+    (the private repo's slug) while its header said "Next Home Game"."""
+    pages = _pages()
+    for html in pages.values():
+        title = re.search(r"<title>(.*?)</title>", html).group(1)
+        assert "Next Home Game" in title
+        assert "womens-sports-calendar" not in html
+    assert "<title>Minnesota Lynx calendar and tickets | Next Home Game</title>" in pages["team"]
 
 
 def test_team_description_names_the_team_and_the_league():
@@ -188,3 +199,24 @@ def test_team_description_names_the_team_and_the_league():
     html = _pages()["team"]
     assert 'name="description" content="Subscribe to the Minnesota Lynx (WNBA) calendar' in html
     assert 'property="og:description" content="Subscribe to the Minnesota Lynx (WNBA) calendar' in html
+
+
+def test_league_roster_links_use_real_team_names_not_title_cased_slugs():
+    ncaa = next(lg for lg in LEAGUES if lg.slug == "ncaaw-big-ten")
+    nwsl = next(lg for lg in LEAGUES if lg.slug == "nwsl")
+    for league, real, mangled in (
+        (ncaa, "UCLA Bruins Womens Basketball", "Ucla Bruins"),
+        (nwsl, "Gotham FC", "Gotham Fc"),
+    ):
+        html = render_league(league=league_data(league, []), base_url="https://nexthomegame.com")
+        assert f">{real}</a>" in html
+        assert mangled not in html
+
+
+def test_unsplittable_event_shows_its_real_name_never_tbd_vs_tbd():
+    listing = _game("EVT-NAME", name="Washington Spirit Premium Experiences")
+    assert listing.home_team is None and listing.away_team is None
+    html = render_team(team=team_data(TEAM, LEAGUE, [listing]), base_url="https://nexthomegame.com")
+    assert "TBD vs TBD" not in html
+    assert "Washington Spirit Premium Experiences" in html
+    assert "Buy tickets for Washington Spirit Premium Experiences on" in html

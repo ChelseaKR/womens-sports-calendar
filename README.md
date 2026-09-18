@@ -31,9 +31,19 @@ but us on the page. Monetised only by plain affiliate URLs.
   validation on every push/PR) and `pages.yml` (the nightly + manual build
   and GitHub Pages deploy).
 
+## Where it runs
+
+Live at **https://nexthomegame.com** (checked 2026-09-17): the domain was
+registered 2026-09-14 (Amazon Registrar, Route 53 DNS), the apex points at
+GitHub Pages, the Pages custom domain is set and its certificate is issued,
+and `pages.yml` deploys nightly. Still open, all owner steps:
+`www.nexthomegame.com` has no DNS record (it needs a `CNAME` to
+`chelseakr.github.io`), "Enforce HTTPS" is off (plain `http://` is served
+without a redirect), and `SITE_BASE_URL` is unset (the build's default,
+`https://nexthomegame.com`, is what is used).
+
 ## Not yet decided
 
-The display name is still a working name (`womens-sports-calendar`). The
-domain is decided — `nexthomegame.com`, see `docs/DECISIONS.md` 0007 — but
-not yet registered; hosting configuration (Pages, DNS, `SITE_BASE_URL`) is
-an owner step, not done here.
+The pages say "Next Home Game" (header, `<title>`, `og:site_name`), matching
+the domain (`docs/DECISIONS.md` 0007); the repo keeps its working name,
+`womens-sports-calendar`.

@@ -6,8 +6,10 @@ client self-limits to 1 request/second, below both published numbers, and
 tracks every request so the caller can print a crawl-budget report (bytes,
 request count) per the repo's crawl-budget constraint.
 
-Identifying User-Agent per the crawl-budget constraint: names the repo, no
-secret in it.
+Identifying User-Agent per the crawl-budget constraint: names the product
+and its public site, no secret in it. It used to point at the GitHub repo,
+which is private -- a contact URL that 404s for Ticketmaster and names the
+private repo is worse than none.
 """
 
 from __future__ import annotations
@@ -18,9 +20,17 @@ from dataclasses import dataclass, field
 import httpx
 
 DISCOVERY_URL = "https://app.ticketmaster.com/discovery/v2/events.json"
-USER_AGENT = "womens-sports-calendar/0.1 (+https://github.com/ChelseaKR/womens-sports-calendar)"
+USER_AGENT = "NextHomeGame/0.1 (+https://nexthomegame.com/)"
 MIN_SECONDS_BETWEEN_REQUESTS = 1.0
 PAGE_SIZE = 50
+# Pages read per (team, country) query before giving up and flagging the
+# result as possibly incomplete. The live build of 2026-09-17 had two
+# teams (connecticut-sun, racing-louisville) whose keyword search ran past
+# one 50-event page -- keyword false positives count toward the page -- so
+# reading only page 0 left their later-dated results unread. 5 x 50 = 250
+# events is several seasons of home games, and well inside the Discovery
+# API's deep-paging limit (size * page < 1000).
+MAX_PAGES_PER_QUERY = 5
 
 
 class TicketmasterFetchError(RuntimeError):
@@ -84,11 +94,13 @@ class DiscoveryClient:
         country_codes: tuple[str, ...],
     ) -> tuple[list[dict], bool]:
         """Return (raw Discovery API event dicts, truncated) for one team.
-        One call per country in country_codes (the API takes a single
-        countryCode per call). Paginates only within the API's first page;
-        a team whose result spans more than one page comes back with
-        truncated=True so the caller can surface it in the coverage report
-        rather than silently dropping events past page 1.
+        One query per country in country_codes (the API takes a single
+        countryCode per call), each read page by page until the API says
+        there are no more pages. Only a result that still has pages left
+        after MAX_PAGES_PER_QUERY comes back with truncated=True, so the
+        caller can say "possibly incomplete" on the site and in the
+        coverage report instead of publishing the first page as the whole
+        schedule.
         """
         events: list[dict] = []
         truncated = False
@@ -109,18 +121,36 @@ class DiscoveryClient:
         return deduped, truncated
 
     def _search_one(self, team_slug: str, team_name: str, country_code: str) -> tuple[list[dict], bool]:
-        params = {
-            "apikey": self._api_key,
-            "keyword": team_name,
-            "classificationName": "Sports",
-            "countryCode": country_code,
-            "size": str(PAGE_SIZE),
-            "sort": "date,asc",
-        }
-        payload = self._get_with_retry(params)
-        page = payload.get("page", {})
-        truncated = page.get("totalPages", 1) > 1
-        return payload.get("_embedded", {}).get("events", []), truncated
+        events: list[dict] = []
+        page_number = 0
+        while True:
+            params = {
+                "apikey": self._api_key,
+                "keyword": team_name,
+                "classificationName": "Sports",
+                "countryCode": country_code,
+                "size": str(PAGE_SIZE),
+                "page": str(page_number),
+                "sort": "date,asc",
+            }
+            payload = self._get_with_retry(params)
+            page = payload.get("page") or {}
+            page_events = (payload.get("_embedded") or {}).get("events") or []
+            total_elements = page.get("totalElements")
+            if not page_events and isinstance(total_elements, int) and total_elements > 0 and page_number == 0:
+                # The API says there are matches but sent none: a malformed
+                # or partial response, not "this team has no games".
+                raise TicketmasterFetchError(
+                    f"Discovery API reported {total_elements} events for "
+                    f"keyword={team_name!r} but returned none on page 0"
+                )
+            events.extend(page_events)
+            page_number += 1
+            total_pages = page.get("totalPages", 1)
+            if not isinstance(total_pages, int) or page_number >= total_pages:
+                return events, False
+            if page_number >= MAX_PAGES_PER_QUERY:
+                return events, True
 
     def _get_with_retry(self, params: dict[str, str]) -> dict:
         last_error: Exception | None = None

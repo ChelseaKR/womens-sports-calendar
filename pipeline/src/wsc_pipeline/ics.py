@@ -6,11 +6,12 @@ derived deterministically from it. Re-subscribing, or a calendar client
 re-fetching the same feed tomorrow, must not duplicate entries -- this is
 the whole reason the UID is not random and not build-timestamp-based.
 
-UID_DOMAIN is a placeholder identifier, not a resolvable domain (the real
-domain is undecided, DECISIONS 0005). It must never change once games have
-been published under it, or every subscriber's calendar app will treat the
-next build's games as new duplicates instead of updates. Pin it once and
-leave it as the product's domain gets decided.
+UID_DOMAIN is a placeholder identifier, not a resolvable domain. It must
+never change once games have been published under it, or every
+subscriber's calendar app will treat the next build's games as new
+duplicates instead of updates. Games have been live under it at
+nexthomegame.com since 2026-09-14, so it keeps the old working name on
+purpose; it is an opaque id, not a link.
 """
 
 from __future__ import annotations
@@ -19,10 +20,12 @@ from collections import Counter, defaultdict
 
 from icalendar import Calendar, Event, Timezone, vText
 
-from .normalize import Game, display_start, zone_for
+from .normalize import Game, display_start, unique_by_event_id, zone_for
 
 UID_DOMAIN = "womens-sports-calendar.invalid"
-PRODID = "-//ChelseaKR//womens-sports-calendar//EN"
+# PRODID only names the producing software; clients do not key on it, so it
+# can follow the product name (unlike UID_DOMAIN above, which must not move).
+PRODID = "-//Next Home Game//nexthomegame.com//EN"
 
 
 class DuplicateUIDError(ValueError):
@@ -40,18 +43,13 @@ def check_no_duplicate_uids(games: list[Game]) -> None:
         raise DuplicateUIDError(f"duplicate UIDs would be emitted: {dupes}")
 
 
-def _dedup_by_event_id(games: list[Game]) -> list[Game]:
-    seen: set[str] = set()
-    out = []
-    for g in games:
-        if g.event_id in seen:
-            continue
-        seen.add(g.event_id)
-        out.append(g)
-    return out
+NOT_FETCHED_CALDESC = (
+    "Not fetched: this build did not query Ticketmaster, so this calendar is "
+    "empty because nothing was read, not because there are no games."
+)
 
 
-def build_calendar(games: list[Game], *, cal_name: str) -> Calendar:
+def build_calendar(games: list[Game], *, cal_name: str, fetched: bool = True) -> Calendar:
     """Games with no usable date were already dropped by normalize_event;
     games with date_tbd=True (a real Ticketmaster date placeholder, not a
     missing field) are also excluded here -- a calendar entry needs a real
@@ -59,7 +57,7 @@ def build_calendar(games: list[Game], *, cal_name: str) -> Calendar:
     games are still visible on the site (see site_data.py), just not in
     the .ics. This is documented, not silent.
     """
-    games = _dedup_by_event_id(games)
+    games = unique_by_event_id(games)
     check_no_duplicate_uids(games)
 
     cal = Calendar()
@@ -68,7 +66,10 @@ def build_calendar(games: list[Game], *, cal_name: str) -> Calendar:
     cal.add("calscale", "GREGORIAN")
     cal.add("method", "PUBLISH")
     cal.add("x-wr-calname", cal_name)
-    cal.add("x-wr-caldesc", "Ticketmaster-listed games; see the site for licensing notes.")
+    cal.add(
+        "x-wr-caldesc",
+        "Ticketmaster-listed games; see the site for licensing notes." if fetched else NOT_FETCHED_CALDESC,
+    )
 
     tzids_seen: set[str] = set()
     n_included = 0
@@ -109,13 +110,13 @@ def build_calendar(games: list[Game], *, cal_name: str) -> Calendar:
     return cal
 
 
-def league_calendar(league_slug: str, league_name: str, games: list[Game]) -> Calendar:
-    return build_calendar(games, cal_name=f"{league_name} (Ticketmaster listings)")
+def league_calendar(league_slug: str, league_name: str, games: list[Game], *, fetched: bool = True) -> Calendar:
+    return build_calendar(games, cal_name=f"{league_name} (Ticketmaster listings)", fetched=fetched)
 
 
-def team_calendar(team_slug: str, team_name: str, games: list[Game]) -> Calendar:
+def team_calendar(team_slug: str, team_name: str, games: list[Game], *, fetched: bool = True) -> Calendar:
     team_games = [g for g in games if g.tracked_team_slug == team_slug]
-    return build_calendar(team_games, cal_name=f"{team_name} (Ticketmaster listings)")
+    return build_calendar(team_games, cal_name=f"{team_name} (Ticketmaster listings)", fetched=fetched)
 
 
 def group_by_team(games: list[Game]) -> dict[str, list[Game]]:
