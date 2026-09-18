@@ -41,6 +41,14 @@ build:
 validate-html: install
 	uv run html5validator --root dist
 
+# Every .ics feed the build wrote: exists for each league/team the site
+# links, parses as RFC 5545 with the required properties, no duplicate
+# UIDs, and carries exactly the games its page shows as in the feed. Run
+# by `make verify` and, against the real fetched build, by pages.yml
+# before deploy -- see src/wsc_pipeline/validate_ics.py.
+validate-ics:
+	uv run python -m wsc_pipeline.validate_ics dist
+
 # Real, CI-enforced accessibility gate -- runs pa11y (WCAG2AA) against every
 # HTML page the build actually produced (index, league pages, team pages),
 # not a one-time manual check. Requires Node/npx (see .github/workflows/ci.yml).
@@ -97,7 +105,7 @@ a11y: install install-a11y build
 	./node_modules/.bin/pa11y-ci --config pa11y-ci.config.json $$urls; \
 	uv run python scripts/check_a11y_coverage.py pa11y-ci-results.json $$urls
 
-verify: install test build validate-html a11y
+verify: install test build validate-html validate-ics a11y
 
 clean:
 	rm -rf dist dist.tmp .pytest_cache .venv node_modules pa11y-ci-results.json
