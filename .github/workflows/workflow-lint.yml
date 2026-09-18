@@ -1,0 +1,90 @@
+# Workflow SAST and policy (CI-CD-STANDARD §7, CICD-19; SECURITY-AND-SUPPLY-
+# CHAIN-STANDARD §3, SEC-09). Runs on every pull request, not only ones that
+# touch .github/workflows/, so its two contexts always report and can be
+# required status checks without leaving a PR "Expected -- waiting".
+#
+# CodeQL `language: actions` (CICD-20) is not used: code scanning is not
+# available to this private repository, and zizmor covers workflow SAST
+# here (see docs/adr/0002 on the security branch).
+
+name: workflow-lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# Per commit on push, per branch on a PR (CI-CD-STANDARD §11c).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.sha }}
+  cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.12.9"
+  ZIZMOR_VERSION: "1.30.1"
+  PYYAML_VERSION: "6.0.3"
+
+jobs:
+  zizmor:
+    name: zizmor
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: false
+
+      # Online mode (GH_TOKEN) adds the audits that need the GitHub API, such
+      # as impostor commits and known-vulnerable action versions. Any finding
+      # of any severity fails the job; there is no ignore list.
+      - name: zizmor
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          uvx "zizmor@${ZIZMOR_VERSION}" --format=github .github/workflows
+
+  workflow-policy:
+    name: workflow-policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+          enable-cache: false
+
+      # --self-test proves every rule still catches a planted violation
+      # before the real workflows are checked.
+      - name: Portfolio workflow rules
+        run: |
+          set -euo pipefail
+          uv run --no-project --with "pyyaml==${PYYAML_VERSION}" \
+            python .github/scripts/check_workflow_policy.py --self-test .github/workflows/*.yml

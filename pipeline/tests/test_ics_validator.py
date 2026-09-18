@@ -11,6 +11,7 @@ from icalendar import Calendar
 from wsc_pipeline.config import LEAGUES
 from wsc_pipeline.ics import league_calendar, make_uid, team_calendar
 from wsc_pipeline.normalize import normalize_event
+
 from .conftest import make_raw_event
 
 REQUIRED_VEVENT_PROPS = ("uid", "dtstamp", "dtstart", "summary")
@@ -22,7 +23,9 @@ def _sample_games_for(league):
         raw = make_raw_event(
             event_id=f"{league.slug}-{team.slug}-{i}",
             name=f"{team.name} vs Visiting Team",
-            price_ranges=[{"type": "standard", "currency": "USD", "min": 10.0 + i, "max": 50.0 + i}] if i != 1 else None,
+            price_ranges=[{"type": "standard", "currency": "USD", "min": 10.0 + i, "max": 50.0 + i}]
+            if i != 1
+            else None,
         )
         game = normalize_event(raw, league_slug=league.slug, tracked_team_slug=team.slug, tracked_team_name=team.name)
         games.append(game)

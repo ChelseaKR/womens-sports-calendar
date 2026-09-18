@@ -15,8 +15,20 @@ https://www.espn.com/mlb/story/_/id/49000604/athletes-unlimited-softball-league-
 Unlimited's other three disciplines (basketball, lacrosse, volleyball) are
 NOT tracked -- see LEAGUES_EXAMINED_NOT_INCLUDED below for why.
 
+NCAA women's basketball (Big Ten only) was added 2026-09-16 (docs/DECISIONS.md
+0010) using the conference's 18 members for the 2026-27 season, per
+https://bigten.org/wbb/article/60396/ (read 2026-09-16). Unlike a WNBA/NWSL/
+PWHL/AUSL team name, a bare school nickname (e.g. "Iowa Hawkeyes") is shared
+across every sport that school plays, so each team name below is suffixed
+"Womens Basketball" to disambiguate the Ticketmaster keyword search --
+matching the naming Ticketmaster's own artist pages already use (confirmed
+per team before adding any of them, see docs/LICENSES-AND-ATTRIBUTION.md).
+The other ~332 Division I women's basketball programs, and every NCAA
+women's sport other than basketball, are NOT tracked -- see
+LEAGUES_EXAMINED_NOT_INCLUDED below for why.
+
 WPBL (Women's Pro Baseball League) was examined 2026-09-16 (docs/DECISIONS.md
-0009) and NOT added: it is a real, currently operating league with fixed
+0011) and NOT added: it is a real, currently operating league with fixed
 team franchises, so team identity was never the blocker, and licensing was
 moot as usual -- but a direct Ticketmaster search for all four of its 2026
 teams and the bare league name returned zero results across the board.
@@ -31,6 +43,10 @@ from dataclasses import dataclass
 class Team:
     slug: str
     name: str
+    # Longer names of OTHER teams that contain this team's name as a phrase,
+    # so the participant check would otherwise accept their games (see
+    # KEYWORD_COLLISIONS below and normalize.team_is_participant).
+    not_this_team: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -41,10 +57,25 @@ class League:
     teams: tuple[Team, ...]
     schedule_source_used: bool = False
     schedule_source_note: str = ""
+    # For structured data (structured_data.py): the sport as schema.org's
+    # free-text `sport`, and the real name of the organisation the teams
+    # belong to (a league, or the Big Ten Conference). Empty = not stated.
+    sport: str = ""
+    organization_name: str = ""
+
+
+# Other teams whose names contain a tracked team's name, found in live
+# data rather than guessed. The live build of 2026-09-17 put six games of
+# Monterey Bay FC (USL Championship, a men's club) on NWSL Bay FC's page
+# and in its calendar: "Bay FC" is a contiguous phrase inside
+# "Monterey Bay FC", so the phrase check (DECISIONS 0009) accepted them.
+KEYWORD_COLLISIONS: dict[str, tuple[str, ...]] = {
+    "Bay FC": ("Monterey Bay FC",),
+}
 
 
 def _teams(*names: str) -> tuple[Team, ...]:
-    return tuple(Team(slug=_slugify(n), name=n) for n in names)
+    return tuple(Team(slug=_slugify(n), name=n, not_this_team=KEYWORD_COLLISIONS.get(n, ())) for n in names)
 
 
 def _slugify(name: str) -> str:
@@ -78,9 +109,10 @@ LEAGUES: tuple[League, ...] = (
             "WNBA's own schedule is not used: its Terms of Use §1 bans "
             "public or commercial reuse of site materials and no "
             "machine-readable feed exists. Games below are Ticketmaster "
-            "Discovery API listings for WNBA teams, not a WNBA feed. "
-            "See docs/LICENSES-AND-ATTRIBUTION.md."
+            "Discovery API listings for WNBA teams, not a WNBA feed."
         ),
+        sport="Basketball",
+        organization_name="Women's National Basketball Association",
     ),
     League(
         slug="nwsl",
@@ -109,8 +141,10 @@ LEAGUES: tuple[League, ...] = (
             "NWSL's own schedule is not used: its Terms of Use page is an "
             "unreadable JavaScript shell (unknown = not used). Games below "
             "are Ticketmaster Discovery API listings for NWSL teams, not "
-            "an NWSL feed. See docs/LICENSES-AND-ATTRIBUTION.md."
+            "an NWSL feed."
         ),
+        sport="Soccer",
+        organization_name="National Women's Soccer League",
     ),
     League(
         slug="pwhl",
@@ -136,8 +170,10 @@ LEAGUES: tuple[League, ...] = (
             "Terms of Use clause (xi) bans automated scripts and limits "
             "use to personal, non-commercial home use. Games below are "
             "Ticketmaster Discovery API listings for PWHL teams, not the "
-            "PWHL/HockeyTech feed. See docs/LICENSES-AND-ATTRIBUTION.md."
+            "PWHL/HockeyTech feed."
         ),
+        sport="Ice hockey",
+        organization_name="Professional Women's Hockey League",
     ),
     League(
         slug="ausl",
@@ -157,27 +193,82 @@ LEAGUES: tuple[League, ...] = (
             "Unlimited) is not used: its Terms of Service ban automated "
             "access and commercial exploitation of site content, same as "
             "auprosports.com's terms. Games below are Ticketmaster "
-            "Discovery API listings for AUSL teams, not an AUSL feed. See "
-            "docs/LICENSES-AND-ATTRIBUTION.md."
+            "Discovery API listings for AUSL teams, not an AUSL feed."
         ),
+        sport="Softball",
+        organization_name="Athletes Unlimited Softball League",
+    ),
+    League(
+        slug="ncaaw-big-ten",
+        name="NCAA Women's Basketball (Big Ten)",
+        country_codes=("US",),
+        teams=_teams(
+            "Illinois Fighting Illini Womens Basketball",
+            "Indiana Hoosiers Womens Basketball",
+            "Iowa Hawkeyes Womens Basketball",
+            "Maryland Terrapins Womens Basketball",
+            "Michigan Wolverines Womens Basketball",
+            "Michigan State Spartans Womens Basketball",
+            "Minnesota Golden Gophers Womens Basketball",
+            "Nebraska Cornhuskers Womens Basketball",
+            "Northwestern Wildcats Womens Basketball",
+            "Ohio State Buckeyes Womens Basketball",
+            "Oregon Ducks Womens Basketball",
+            "Penn State Nittany Lions Womens Basketball",
+            "Purdue Boilermakers Womens Basketball",
+            "Rutgers Scarlet Knights Womens Basketball",
+            "UCLA Bruins Womens Basketball",
+            "USC Trojans Womens Basketball",
+            "Washington Huskies Womens Basketball",
+            "Wisconsin Badgers Womens Basketball",
+        ),
+        schedule_source_used=False,
+        schedule_source_note=(
+            "No NCAA women's basketball schedule source -- not NCAA.com, "
+            "not NCAA.org, not any individual school's athletics site -- "
+            "is used: their Terms of Service ban commercial exploitation "
+            "of their content (same blanket shape as every other league "
+            "here) and there is no unified machine-readable feed across "
+            "Division I programs. Games below are Ticketmaster Discovery "
+            "API listings for Big Ten women's basketball teams, not any "
+            "NCAA or school feed. Team names are suffixed 'Womens "
+            "Basketball' to disambiguate the keyword search, since a "
+            "school's nickname alone spans every sport it fields. Limited "
+            "to the Big Ten's 18 teams, not all ~350 Division I programs."
+        ),
+        sport="Basketball",
+        organization_name="Big Ten Conference",
     ),
 )
 
 LEAGUES_EXAMINED_NOT_INCLUDED: tuple[dict[str, str], ...] = (
     {
-        "name": "NCAA women's sports",
+        "name": ("NCAA women's basketball outside the Big Ten, and NCAA women's sports other than basketball"),
         "reason": (
-            "No unified machine-readable schedule across ~350 school "
-            "athletic sites, and NCAA.com's Terms of Service ban "
-            "commercial exploitation of NCAA Content. Not configured as a "
-            "tracked league."
+            "Big Ten women's basketball is a tracked league (see above) via "
+            "Ticketmaster team-keyword search, same as WNBA/NWSL/PWHL/AUSL "
+            "-- added 2026-09-16, after confirming "
+            "real Ticketmaster inventory (dedicated '<School> Womens "
+            "Basketball' artist pages carrying real dated 2026-27 games) "
+            "across Big Ten programs, not just a couple of blue bloods. The "
+            "other ~332 Division I women's basketball programs, and every "
+            "NCAA women's sport other than basketball (soccer, volleyball, "
+            "softball, etc.), remain untracked. Not a licensing gap -- "
+            "NCAA.com's and NCAA.org's Terms of Service ban commercial "
+            "exploitation of their own content, same shape as every other "
+            "league here, but neither site is scraped either "
+            "way, same as every tracked league. The gap is that "
+            "Ticketmaster coverage and conference-by-conference team-roster "
+            "stability have not been checked for the remaining programs or "
+            "sports -- team roster/Ticketmaster coverage not yet scoped, "
+            "same bucket as Unrivaled and LOVB below."
         ),
     },
     {
         "name": "Unrivaled",
         "reason": (
-            "Terms of use ban automated collection and name \"collecting "
-            "product prices\" as a prohibited commercial purpose. Not "
+            'Terms of use ban automated collection and name "collecting '
+            'product prices" as a prohibited commercial purpose. Not '
             "configured as a tracked league (team roster/Ticketmaster "
             "coverage not yet scoped)."
         ),
@@ -195,8 +286,8 @@ LEAGUES_EXAMINED_NOT_INCLUDED: tuple[dict[str, str], ...] = (
         "reason": (
             "AUSL, the softball league Athletes Unlimited operates, is a "
             "tracked league (see above) via Ticketmaster team-keyword "
-            "search, same as WNBA/NWSL/PWHL -- added 2026-09-14, "
-            "docs/DECISIONS.md 0008. Athletes Unlimited's other three "
+            "search, same as WNBA/NWSL/PWHL -- added 2026-09-14. "
+            "Athletes Unlimited's other three "
             "disciplines are not tracked: basketball, lacrosse, and "
             "volleyball each play a single host-city season with teams "
             "re-drafted weekly by rotating captains (e.g. basketball's "
@@ -222,7 +313,7 @@ LEAGUES_EXAMINED_NOT_INCLUDED: tuple[dict[str, str], ...] = (
             "TicketReturn, not Ticketmaster, as its ticketing partner, "
             "and a direct Ticketmaster search for all four 2026 teams "
             "plus the bare league name returned zero results across the "
-            "board, confirmed 2026-09-16. See docs/DECISIONS.md 0009."
+            "board, confirmed 2026-09-16."
         ),
     },
 )

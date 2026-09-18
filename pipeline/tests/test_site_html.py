@@ -6,19 +6,20 @@ from wsc_pipeline.config import LEAGUES, LEAGUES_EXAMINED_NOT_INCLUDED
 from wsc_pipeline.normalize import normalize_event
 from wsc_pipeline.site import render_index, render_league, render_team
 from wsc_pipeline.site_data import league_data, team_data
+
 from .conftest import make_raw_event
 
 LEAGUE = LEAGUES[0]  # wnba
 TEAM = LEAGUE.teams[0]
 
-SCRIPT_TAG_RE = re.compile(r"<script\b", re.IGNORECASE)
+# An executable <script>: anything but a JSON-LD data block, which browsers
+# never run (structured_data.py).
+SCRIPT_TAG_RE = re.compile(r"<script\b(?![^>]*\btype=\"application/ld\+json\")", re.IGNORECASE)
 
 
 def _game(event_id, **kwargs):
     raw = make_raw_event(event_id=event_id, **kwargs)
-    return normalize_event(
-        raw, league_slug=LEAGUE.slug, tracked_team_slug=TEAM.slug, tracked_team_name=TEAM.name
-    )
+    return normalize_event(raw, league_slug=LEAGUE.slug, tracked_team_slug=TEAM.slug, tracked_team_name=TEAM.name)
 
 
 def _pages():
@@ -31,45 +32,91 @@ def _pages():
     # unpriced games above, so the populated-games-table pa11y check in
     # `make a11y` (see pipeline/README.md) covers all three cell shapes.
     date_tbd = _game("EVT-TBD", date_time=None, local_date="2026-08-01", local_time=None, date_tbd=True)
-    games = [priced, unpriced, date_tbd]
+    # The tracked team at home (the next-home-game hero and a "Home" label),
+    # away and cancelled (an "Away" label and a status), and a game whose
+    # date is known but not its time -- so the a11y sweep covers every cell
+    # shape a real team page can show.
+    home = _game(
+        "EVT-HOME",
+        name=f"{TEAM.name} vs Seattle Storm",
+        date_time="2026-06-10T00:00:00Z",
+        local_date="2026-06-09",
+        local_time="19:00:00",
+        venue_name="Target Center",
+        venue_city="Minneapolis",
+        venue_state="MN",
+        timezone="America/Chicago",
+    )
+    away_cancelled = _game(
+        "EVT-AWAY",
+        name=f"Seattle Storm vs {TEAM.name}",
+        date_time="2026-06-12T02:00:00Z",
+        local_date="2026-06-11",
+        local_time="19:00:00",
+        status="cancelled",
+        venue_name="Climate Pledge Arena",
+        venue_city="Seattle",
+        venue_state="WA",
+        timezone="America/Los_Angeles",
+    )
+    time_tba = _game("EVT-TBA", date_time=None, local_date="2026-06-20", local_time=None, time_tba=True)
+    games = [priced, unpriced, date_tbd, home, away_cancelled, time_tba]
     league_payload = league_data(LEAGUE, games)
     team_payload = team_data(TEAM, LEAGUE, games)
+    # A fetched build states when it fetched (site_data.provenance); a fixed
+    # time here puts that line on the fixture pages the a11y sweep checks.
+    for payload in (league_payload, team_payload):
+        payload["fetched_at"] = "2026-06-01T08:31:00+00:00"
     leagues_summary = [{"slug": lg.slug, "name": lg.name, "games_count": 2} for lg in LEAGUES]
     return {
-        "index": render_index(leagues=leagues_summary, not_included=list(LEAGUES_EXAMINED_NOT_INCLUDED), base_url="https://calendar.chelseakr.com"),
+        "index": render_index(
+            leagues=leagues_summary,
+            not_included=list(LEAGUES_EXAMINED_NOT_INCLUDED),
+            base_url="https://calendar.chelseakr.com",
+        ),
         "league": render_league(league=league_payload, base_url="https://calendar.chelseakr.com"),
         "team": render_team(team=team_payload, base_url="https://calendar.chelseakr.com"),
     }
 
 
 def test_no_script_tags_on_any_page():
-    """DECISIONS 0002 / brief: no JavaScript that contacts anyone but us --
-    the simplest and strongest guarantee is zero <script> elements at all."""
+    """With no GA4 measurement ID (the default -- DECISIONS 0012), a page
+    carries zero <script> elements at all. With an ID, the one allowed
+    script is the guarded GA4 loader, checked in tests/test_analytics.py."""
     for page_name, html in _pages().items():
         assert not SCRIPT_TAG_RE.search(html), f"{page_name} page contains a <script> tag"
 
 
-def test_no_price_rendered_without_a_ticketmaster_event_on_league_page():
-    html = _pages()["league"]
-    # The unpriced game's row must say "not available", and must not have
-    # a dollar-shaped price anywhere near it. Since only one priced game
-    # exists, exactly one price-value span should appear.
-    assert html.count('class="price-value"') == 1
-    assert html.count('class="price-unavailable"') >= 1
-    assert "USD 12.00" in html
-    assert "not available" in html
+_PRICE_WORDING = re.compile(r"price|\$\s?\d|USD|\d+\.\d\d", re.IGNORECASE)
 
 
-def test_no_price_rendered_without_a_ticketmaster_event_on_team_page():
-    html = _pages()["team"]
-    assert html.count('class="price-value"') == 1
-    assert "not available" in html
+def _visible_text(html: str) -> str:
+    return re.sub(r"<[^>]+>", " ", html)
+
+
+def test_no_price_or_price_promise_on_any_page():
+    """DECISIONS 0013: calendar-first, no prices. The fixture includes a game
+    Ticketmaster DID price (USD 12.00-34.00); no page may show it, and no
+    page may promise a price (headline, lede, footer, meta description)."""
+    for name, html in _pages().items():
+        text = _visible_text(html)
+        # Two legitimate mentions: the footer's statement that there are no
+        # prices, and Unrivaled's terms quoted in the not-included panel.
+        allowed = text.replace("This site does not show ticket prices.", "").replace("collecting product prices", "")
+        match = _PRICE_WORDING.search(allowed)
+        assert match is None, f"{name}: {match.group(0)!r} in visible text"
+        for meta in re.findall(
+            r'<meta (?:name|property)="(?:description|og:description|twitter:description)" content="([^"]*)"', html
+        ):
+            assert "price" not in meta.lower(), f"{name}: {meta}"
+        assert "12.00" not in html and "34.00" not in html
 
 
 def test_table_headers_present_with_scope():
     html = _pages()["league"]
     assert '<th scope="col">Date</th>' in html
-    assert '<th scope="col">Price range</th>' in html
+    assert '<th scope="col">Tickets</th>' in html
+    assert "Price" not in html
 
 
 def test_buy_link_text_says_where_it_goes():
@@ -89,9 +136,14 @@ def test_canonical_and_og_tags_present():
 
 
 def test_footer_privacy_note_is_present_and_literal():
-    html = _pages()["index"]
-    assert "Nothing leaves your browser" in html
-    assert "no tracking cookie" in html
+    """With no GA4 ID the footer says there is no analytics -- and links the
+    privacy page -- rather than claiming a measurement this build never
+    does. (The with-ID wording is checked in tests/test_analytics.py.)"""
+    for html in _pages().values():
+        assert "This site runs no analytics, no scripts, and\nsets no cookies" in html
+        assert "the calendar feeds are never tracked" in html
+        assert '<a href="/privacy/">Privacy: what this site measures' in html
+        assert "Google Analytics" not in html
 
 
 def test_footer_attribution_names_ticketmaster_terms():
@@ -145,7 +197,7 @@ def test_og_image_tags_present_and_grounded_in_real_dimensions():
         assert 'property="og:image:width" content="1200"' in html, page_name
         assert 'property="og:image:height" content="630"' in html, page_name
         assert 'property="og:image:alt" content="' in html, page_name
-        assert 'https://calendar.chelseakr.com/og-image' in html, page_name
+        assert "https://calendar.chelseakr.com/og-image" in html, page_name
 
 
 def test_twitter_card_tags_present():
@@ -179,12 +231,44 @@ def test_league_and_team_pages_use_their_own_league_og_image():
 
 def test_og_site_name_present():
     for html in _pages().values():
-        assert '<meta property="og:site_name" content="womens-sports-calendar">' in html
+        assert '<meta property="og:site_name" content="Next Home Game">' in html
+
+
+def test_titles_use_the_product_name_never_the_repo_slug():
+    """The live site's <title> and og:site_name read "womens-sports-calendar"
+    (the private repo's slug) while its header said "Next Home Game"."""
+    pages = _pages()
+    for html in pages.values():
+        title = re.search(r"<title>(.*?)</title>", html).group(1)
+        assert "Next Home Game" in title
+        assert "womens-sports-calendar" not in html
+    assert "<title>Minnesota Lynx 2026 schedule: add to your calendar | Next Home Game</title>" in pages["team"]
 
 
 def test_team_description_names_the_team_and_the_league():
     """Brief: a team page's description must name the actual team and
     league, not a generic template repeated everywhere."""
     html = _pages()["team"]
-    assert 'name="description" content="Subscribe to the Minnesota Lynx (WNBA) calendar' in html
-    assert 'property="og:description" content="Subscribe to the Minnesota Lynx (WNBA) calendar' in html
+    assert 'name="description" content="Minnesota Lynx 2026 schedule (WNBA): add every game to Google Calendar' in html
+    assert 'property="og:description" content="Minnesota Lynx 2026 schedule (WNBA): add every game' in html
+
+
+def test_league_roster_links_use_real_team_names_not_title_cased_slugs():
+    ncaa = next(lg for lg in LEAGUES if lg.slug == "ncaaw-big-ten")
+    nwsl = next(lg for lg in LEAGUES if lg.slug == "nwsl")
+    for league, real, mangled in (
+        (ncaa, "UCLA Bruins Womens Basketball", "Ucla Bruins"),
+        (nwsl, "Gotham FC", "Gotham Fc"),
+    ):
+        html = render_league(league=league_data(league, []), base_url="https://nexthomegame.com")
+        assert f">{real}</a>" in html
+        assert mangled not in html
+
+
+def test_unsplittable_event_shows_its_real_name_never_tbd_vs_tbd():
+    listing = _game("EVT-NAME", name="Washington Spirit Premium Experiences")
+    assert listing.home_team is None and listing.away_team is None
+    html = render_team(team=team_data(TEAM, LEAGUE, [listing]), base_url="https://nexthomegame.com")
+    assert "TBD vs TBD" not in html
+    assert "Washington Spirit Premium Experiences" in html
+    assert "Buy tickets for Washington Spirit Premium Experiences on" in html

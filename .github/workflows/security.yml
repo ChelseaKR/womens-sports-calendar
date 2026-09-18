@@ -1,0 +1,137 @@
+# Merge-blocking security scans (SECURITY-AND-SUPPLY-CHAIN-STANDARD §3-4, §9;
+# docs/adr/0002 for the tool choices). Every job fails on a finding: no
+# `|| true`, no `continue-on-error`. Each scanner is a pinned release, checked
+# against a pinned SHA-256 before it runs. The weekly schedule catches a new
+# advisory against an unchanged lockfile.
+
+name: security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "37 6 * * 1" # Mondays 06:37 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+# Per commit on push, per branch on a PR (CI-CD-STANDARD §11c).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.sha }}
+  cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.12.9"
+  GITLEAKS_VERSION: "8.30.1"
+  GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+  OSV_SCANNER_VERSION: "2.6.0"
+  OSV_SCANNER_SHA256: "ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108"
+  SEMGREP_VERSION: "1.177.0"
+
+jobs:
+  # SEC-18 (Gate 2). Reads the whole history of the checked-out ref, not just
+  # the pull request's own commits, so a secret committed on a branch and
+  # deleted in a later commit is still found.
+  gitleaks:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install gitleaks (pinned, checksum-verified)
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/gitleaks.tar.gz"
+          curl -fsSL -o "$archive" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  ${archive}" | sha256sum --check --strict -
+          tar -xzf "$archive" -C "$RUNNER_TEMP" gitleaks
+
+      - name: Scan the full history
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/gitleaks" git --no-banner --redact --exit-code 1 .
+
+  # SEC-07 / SEC-20 / OBS-11. Registry rule packs plus this repository's own
+  # rule, whose tests run first so a rule that stopped matching fails here.
+  semgrep:
+    name: semgrep
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+          enable-cache: false
+
+      - name: Test the repository's own rule
+        run: |
+          set -euo pipefail
+          uvx "semgrep@${SEMGREP_VERSION}" scan --test --metrics=off \
+            --config .semgrep/wsc-credential-in-output.yml .semgrep/wsc-credential-in-output.py
+
+      - name: Scan (ERROR and WARNING findings fail)
+        run: |
+          set -euo pipefail
+          uvx "semgrep@${SEMGREP_VERSION}" scan --metrics=off --error \
+            --severity=ERROR --severity=WARNING \
+            --config p/python --config p/security-audit --config p/secrets --config p/github-actions \
+            --config .semgrep/wsc-credential-in-output.yml \
+            --exclude .semgrep .
+
+  # SEC-11 / SEC-13 (Python and npm lockfiles; pip-audit also runs in
+  # `make verify`). Waivers, each with a reason and an expiry, live in
+  # pipeline/osv-scanner.toml with VEX in pipeline/vex.cdx.json.
+  osv-scanner:
+    name: osv-scanner
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install osv-scanner (pinned, checksum-verified)
+        run: |
+          set -euo pipefail
+          binary="$RUNNER_TEMP/osv-scanner"
+          curl -fsSL -o "$binary" \
+            "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64"
+          echo "${OSV_SCANNER_SHA256}  ${binary}" | sha256sum --check --strict -
+          chmod +x "$binary"
+
+      - name: Scan both lockfiles
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/osv-scanner" scan source --config pipeline/osv-scanner.toml \
+            -L pipeline/uv.lock -L pipeline/package-lock.json

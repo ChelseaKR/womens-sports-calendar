@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from wsc_pipeline.normalize import display_start, normalize_event, parse_teams, team_is_participant
+from wsc_pipeline.normalize import display_start, normalize_event, parse_matchup, parse_teams, team_is_participant
+
 from .conftest import make_raw_event
 
 
@@ -10,10 +11,24 @@ def test_parse_teams_vs_split():
     assert away == "New York Liberty"
 
 
-def test_parse_teams_at_split():
+def test_parse_teams_at_split_names_the_visitor_first():
+    """ "A at B" is the sports convention for A visiting B: the home team is
+    the second one. (This test used to assert the reverse, which put every
+    such game on the wrong side of "home" -- and the home team's seller
+    link -- and would have made the structured data's homeTeam wrong.)"""
     home, away = parse_teams("Toronto Sceptres at Boston Fleet", [])
-    assert home == "Toronto Sceptres"
-    assert away == "Boston Fleet"
+    assert home == "Boston Fleet"
+    assert away == "Toronto Sceptres"
+    assert parse_teams("Toronto Sceptres @ Boston Fleet", []) == ("Boston Fleet", "Toronto Sceptres")
+
+
+def test_parse_matchup_says_when_home_and_away_are_known():
+    assert parse_matchup("Indiana Fever vs New York Liberty", []) == ("Indiana Fever", "New York Liberty", True)
+    assert parse_matchup("Toronto Sceptres at Boston Fleet", []) == ("Boston Fleet", "Toronto Sceptres", True)
+    # From the attraction list, the pair is right but not which is at home.
+    attractions = [{"name": "Minnesota Frost"}, {"name": "Ottawa Charge"}]
+    assert parse_matchup("PWHL: Championship Night", attractions) == ("Minnesota Frost", "Ottawa Charge", False)
+    assert parse_matchup("Season Pass Package", []) == (None, None, False)
 
 
 def test_parse_teams_falls_back_to_attractions_when_name_unparseable():
@@ -207,3 +222,38 @@ def test_team_is_participant_rejects_shared_city_different_league():
         venue_state="TX",
     )
     assert team_is_participant("Minnesota Frost", raw) is False
+
+
+# -- Monterey Bay FC (USL Championship, men's) on NWSL Bay FC's page: seen
+# live 2026-09-17, six games. Event names below are the live ones.
+
+
+def _bay_fc():
+    from wsc_pipeline.config import LEAGUES
+
+    return next(t for lg in LEAGUES for t in lg.teams if t.slug == "bay-fc")
+
+
+def test_monterey_bay_fc_games_are_not_bay_fc_games():
+    bay_fc = _bay_fc()
+    assert bay_fc.not_this_team == ("Monterey Bay FC",)
+    for name in (
+        "Monterey Bay FC vs Lexington SC",
+        "Orange County SC vs Monterey Bay FC- Hispanic Heritage Night",
+        "New Mexico United vs Monterey Bay FC",
+        "Monterey Bay FC vs Las Vegas Lights FC",
+    ):
+        raw = make_raw_event(name=name)
+        assert team_is_participant(bay_fc.name, raw, bay_fc.not_this_team) is False, name
+        # and without the exclusion, the phrase check alone lets it through
+        assert team_is_participant(bay_fc.name, raw) is True, name
+
+
+def test_real_bay_fc_games_still_match_with_the_exclusion():
+    bay_fc = _bay_fc()
+    for name in (
+        "Bay FC vs Racing Louisville FC",
+        "Angel City FC vs Bay FC",
+        "Bay FC vs Monterey Bay FC",  # a real meeting of the two still belongs to Bay FC
+    ):
+        assert team_is_participant(bay_fc.name, make_raw_event(name=name), bay_fc.not_this_team) is True, name

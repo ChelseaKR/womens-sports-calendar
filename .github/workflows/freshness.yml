@@ -1,0 +1,86 @@
+# Staleness alarm for the live listings (DATA-GOVERNANCE-STANDARD DG-04,
+# ADR 0003). pages.yml deploys only after a fully successful fetch, so a
+# broken fetch leaves the previous night's site live: safe, but silent. This
+# reads the live data/site.json once a day, ~7 hours after the nightly
+# deploy, and fails when its fetch time is older than the 30-hour SLA or
+# cannot be read. A failure opens (or comments on) one `incident` + `sev2`
+# issue, per INCIDENT-RESPONSE-STANDARD §1-2.
+#
+# Deliberately calendar-dependent, so it is scheduled and never a pull
+# request check.
+
+name: freshness
+
+on:
+  schedule:
+    - cron: "7 15 * * *" # daily 15:07 UTC; the nightly deploy runs at 08:13
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+env:
+  UV_VERSION: "0.12.9"
+  SITE_DATA_URL: "https://nexthomegame.com/data/site.json"
+  MAX_AGE_HOURS: "30"
+
+jobs:
+  live-listings:
+    name: live listings are within their SLA
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write # open or comment on the stale-data incident
+    defaults:
+      run:
+        working-directory: pipeline
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv (Python 3.12)
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+          enable-cache: false
+
+      - name: Check the live fetch time
+        run: |
+          set -euo pipefail
+          uv sync --frozen
+          uv run --frozen python scripts/check_live_freshness.py \
+            --url "$SITE_DATA_URL" --max-age-hours "$MAX_AGE_HOURS" | tee "$RUNNER_TEMP/freshness.txt"
+          cat "$RUNNER_TEMP/freshness.txt" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Open or update the stale-data incident
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [ -f "$RUNNER_TEMP/freshness.txt" ]; then
+            detail="$(cat "$RUNNER_TEMP/freshness.txt")"
+          else
+            detail="The check did not produce output; see the run log."
+          fi
+          body="$(printf '%s\n\n%s\n\nRun: %s\n\nSee docs/incidents/README.md. Check the latest pages.yml run first.' \
+            "The live listings at ${SITE_DATA_URL} are past their ${MAX_AGE_HOURS}-hour SLA or could not be read." \
+            "${detail}" "${RUN_URL}")"
+          existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label stale-data \
+            --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "Live listings are stale or unreadable" \
+              --label incident --label sev2 --label stale-data --body "$body"
+          fi

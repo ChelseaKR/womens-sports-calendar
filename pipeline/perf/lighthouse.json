@@ -1,0 +1,18 @@
+{
+  "_comment": "Lighthouse budgets for `make perf` (perf/lighthouse_budgets.mjs). One file for PERFORMANCE-STANDARD §1, the OBSERVABILITY-STANDARD §8 Core Web Vitals lab gate and ACCESSIBILITY-STANDARD A11Y-02, so no two configs can drift. Paths are served from dist/ by a local server; each is run `runs` times with Lighthouse's default mobile profile and simulated throttling, and the median run (by performance score) is judged.",
+  "runs": 3,
+  "paths": [
+    "/index.html",
+    "/wnba/index.html",
+    "/wnba/las-vegas-aces/index.html",
+    "/_a11y-fixtures/team.html"
+  ],
+  "budgets": {
+    "performance_score_min": 0.9,
+    "accessibility_score_min": 0.9,
+    "largest_contentful_paint_ms_max": 2500,
+    "cumulative_layout_shift_max": 0.1,
+    "total_blocking_time_ms_max": 200,
+    "script_transfer_bytes_max": 204800
+  }
+}

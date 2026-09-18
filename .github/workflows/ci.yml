@@ -12,8 +12,13 @@ on:
 permissions:
   contents: read
 
+# One group per commit on a push to main, one per branch on a pull request
+# (CI-CD-STANDARD §11c). The old ref-only key put every push to main in a
+# single group; GitHub keeps exactly one *pending* run per group, so a third
+# push evicted the pending run with zero jobs and that commit landed on main
+# with no verdict at all. A new push to a PR still supersedes its old run.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.sha }}
   cancel-in-progress: true
 
 env:
@@ -21,13 +26,21 @@ env:
   NODE_VERSION: "22"
 
 jobs:
-  test:
-    name: test, build (no secrets), validate HTML, a11y
+  verify:
+    # The job name is the required-status-check context (see
+    # .github/rulesets/main.json); `make verify` is every stage it runs.
+    name: verify
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: pipeline
+        # `shell: bash` makes Actions run `bash -eo pipefail {0}`; the default
+        # for an unspecified shell is `bash -e {0}`, which lets a failure on
+        # the left of a pipe pass silently. Each step also sets -u itself.
+        shell: bash
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -41,22 +54,41 @@ jobs:
           python-version: "3.12"
           enable-cache: true
 
-      # Node/npx is only needed for `make a11y`'s `npx pa11y` step below --
-      # the pipeline itself has no JS dependency.
+      # Node/npm is only needed for `make a11y`'s pa11y-ci step below -- the
+      # pipeline itself has no JS dependency. `cache: npm` caches npm's
+      # download cache (keyed on pipeline/package-lock.json), so `npm ci` in
+      # `make install-a11y` installs pa11y-ci/puppeteer from local tarballs
+      # instead of re-downloading them on every run.
       - name: Set up Node (for pa11y)
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: pipeline/package-lock.json
 
-      # `make verify` (install -> test -> build -> validate-html -> a11y) is
-      # the same target a human runs locally, so local and CI can't diverge.
+      # `cache: npm` above only caches npm's own package-download cache --
+      # puppeteer (pa11y-ci's browser-automation dependency) separately
+      # downloads its own ~150MB+ Chromium binary into ~/.cache/puppeteer
+      # via a postinstall script, every time that directory is empty. Keyed
+      # on pipeline/package-lock.json, which pins the puppeteer version.
+      - name: Cache Puppeteer's Chromium download
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/puppeteer
+          key: puppeteer-${{ runner.os }}-${{ hashFiles('pipeline/package-lock.json') }}
+
+      # `make verify` is the same target a human runs locally (its stage
+      # list lives in pipeline/Makefile, not here), so local and CI can't
+      # diverge.
       # No TICKETMASTER_API_KEY is available to pull_request runs from a
       # fork by design (GitHub never exposes secrets there), and PR CI has
       # no business hitting the live Discovery API anyway. This exercises
-      # the degraded-mode path -- the same path a missing repo secret
-      # exercises in production -- and proves the build stays green,
+      # the degraded-mode path (pages say "not fetched"; the deploy
+      # workflow refuses to publish it) and proves the build stays green,
       # produces valid HTML, and passes a real WCAG2AA pa11y check (both
       # the degraded-mode dist/ pages and two fixture pages with a
       # populated games table -- see pipeline/Makefile's `a11y` target).
       - name: make verify
-        run: make verify
+        run: |
+          set -euo pipefail
+          make verify

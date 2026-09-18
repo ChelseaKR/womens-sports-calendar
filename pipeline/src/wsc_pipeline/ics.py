@@ -6,23 +6,34 @@ derived deterministically from it. Re-subscribing, or a calendar client
 re-fetching the same feed tomorrow, must not duplicate entries -- this is
 the whole reason the UID is not random and not build-timestamp-based.
 
-UID_DOMAIN is a placeholder identifier, not a resolvable domain (the real
-domain is undecided, DECISIONS 0005). It must never change once games have
-been published under it, or every subscriber's calendar app will treat the
-next build's games as new duplicates instead of updates. Pin it once and
-leave it as the product's domain gets decided.
+UID_DOMAIN is a placeholder identifier, not a resolvable domain. It must
+never change once games have been published under it, or every
+subscriber's calendar app will treat the next build's games as new
+duplicates instead of updates. Games have been live under it at
+nexthomegame.com since 2026-09-14, so it keeps the old working name on
+purpose; it is an opaque id, not a link.
 """
 
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from datetime import datetime, timedelta
 
 from icalendar import Calendar, Event, Timezone, vText
 
-from .normalize import Game, display_start, zone_for
+from .normalize import Game, unique_by_event_id, zone_for
 
 UID_DOMAIN = "womens-sports-calendar.invalid"
-PRODID = "-//ChelseaKR//womens-sports-calendar//EN"
+# PRODID only names the producing software; clients do not key on it, so it
+# can follow the product name (unlike UID_DOMAIN above, which must not move).
+PRODID = "-//Next Home Game//nexthomegame.com//EN"
+# The product name, as the pages spell it (site.SITE_NAME); repeated here
+# rather than imported so the feed module does not depend on the HTML one.
+SITE_NAME = "Next Home Game"
+# The site rebuilds every night, so a subscriber's app is asked to refresh
+# daily (RFC 7986 REFRESH-INTERVAL, and X-PUBLISHED-TTL for Outlook). Apps
+# may poll less often; none is asked to poll more often than the data moves.
+REFRESH_INTERVAL = timedelta(days=1)
 
 
 class DuplicateUIDError(ValueError):
@@ -40,38 +51,57 @@ def check_no_duplicate_uids(games: list[Game]) -> None:
         raise DuplicateUIDError(f"duplicate UIDs would be emitted: {dupes}")
 
 
-def _dedup_by_event_id(games: list[Game]) -> list[Game]:
-    seen: set[str] = set()
-    out = []
-    for g in games:
-        if g.event_id in seen:
-            continue
-        seen.add(g.event_id)
-        out.append(g)
-    return out
+NOT_FETCHED_CALDESC = (
+    "Not fetched: this build did not query Ticketmaster, so this calendar is "
+    "empty because nothing was read, not because there are no games."
+)
 
 
-def build_calendar(games: list[Game], *, cal_name: str) -> Calendar:
+def calendar_name(subject: str) -> str:
+    """The calendar's display name in the subscriber's app (X-WR-CALNAME,
+    RFC 7986 NAME, and the Outlook subscribe link's `name`): the team or
+    league first, then where it came from."""
+    return f"{subject} ({SITE_NAME})"
+
+
+def calendar_description(subject: str, *, page_url: str | None, fetched: bool) -> str:
+    """X-WR-CALDESC / DESCRIPTION: what the calendar holds, and a link back
+    to its page on the site, where the full schedule and the other
+    calendars are."""
+    link = f" Schedule, venues and ticket links: {page_url}" if page_url else ""
+    if not fetched:
+        return NOT_FETCHED_CALDESC + link
+    return f"Every {subject} game listed by Ticketmaster, updated nightly by {SITE_NAME}.{link}"
+
+
+def build_calendar(
+    games: list[Game],
+    *,
+    cal_name: str,
+    fetched: bool = True,
+    cal_desc: str | None = None,
+    page_url: str | None = None,
+) -> Calendar:
     """Games with no usable date were already dropped by normalize_event;
     games with date_tbd=True (a real Ticketmaster date placeholder, not a
     missing field) are also excluded here -- a calendar entry needs a real
     date, and RFC 5545 does not have a clean "TBD" representation. Those
     games are still visible on the site (see site_data.py), just not in
     the .ics. This is documented, not silent.
+
+    page_url, when given, is the calendar's page on the site: the
+    calendar's URL property, and the last line of every event's
+    description. Nothing about it reaches a UID, so adding or changing it
+    never duplicates a subscriber's events.
     """
-    games = _dedup_by_event_id(games)
+    games = unique_by_event_id(games)
     check_no_duplicate_uids(games)
 
-    cal = Calendar()
-    cal.add("prodid", PRODID)
-    cal.add("version", "2.0")
-    cal.add("calscale", "GREGORIAN")
-    cal.add("method", "PUBLISH")
-    cal.add("x-wr-calname", cal_name)
-    cal.add("x-wr-caldesc", "Ticketmaster-listed games; see the site for licensing notes.")
+    if cal_desc is None:
+        cal_desc = "Ticketmaster-listed games; see the site for licensing notes." if fetched else NOT_FETCHED_CALDESC
+    cal = _calendar_header(cal_name=cal_name, cal_desc=cal_desc, page_url=page_url)
 
     tzids_seen: set[str] = set()
-    n_included = 0
     for game in sorted(games, key=lambda g: (g.start_utc is None, g.start_utc or g.start_local_date)):
         if game.date_tbd or game.start_utc is None:
             continue
@@ -80,42 +110,95 @@ def build_calendar(games: list[Game], *, cal_name: str) -> Calendar:
             vtz = Timezone.from_tzid(game.tzid)
             if vtz is not None:
                 cal.add_component(vtz)
-
-        event = Event()
-        event.add("uid", make_uid(game.event_id))
-        event.add("dtstamp", game.start_utc)
-        zone = zone_for(game.tzid)
-        dtstart = game.start_utc.astimezone(zone) if zone else game.start_utc
-        event.add("dtstart", dtstart)
-        summary = game.raw_event_name or f"{game.home_team or '?'} vs {game.away_team or '?'}"
-        event.add("summary", vText(summary))
-        location_parts = [p for p in (game.venue_name, game.venue_city, game.venue_state) if p]
-        if location_parts:
-            event.add("location", vText(", ".join(location_parts)))
-        description_lines = [f"League: {game.league_slug.upper()}"]
-        if game.price:
-            description_lines.append(
-                f"Tickets: {game.price.currency} {game.price.min:.2f}-{game.price.max:.2f} (Ticketmaster)"
-            )
-        else:
-            description_lines.append("Tickets: price not available from Ticketmaster")
-        if game.ticket_url:
-            description_lines.append(f"Buy: {game.ticket_url}")
-            event.add("url", game.ticket_url)
-        event.add("description", vText("\n".join(description_lines)))
-        cal.add_component(event)
-        n_included += 1
+        cal.add_component(_event(game, game.start_utc, page_url=page_url))
 
     return cal
 
 
-def league_calendar(league_slug: str, league_name: str, games: list[Game]) -> Calendar:
-    return build_calendar(games, cal_name=f"{league_name} (Ticketmaster listings)")
+def _calendar_header(*, cal_name: str, cal_desc: str, page_url: str | None) -> Calendar:
+    cal = Calendar()
+    cal.add("prodid", PRODID)
+    cal.add("version", "2.0")
+    cal.add("calscale", "GREGORIAN")
+    cal.add("method", "PUBLISH")
+    cal.add("x-wr-calname", cal_name)
+    cal.add("x-wr-caldesc", cal_desc)
+    # RFC 7986 spellings of the same name and description, for apps that
+    # read those instead of the X-WR- extensions.
+    cal.add("name", cal_name)
+    cal.add("description", cal_desc)
+    if page_url:
+        cal.add("url", page_url)
+    cal.add("refresh-interval", REFRESH_INTERVAL, parameters={"VALUE": "DURATION"})
+    cal.add("x-published-ttl", "P1D")
+    return cal
 
 
-def team_calendar(team_slug: str, team_name: str, games: list[Game]) -> Calendar:
+def _event(game: Game, start_utc: datetime, *, page_url: str | None) -> Event:
+    """One VEVENT, for a game whose real start instant is start_utc."""
+    event = Event()
+    event.add("uid", make_uid(game.event_id))
+    event.add("dtstamp", start_utc)
+    zone = zone_for(game.tzid)
+    dtstart = start_utc.astimezone(zone) if zone else start_utc
+    event.add("dtstart", dtstart)
+    summary = game.raw_event_name or f"{game.home_team or '?'} vs {game.away_team or '?'}"
+    event.add("summary", vText(summary))
+    location_parts = [p for p in (game.venue_name, game.venue_city, game.venue_state) if p]
+    if location_parts:
+        event.add("location", vText(", ".join(location_parts)))
+    description_lines = [f"League: {game.league_slug.upper()}"]
+    if game.price:
+        description_lines.append(
+            f"Tickets: {game.price.currency} {game.price.min:.2f}-{game.price.max:.2f} (Ticketmaster)"
+        )
+    else:
+        description_lines.append("Tickets: price not available from Ticketmaster")
+    if game.ticket_url:
+        description_lines.append(f"Buy: {game.ticket_url}")
+        event.add("url", game.ticket_url)
+    if page_url:
+        description_lines.append(f"More games and calendars: {page_url}")
+    event.add("description", vText("\n".join(description_lines)))
+    return event
+
+
+def league_calendar(
+    league_slug: str,
+    league_name: str,
+    games: list[Game],
+    *,
+    fetched: bool = True,
+    base_url: str | None = None,
+) -> Calendar:
+    page_url = f"{base_url}/{league_slug}/" if base_url else None
+    return build_calendar(
+        games,
+        cal_name=calendar_name(league_name),
+        fetched=fetched,
+        cal_desc=calendar_description(league_name, page_url=page_url, fetched=fetched),
+        page_url=page_url,
+    )
+
+
+def team_calendar(
+    team_slug: str,
+    team_name: str,
+    games: list[Game],
+    *,
+    fetched: bool = True,
+    base_url: str | None = None,
+    league_slug: str | None = None,
+) -> Calendar:
     team_games = [g for g in games if g.tracked_team_slug == team_slug]
-    return build_calendar(team_games, cal_name=f"{team_name} (Ticketmaster listings)")
+    page_url = f"{base_url}/{league_slug}/{team_slug}/" if base_url and league_slug else None
+    return build_calendar(
+        team_games,
+        cal_name=calendar_name(team_name),
+        fetched=fetched,
+        cal_desc=calendar_description(team_name, page_url=page_url, fetched=fetched),
+        page_url=page_url,
+    )
 
 
 def group_by_team(games: list[Game]) -> dict[str, list[Game]]:
