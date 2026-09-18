@@ -2,8 +2,11 @@
 
 All notable changes to Next Home Game (this repository) are recorded here.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
-No version has been released yet (see #28); everything so far is under
+No version has been released yet (see #7); everything so far is under
 Unreleased, and it is what runs live at https://nexthomegame.com.
+The repository was republished as a new public repository on 2026-09-18;
+pull request numbers up to #38 below refer to the original, which is now
+archived and private.
 
 ## [Unreleased]
 
@@ -39,6 +42,10 @@ Unreleased, and it is what runs live at https://nexthomegame.com.
 
 ### Changed
 
+- The repository is public as of 2026-09-18, and the code is licensed under
+  the Elastic License 2.0. `NOTICE` lists what the license doesn't cover:
+  schedule, event and price data, league and team marks, the fonts and the
+  vendored standards.
 - Calendar-first: no prices anywhere. Each game has one ticket link to the
   home team's official seller where it's known, otherwise to the
   Ticketmaster listing (#17).

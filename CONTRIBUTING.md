@@ -1,6 +1,6 @@
 # Contributing
 
-This is a private, single-maintainer repository. Changes arrive as pull
+This is a public, single-maintainer repository. Changes arrive as pull
 requests against `main`; nothing is pushed to `main` directly.
 
 ## Set up
