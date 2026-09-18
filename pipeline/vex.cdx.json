@@ -1,0 +1,106 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.7",
+  "serialNumber": "urn:uuid:6c31fc9c-8537-45ab-9ab1-f00b20c1aede",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-09-17T00:00:00Z",
+    "component": {
+      "type": "application",
+      "name": "womens-sports-calendar",
+      "bom-ref": "womens-sports-calendar"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "extract-zip",
+      "version": "2.0.1",
+      "purl": "pkg:npm/extract-zip@2.0.1",
+      "bom-ref": "pkg:npm/extract-zip@2.0.1",
+      "scope": "excluded"
+    }
+  ],
+  "vulnerabilities": [
+    {
+      "id": "CVE-2026-19693",
+      "source": {
+        "name": "NVD",
+        "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-19693"
+      },
+      "references": [
+        {
+          "id": "GHSA-7pqw-9j4j-h8q3",
+          "source": {
+            "name": "GitHub Advisories",
+            "url": "https://github.com/advisories/GHSA-7pqw-9j4j-h8q3"
+          }
+        }
+      ],
+      "ratings": [
+        {
+          "severity": "high",
+          "method": "other",
+          "source": {
+            "name": "GitHub Advisories"
+          }
+        }
+      ],
+      "description": "extract-zip allows arbitrary file writes through symlink archive entries",
+      "affects": [
+        {
+          "ref": "pkg:npm/extract-zip@2.0.1"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "response": [
+          "can_not_fix"
+        ],
+        "detail": "extract-zip 2.0.1 has no fixed release. In this repository it is a development-only dependency (pa11y-ci -> puppeteer -> @puppeteer/browsers), used to unpack the Chrome-for-Testing archive puppeteer downloads over HTTPS from Google's storage when the CI cache is cold. It never processes a user- or attacker-supplied archive and nothing it writes is deployed: the published site and .ics feeds are built by the Python pipeline. The vulnerable code does run on that one archive, so this is recorded as exploitable with no fix available, not as not_affected; the residual risk is a compromised Google archive.",
+        "firstIssued": "2026-09-17T00:00:00Z",
+        "lastUpdated": "2026-09-17T00:00:00Z"
+      }
+    },
+    {
+      "id": "CVE-2026-56876",
+      "source": {
+        "name": "NVD",
+        "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-56876"
+      },
+      "references": [
+        {
+          "id": "GHSA-jmr9-qjv8-65gv",
+          "source": {
+            "name": "GitHub Advisories",
+            "url": "https://github.com/advisories/GHSA-jmr9-qjv8-65gv"
+          }
+        }
+      ],
+      "ratings": [
+        {
+          "severity": "high",
+          "method": "other",
+          "source": {
+            "name": "GitHub Advisories"
+          }
+        }
+      ],
+      "description": "extract-zip unvalidated symlink path traversal",
+      "affects": [
+        {
+          "ref": "pkg:npm/extract-zip@2.0.1"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "response": [
+          "can_not_fix"
+        ],
+        "detail": "extract-zip 2.0.1 has no fixed release. In this repository it is a development-only dependency (pa11y-ci -> puppeteer -> @puppeteer/browsers), used to unpack the Chrome-for-Testing archive puppeteer downloads over HTTPS from Google's storage when the CI cache is cold. It never processes a user- or attacker-supplied archive and nothing it writes is deployed: the published site and .ics feeds are built by the Python pipeline. The vulnerable code does run on that one archive, so this is recorded as exploitable with no fix available, not as not_affected; the residual risk is a compromised Google archive.",
+        "firstIssued": "2026-09-17T00:00:00Z",
+        "lastUpdated": "2026-09-17T00:00:00Z"
+      }
+    }
+  ]
+}

@@ -103,6 +103,16 @@ class DiscoveryClient:
                 time.sleep(remaining)
         self._last_request_at = time.monotonic()
 
+    def _redact(self, message: str) -> str:
+        """The message with the API key replaced. An error body or an HTTP
+        exception can echo the request URL, and the key travels in its query
+        string; these messages reach stderr, the build log and the job
+        summary (OBSERVABILITY-STANDARD OBS-11: never log a credential).
+        GitHub masks the secret in Actions logs; a local run has no mask."""
+        if not self._api_key:
+            return message
+        return message.replace(self._api_key, "[redacted]")
+
     def search_team_events(
         self,
         team_slug: str,
@@ -149,7 +159,11 @@ class DiscoveryClient:
                 "page": str(page_number),
                 "sort": "date,asc",
             }
-            payload = self._get_with_retry(params)
+            try:
+                payload = self._get_with_retry(params)
+            except TicketmasterFetchError as exc:
+                # `from None`: the chained original still carries the key.
+                raise TicketmasterFetchError(self._redact(str(exc))) from None
             page = payload.get("page") or {}
             page_events = (payload.get("_embedded") or {}).get("events") or []
             total_elements = page.get("totalElements")

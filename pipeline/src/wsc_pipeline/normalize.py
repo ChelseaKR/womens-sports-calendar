@@ -234,7 +234,7 @@ def normalize_event(
         date_tbd=date_tbd,
         time_tba=time_tba,
         price=_parse_price(raw.get("priceRanges")),
-        ticket_url=raw.get("url"),
+        ticket_url=safe_ticket_url(raw.get("url")),
         raw_event_name=raw.get("name", ""),
     )
 
@@ -280,3 +280,22 @@ def zone_for(tzid: str | None) -> ZoneInfo | None:
         return ZoneInfo(tzid)
     except Exception:
         return None
+
+
+def safe_ticket_url(url: object) -> str | None:
+    """The event's ticket URL only if it is an http(s) URL, else None.
+
+    The URL comes from a third party and is rendered as a link (`href`) on
+    every page and as the `URL` of every calendar entry. html.escape() stops
+    it breaking out of the attribute, but not a `javascript:`, `data:` or
+    `vbscript:` URL, which runs in the reader's browser when clicked. An
+    unusable URL is absence (the page says there is no Ticketmaster
+    listing), never a guessed or rewritten link -- rewriting would also
+    strip Ticketmaster's affiliate tracking.
+    """
+    if not isinstance(url, str):
+        return None
+    scheme, separator, rest = url.partition("://")
+    if separator and scheme.lower() in ("http", "https") and rest and not rest.startswith("/"):
+        return url
+    return None
