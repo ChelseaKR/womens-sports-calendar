@@ -12,7 +12,7 @@ and the static site into `dist/`.
 
 ```sh
 uv sync --extra dev
-uv run pytest -q                 # 84 tests, 4 with a recorded negative-control run (see below)
+uv run pytest -q                 # 139 tests; negative controls described below
 
 # Degraded mode (no key) -- always safe, always produces a valid site:
 uv run python -m wsc_pipeline.build --out dist --base-url https://nexthomegame.com
@@ -60,15 +60,29 @@ used (requests, bytes).
 - `site_data.py` — the compact JSON the HTML is templated from. One shape,
   reused for league and team pages; a game's `price` key is present and
   either a real object or `null`, never omitted.
-- `site.py` — the static HTML generator. Zero `<script>` elements on any
-  page (checked by `tests/test_site_html.py`), `<link rel="canonical">`,
+- `analytics.py` — Google Analytics 4 (`../docs/DECISIONS.md` 0012).
+  `GA4_MEASUREMENT_ID` is the one place the measurement ID goes (committed:
+  it is public); empty means no page carries any analytics. When set, every
+  HTML page gets one inline loader in `<head>` that returns before loading
+  anything unless the page is on the base URL's own host and the browser
+  sends neither Global Privacy Control nor Do Not Track; sets Consent Mode v2
+  defaults (ad storage / ad user data / ad personalisation denied everywhere,
+  analytics storage denied in the EEA, UK and Switzerland); configures gtag
+  with Google signals and ad personalisation off; and records
+  `ticket_click` / `calendar_subscribe` events without touching the links.
+  The `.ics` feeds and `data/*.json` never see the ID.
+- `site.py` — the static HTML generator. No `<script>` element on any page
+  except that GA4 loader (checked by `tests/test_site_html.py` and
+  `tests/test_analytics.py`), `<link rel="canonical">`,
   a favicon (SVG primary + PNG/apple-touch-icon fallbacks), Open Graph and
   Twitter Card tags — including a real `og:image` per page (the site-wide
   default on the index, a per-league card on every league and team page,
   see `assets/` below) — semantic landmarks, table headers with `scope`,
   link text that names its destination ("Buy tickets for X vs Y on
-  \<date\> from Ticketmaster", never bare "Buy" or "click here"), and a
-  literal, non-euphemistic privacy note in the footer.
+  \<date\> from Ticketmaster", never bare "Buy" or "click here"), a
+  literal, non-euphemistic privacy note in the footer that links
+  `/privacy/`, and the privacy page itself. Both are rendered from the GA4
+  ID, so they say "no analytics" exactly when a build has none.
 - `build.py` — the orchestrator/CLI (`python -m wsc_pipeline.build`).
   Writes to a temp directory and only atomically replaces `--out` on full
   success, so a failed fetch never leaves a partial/broken build where a
@@ -94,14 +108,34 @@ used (requests, bytes).
 checks at both the single-calendar and whole-build level, TBD-date
 exclusion), the Ticketmaster client (throttling, retry, the 429 path, the
 "failed fetch raises" contract), coverage math, the JSON data layer's
-absence discipline, and the generated HTML (no `<script>` tags anywhere,
-no price rendered without a matching Ticketmaster event, table headers,
+absence discipline, and the generated HTML (no `<script>` tags anywhere
+without a GA4 ID, no price rendered without a matching Ticketmaster event,
+table headers,
 link text, canonical/favicon/OG/Twitter-card tags — including that each
 page's `og:image` is the real, correctly-sized card for that page type,
 not one generic image repeated everywhere — the privacy note, and that
 `build.py` actually copies the favicon and social-card bytes into `--out`
 at the real dimensions those tags promise, failing loudly if one is
 missing).
+
+`tests/test_analytics.py` covers GA4 (`../docs/DECISIONS.md` 0012): a build
+with no ID emits no GA on any page; a build with an ID puts the same guarded
+loader in the `<head>` of all 75 pages (index, privacy, 404, 5 league, 67
+team); the `.ics` feeds are byte-identical with and without an ID (and
+`data/*.json` too, apart from `site.json`'s build timestamp); ticket links
+stay plain Ticketmaster URLs; a malformed ID fails the build before anything
+is written. The loader itself is executed in Node against stubbed
+`window`/`navigator`/`document` objects: under Global Privacy Control, any
+of the three Do Not Track spellings, or an off-site hostname it creates no
+`dataLayer`, requests nothing and adds no listener; otherwise it sets both
+Consent Mode defaults before `config`, loads gtag.js, and records
+`ticket_click`/`calendar_subscribe` without cancelling or rewriting the
+link. (Node is set up in CI; locally the Node tests skip if it is missing,
+and in CI they fail instead.) Its negative controls run in the suite on
+every build: each breaks a page or the loader (drops the GPC or DNT guard,
+turns Google signals on, adds a static `<script src>`, removes the tag),
+first asserts the break actually landed, and then asserts the checker
+rejects it.
 
 Four of these checks were run through a full negative-control cycle
 (sabotage the guarded code, confirm the sabotage landed by occurrence
@@ -113,28 +147,34 @@ normalize/site_data/ics-description layers together), the
 no-`<script>`-tags check, and the RFC 5545 required-property check
 (`dtstamp`). All four went RED with the sabotage in place and green again
 after restoration; this was a one-time verification pass, not something
-CI re-runs.
+CI re-runs. The same cycle was run on 2026-09-17 for three GA4 checks: an
+unset ID that still emitted a tag, the GPC guard removed from the loader,
+and the ID written into every `.ics` feed. Each targeted test in
+`tests/test_analytics.py` went RED, and each file was restored to its
+pre-sabotage `git hash-object`.
 
 Also run (not part of `pytest`, but part of `make verify` and so CI-gated on
 every push/PR, not a one-time manual check):
 
-- `make validate-html` — `html5validator` against every generated page (73
-  pages in the degraded, no-API-key build CI runs: the index, 5 league pages,
-  67 team pages).
+- `make validate-html` — `html5validator` against every generated page (75
+  pages in the degraded, no-API-key build CI runs: the index, the privacy
+  page, the 404 page, 5 league pages, 67 team pages).
 - `make a11y` — `pa11y --standard WCAG2AA` (via `pa11y-ci`, 5 pages at a
-  time) against every generated page (the same 73) **plus** two fixture
+  time) against every generated page (the same 75) **plus** two fixture
   pages rendered with a populated games table (a priced game, an unpriced
   game, and a date-TBD game together — the exact shape
   `tests/test_site_html.py::_pages()` builds and asserts on, reused via
   `scripts/render_a11y_fixtures.py` rather than duplicated) — these two exist
   because the degraded build CI runs never has a non-empty games table to
-  check. 75 pages in all — see `pipeline/Makefile`'s `a11y` target and
+  check. 77 pages in all — see `pipeline/Makefile`'s `a11y` target and
   `pipeline/pa11y-ci.config.json` for exactly what runs. The URL list is
   rebuilt from `find dist -name '*.html'` on every run, and
   `scripts/check_a11y_coverage.py` then fails the gate unless pa11y-ci's own
   JSON report names every URL it was handed, all passing, and that list
-  covers every index/league/team page `wsc_pipeline.config` says the build
-  must produce, so a faster sweep can't quietly check fewer pages.
+  covers every index/privacy/404/league/team page `wsc_pipeline.config` says
+  the build must produce, so a faster sweep can't quietly check fewer pages.
+  The pages carry the GA4 loader (the committed ID is set), but it returns
+  before loading anything on 127.0.0.1, so the sweep never contacts Google.
   `make a11y` installs its own npm dependency (`make install-a11y`); plain
   `make install`, which the nightly deploy runs, is Python-only.
 

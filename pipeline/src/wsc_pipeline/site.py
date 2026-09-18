@@ -1,11 +1,13 @@
-"""Static HTML generator. No JavaScript, no cookies, no analytics, no
-third-party script tags anywhere (DECISIONS 0002) -- every page emitted
-here contains zero <script> elements, checked by
-tests/test_site_no_script.py and again by the "no external script tags"
-build-time check in build.py. The same posture rules out third-party
-fonts (a Google Fonts <link> would contact Google on every page load) --
-STYLE_CSS's @font-face rules point at self-hosted files under
-pipeline/assets/fonts/, copied into dist/fonts/ by build.py.
+"""Static HTML generator. The only script on any page is the guarded Google
+Analytics 4 loader from analytics.py (DECISIONS 0012, superseding 0002), and
+only when analytics.GA4_MEASUREMENT_ID is set: with no ID, every page emitted
+here contains zero <script> elements; with one, exactly one inline <script>
+that honours Global Privacy Control and Do Not Track -- both checked by
+tests/test_site_html.py and tests/test_analytics.py. Nothing else here is
+third-party: STYLE_CSS's @font-face rules point at self-hosted files under
+pipeline/assets/fonts/ (copied into dist/fonts/ by build.py), never a Google
+Fonts <link>. The privacy copy (footer note and /privacy/) is rendered from
+the same ID, so it says "no analytics" exactly when there is none.
 
 WCAG 2.2 AA per STANDARDS/ACCESSIBILITY-STANDARD.md: semantic landmarks,
 table headers with scope, link text that names its destination, sufficient
@@ -22,7 +24,10 @@ from __future__ import annotations
 from datetime import date
 from html import escape as e
 
+from .analytics import GA4_DATA_RETENTION, ga4_head_snippet, measurement_id
+
 CSS_PATH = "/style.css"
+PRIVACY_PATH = "/privacy/"
 # The name visitors see: the header brand, <title> suffix, and og:site_name
 # all use this one string. It was the repo slug ("womens-sports-calendar")
 # in <title>/og:site_name while the header already said "Next Home Game",
@@ -79,8 +84,10 @@ def _base(
     og_image: str = DEFAULT_OG_IMAGE,
     og_image_alt: str = DEFAULT_OG_IMAGE_ALT,
     noindex: bool = False,
+    ga4_id: str | None = None,
 ) -> str:
     image_url = f"{base_url}/{og_image}"
+    analytics_head = ga4_head_snippet(ga4_id, base_url=base_url)
     robots_meta = '<meta name="robots" content="noindex">\n' if noindex else ""
     # A noindexed page (the 404) carries no canonical: pointing it at another
     # URL would declare it a duplicate of a page it is not.
@@ -115,7 +122,7 @@ def _base(
 <meta name="twitter:description" content="{e(description)}">
 <meta name="twitter:image" content="{e(image_url)}">
 <meta name="twitter:image:alt" content="{e(og_image_alt)}">
-</head>
+{analytics_head}</head>
 <body>
 <a class="skip-link" href="#main">Skip to main content</a>
 <header class="site-header">
@@ -124,14 +131,29 @@ def _base(
 <main id="main">
 {body}
 </main>
-{_footer()}
+{_footer(analytics_on=bool(analytics_head))}
 </body>
 </html>
 """
 
 
-def _footer() -> str:
-    return """<footer class="site-footer">
+# The footer's privacy note, in the two states the build can be in. Each is
+# literal about what happens; /privacy/ has the detail.
+PRIVACY_NOTE_ANALYTICS = """This site's pages use Google Analytics to count
+visits and clicks on ticket and calendar links, with Google's advertising
+features switched off. It is not loaded at all if your browser sends Global
+Privacy Control or Do Not Track, and the calendar feeds are never tracked. A
+&ldquo;Buy tickets&rdquo; link goes to Ticketmaster's own site and tells them
+we sent you."""
+PRIVACY_NOTE_NO_ANALYTICS = """This site runs no analytics, no scripts, and
+sets no cookies, and the calendar feeds are never tracked. A &ldquo;Buy
+tickets&rdquo; link goes to Ticketmaster's own site and tells them we sent
+you."""
+
+
+def _footer(*, analytics_on: bool) -> str:
+    note = PRIVACY_NOTE_ANALYTICS if analytics_on else PRIVACY_NOTE_NO_ANALYTICS
+    return f"""<footer class="site-footer">
 <h2>Sources and terms</h2>
 <p>Game data, venues, dates, and prices are read from the
 <a href="https://developer.ticketmaster.com/products-and-docs/apis/discovery-api/v2/">Ticketmaster Discovery API</a>,
@@ -143,11 +165,8 @@ one tells Ticketmaster this site sent you, and Ticketmaster (via its Impact
 affiliate programme) may pay this site a commission on the sale. Prices
 shown are the range Ticketmaster publishes for an event; a game with no
 Ticketmaster listing shows no price, never a guess.</p>
-<p class="privacy-note">Nothing leaves your browser when you read this
-site. There is no analytics, no tracking cookie, and no script from anyone
-but us on this page. The only thing that reaches another company is a
-click on a &ldquo;Buy tickets&rdquo; link, which goes to Ticketmaster's own
-site and tells them we sent you.</p>
+<p class="privacy-note">{note}
+<a href="{PRIVACY_PATH}">Privacy: what this site measures and what it never does</a>.</p>
 </footer>
 """
 
@@ -325,6 +344,7 @@ def render_index(
     leagues: list[dict],
     not_included: list[dict[str, str]],
     base_url: str,
+    ga4_id: str | None = None,
 ) -> str:
     league_rows = []
     for lg in leagues:
@@ -348,8 +368,7 @@ def render_index(
     )
     body = f"""<h1>Women's pro sports calendar and ticket-price finder</h1>
 <p class="lede">Subscribe once to a league or team calendar and see the
-Ticketmaster price range before you click. No account, no ads, no
-tracking.</p>
+Ticketmaster price range before you click. No account, no ads.</p>
 <h2>Leagues</h2>
 <ul class="league-strip">
 {league_links}
@@ -372,10 +391,11 @@ them):</p>
         canonical_url=f"{base_url}/",
         base_url=base_url,
         body=body,
+        ga4_id=ga4_id,
     )
 
 
-def render_not_found(*, leagues: list[dict], base_url: str) -> str:
+def render_not_found(*, leagues: list[dict], base_url: str, ga4_id: str | None = None) -> str:
     """dist/404.html, which GitHub Pages serves for any missing path --
     without it, a stale or mistyped link lands on GitHub's own "Page not
     found · GitHub Pages" page, with no way back to this site. noindex, and
@@ -396,6 +416,87 @@ are listed below, or start from <a href="/">the home page</a>.</p>
         base_url=base_url,
         body=body,
         noindex=True,
+        ga4_id=ga4_id,
+    )
+
+
+def render_privacy(*, base_url: str, ga4_id: str | None = None) -> str:
+    """dist/privacy/index.html, linked from every page's footer. Rendered
+    from the same GA4 ID as the pages' <head>, so it describes exactly what
+    this build does: Google Analytics with its safeguards when an ID is
+    set, "no analytics" when none is."""
+    if measurement_id(ga4_id) is not None:
+        pages_section = f"""<h2>Web pages: Google Analytics</h2>
+<p>This site's pages use Google Analytics 4, a Google service, to count page
+views and clicks on &ldquo;Buy tickets&rdquo; and calendar-subscribe links, so
+we can see which leagues and teams people use.</p>
+<ul>
+<li><strong>Not loaded if you ask not to be tracked.</strong> If your browser
+sends Global Privacy Control or Do Not Track, the page never loads Google's
+script: no request to Google, no cookie.</li>
+<li><strong>Advertising features are off.</strong> Google signals and ad
+personalization are disabled, and consent for ad storage, ad user data and
+ad personalization is denied for every visitor.</li>
+<li><strong>In the EEA, the UK and Switzerland</strong>, analytics storage is
+denied as well, so Google Analytics sets no cookies on your device. Google
+still receives a cookieless measurement request for each page view and link
+click, with nothing stored on your device to recognise you next time.</li>
+<li><strong>Everywhere else</strong>, Google Analytics sets first-party
+cookies (named <code>_ga</code> and <code>_ga_</code> followed by an ID) to
+tell a returning visitor from a new one.</li>
+<li><strong>What Google receives:</strong> the page address and title, the
+page you came from, the link you clicked (on this site), and your browser,
+device type, language and screen size, from which Google also derives an
+approximate location. Google says Google Analytics 4 does not log or store
+IP addresses.</li>
+<li><strong>Kept for {e(GA4_DATA_RETENTION)}.</strong> Google Analytics deletes
+this site's event-level data after {e(GA4_DATA_RETENTION)}.</li>
+</ul>
+<p>Google handles this data under its own terms: see
+<a href="https://policies.google.com/technologies/partner-sites">how Google uses information from sites that use its services</a>.
+To opt out in any browser, turn on Global Privacy Control or Do Not Track, or
+install <a href="https://tools.google.com/dlpage/gaoptout">Google's Analytics opt-out browser add-on</a>.</p>
+"""
+        ticket_measured = " Google Analytics records only that the link was clicked, on this site's page."
+    else:
+        pages_section = """<h2>Web pages: no analytics</h2>
+<p>This site runs no analytics: no measurement service of any kind, no
+scripts at all, and no cookies.</p>
+"""
+        ticket_measured = ""
+    body = f"""<nav aria-label="breadcrumb"><a href="/">All leagues</a></nav>
+<h1>Privacy</h1>
+<p class="lede">What this site measures, what it never measures, and how to
+opt out.</p>
+{pages_section}<h2>Calendar feeds: never tracked</h2>
+<p>The <code>.ics</code> calendar feeds carry game listings and nothing else:
+no tracking pixel, no analytics, no redirecting links. A calendar app that
+subscribes to a feed and re-fetches it is not measured by this site. Ticket
+links inside a feed are the same plain Ticketmaster addresses the pages
+show.</p>
+<h2>Ticket links</h2>
+<p>Every &ldquo;Buy tickets&rdquo; link is the plain address Ticketmaster
+publishes for that event, used as-is: never rewritten, and never routed
+through this site or through Google.{ticket_measured} Following one takes you
+to Ticketmaster, which then knows this site sent you; Ticketmaster, through
+its Impact affiliate programme, may pay this site a commission on a sale.
+What happens there is covered by Ticketmaster's own privacy policy.</p>
+<h2>No accounts, no ads, no forms</h2>
+<p>There is nothing to sign up for, no advertising, and no form that collects
+anything.</p>
+<h2>Hosting</h2>
+<p>Pages and calendar feeds are served by GitHub Pages. Like any web host,
+GitHub receives each request's IP address and browser details; this site has
+no access to those logs.</p>
+<p>Updated 2026-09-17.</p>
+"""
+    return _base(
+        title=f"Privacy | {SITE_NAME}",
+        description="What Next Home Game measures, what it never measures, and how to opt out.",
+        canonical_url=f"{base_url}{PRIVACY_PATH}",
+        base_url=base_url,
+        body=body,
+        ga4_id=ga4_id,
     )
 
 
@@ -403,6 +504,7 @@ def render_league(
     *,
     league: dict,
     base_url: str,
+    ga4_id: str | None = None,
 ) -> str:
     slug = league["league_slug"]
     name = league["league_name"]
@@ -443,6 +545,7 @@ def render_league(
         body=body,
         og_image=og_image,
         og_image_alt=og_image_alt,
+        ga4_id=ga4_id,
     )
 
 
@@ -450,6 +553,7 @@ def render_team(
     *,
     team: dict,
     base_url: str,
+    ga4_id: str | None = None,
 ) -> str:
     league_slug = team["league_slug"]
     team_slug = team["team_slug"]
@@ -477,6 +581,7 @@ def render_team(
         body=body,
         og_image=og_image,
         og_image_alt=og_image_alt,
+        ga4_id=ga4_id,
     )
 
 

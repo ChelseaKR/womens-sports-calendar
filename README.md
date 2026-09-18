@@ -2,8 +2,10 @@
 
 Subscribable `.ics` calendar feeds per league and team for women's pro and
 college sports, plus a ticket-price finder, built nightly from the
-Ticketmaster Discovery API. No account, no tracking, no script from anyone
-but us on the page. Monetised only by plain affiliate URLs.
+Ticketmaster Discovery API. No account. The web pages use Google Analytics 4
+(not loaded under Global Privacy Control or Do Not Track, ads features off;
+`docs/DECISIONS.md` 0012); the calendar feeds carry no tracking of any kind.
+Monetised only by plain affiliate URLs.
 
 [moved to private strategy notes]
 
@@ -24,8 +26,13 @@ but us on the page. Monetised only by plain affiliate URLs.
   for why the generator itself is in `pipeline/`. The built output
   (`pipeline/dist/`, gitignored, rebuilt every run) is one page per league and
   team: the subscribe link, the next games, the price range, and one
-  affiliate link per game. No JavaScript that talks to anyone but us; no
-  cookies; no analytics; zero `<script>` tags on any page.
+  affiliate link per game, plus `/privacy/`. The only script is one inline
+  Google Analytics 4 loader per page, emitted only while
+  `pipeline/src/wsc_pipeline/analytics.py`'s `GA4_MEASUREMENT_ID` is set
+  (it is: `G-YKGPZ76LVE`); it loads nothing under Global Privacy Control or
+  Do Not Track, turns Google signals and ad personalisation off, and denies
+  analytics storage for the EEA, UK and Switzerland. The `.ics` feeds are
+  never tracked.
 - `docs/` — research, decisions, licences and attributions.
 - `.github/workflows/` — `ci.yml` (tests + a degraded-mode build + HTML
   validation on every push/PR) and `pages.yml` (the nightly + manual build

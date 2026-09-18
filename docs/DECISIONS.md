@@ -15,6 +15,8 @@ affiliate id, which needs no script and no cookie on our side. The portfolio's
 other products adopted analytics the same day; this one may later, as a
 per-product choice, if the numbers justify it.
 
+*Superseded 2026-09-17 by 0012 (Google Analytics 4 on the HTML pages).*
+
 ## 0003 — Licence before bytes (2026-09-13)
 
 A league's schedule is used only if its published terms permit reuse in a
@@ -172,3 +174,61 @@ here, not the only eligible one. The other ~332 programs and every NCAA
 women's sport besides basketball remain in `LEAGUES_EXAMINED_NOT_INCLUDED`
 -- not a licensing gap, just not yet scoped, same bucket as Unrivaled and
 LOVB.
+
+## 0012 — Google Analytics 4 on the HTML pages; calendar feeds stay untracked (2026-09-17)
+
+Supersedes 0002. Numbered 0012, not 0011: open PR #5 (WPBL) already uses
+0011 on its branch and open PR #6 (USL W League) uses 0009, which main
+already has, so 0011 is not free once #5 lands.
+
+**Decision (owner, 2026-09-17):** Google Analytics 4 on every public site in
+the portfolio, with privacy pages updated to match, chosen knowing it
+reverses this product's recorded "none" posture (0002) and its "No account,
+no tracking" copy. Property 554878764, web stream measurement ID
+`G-YKGPZ76LVE`, provisioned 2026-09-17 with 14-month event-data retention
+and Google signals disabled on the property itself.
+
+What ships (`pipeline/src/wsc_pipeline/analytics.py`):
+
+- **The ID is site configuration**, committed as
+  `analytics.GA4_MEASUREMENT_ID` (it is public; every page that loads GA
+  sends it to the browser). Empty means the build emits no GA at all: no
+  `<script>`, no reference to Google, and the footer and `/privacy/` say the
+  site runs no analytics. A malformed ID fails the build.
+- **HTML pages only.** One inline loader in the `<head>` of every generated
+  page: home, privacy, 404, every league and every team page.
+- **GPC and DNT honoured by not loading GA at all.** When
+  `navigator.globalPrivacyControl === true`, or Do Not Track is on
+  (`navigator.doNotTrack`, `window.doNotTrack` or `navigator.msDoNotTrack`
+  is `"1"` or `"yes"`), the loader returns before `dataLayer`, the gtag.js
+  request, or any listener exists: no request to Google, no cookie.
+- **Ads features off.** `gtag('config', …)` sets
+  `allow_google_signals: false` and `allow_ad_personalization_signals:
+  false`. Consent Mode v2 defaults deny `ad_storage`, `ad_user_data` and
+  `ad_personalization` everywhere; `analytics_storage` is denied for the
+  EEA, the UK and Switzerland (via `region`, 32 country codes) and granted
+  elsewhere. There is no consent banner, so those defaults are never
+  updated: visitors in those regions get no GA cookies, though gtag.js
+  still sends Google cookieless measurement pings.
+- **Production host only.** The loader also returns unless it is served from
+  the base URL's own hostname, so local previews and CI's pa11y sweep (over
+  127.0.0.1) never load GA or send hits to the real property.
+- **Clicks are observed, links are not touched.** A click listener sends
+  `ticket_click` (a link in `<main>` to a `ticketmaster.*` host) and
+  `calendar_subscribe` (a `webcal:` link or a path ending `.ics`). Ticket
+  links stay the plain URLs Ticketmaster publishes, never wrapped in a GA
+  or other redirect.
+- **Feeds untracked.** The `.ics` feeds and `data/*.json` are written
+  without the ID and are byte-identical with or without it
+  (`tests/test_analytics.py`); no tracking of any kind is added to a feed.
+
+Where 0002 said "Affiliate revenue is plain URLs with an affiliate id, which
+needs no script and no cookie on our side": still true of the affiliate
+link itself. The analytics script and its cookies are a separate, measured
+choice made here. Likewise 0001's "nothing leaves your browser" no longer
+describes the pages (it still describes the feeds); 0001's static,
+no-runtime architecture is unchanged.
+
+`README.md`, the site footer, the index lede, the new `/privacy/` page
+(linked from every footer) and the repo description were updated so no
+"no tracking" / "no cookies" claim remains false.

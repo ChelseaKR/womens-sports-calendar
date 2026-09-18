@@ -20,7 +20,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from . import config, ics, site, site_data
+from . import analytics, config, ics, site, site_data
 from .coverage import BuildCoverage, LeagueCoverage, compute_league_coverage, render_report
 from .normalize import Game, normalize_event, team_is_participant, unique_by_event_id
 from .ticketmaster import DiscoveryClient, TicketmasterFetchError
@@ -46,9 +46,10 @@ STATIC_ASSET_FILES = (
 # Self-hosted webfonts (SIL OFL licensed, latin-subset .woff2 files
 # committed under pipeline/assets/fonts/) -- never a Google Fonts <link>,
 # since a third-party font request would contact Google on every page load,
-# contradicting this site's own footer promise ("Nothing leaves your
-# browser when you read this site"). Copied into dist/fonts/ so
-# site.STYLE_CSS's @font-face rules (url("/fonts/...")) resolve.
+# including for a visitor who sent Global Privacy Control or Do Not Track
+# (the only thing that may contact Google is the guarded GA4 loader, see
+# analytics.py). Copied into dist/fonts/ so site.STYLE_CSS's @font-face
+# rules (url("/fonts/...")) resolve.
 STATIC_FONT_FILES = (
     "big-shoulders-display-latin.woff2",
     "big-shoulders-text-latin.woff2",
@@ -108,14 +109,27 @@ def fetch_all_games(api_key: str) -> tuple[list[Game], dict[str, set[str]], dict
     return games, truncated, mismatched, budget.requests_made, budget.bytes_received
 
 
-def build(*, out_dir: Path, base_url: str, api_key: str | None, affiliate_id: str | None) -> BuildCoverage:
+def build(
+    *,
+    out_dir: Path,
+    base_url: str,
+    api_key: str | None,
+    affiliate_id: str | None,
+    ga4_id: str | None = None,
+) -> BuildCoverage:
     """Fetches and writes to a temp directory first, then atomically
     replaces --out only on full success. A fetch failure raises before the
     temp directory ever becomes --out, so an existing good --out (e.g. a
     previous local build) is left untouched rather than overwritten with a
     partial one -- the same "never publish a stale/broken build as current"
     rule the GitHub Actions workflow applies at the deploy step.
+
+    ga4_id reaches the HTML pages only (analytics.py): the .ics feeds and
+    data/*.json are written without it, so they are byte-identical whether
+    or not an ID is set. None or "" emits no analytics at all; a malformed
+    ID raises ValueError here, before anything is fetched or written.
     """
+    ga4_id = analytics.measurement_id(ga4_id)
     api_key_present = bool(api_key)
     if api_key_present:
         games, truncated, mismatched, requests_made, bytes_received = fetch_all_games(api_key)  # may raise
@@ -149,7 +163,7 @@ def build(*, out_dir: Path, base_url: str, api_key: str | None, affiliate_id: st
 
     _write_ics(tmp_dir, games_by_league, api_key_present)
     _write_data(tmp_dir, base_url, games_by_league, api_key_present, truncated)
-    _write_html(tmp_dir, base_url, games_by_league, api_key_present, truncated)
+    _write_html(tmp_dir, base_url, games_by_league, api_key_present, truncated, ga4_id)
     _write_static(tmp_dir)
     _write_sitemap_and_robots(tmp_dir, base_url)
 
@@ -211,6 +225,7 @@ def _write_html(
     games_by_league: dict[str, list[Game]],
     api_key_present: bool,
     truncated: dict[str, set[str]],
+    ga4_id: str | None,
 ) -> None:
     leagues_summary = [
         {
@@ -227,10 +242,16 @@ def _write_html(
             leagues=leagues_summary,
             not_included=list(config.LEAGUES_EXAMINED_NOT_INCLUDED),
             base_url=base_url,
+            ga4_id=ga4_id,
         ),
         encoding="utf-8",
     )
-    (out_dir / "404.html").write_text(site.render_not_found(leagues=leagues_summary, base_url=base_url), encoding="utf-8")
+    (out_dir / "404.html").write_text(
+        site.render_not_found(leagues=leagues_summary, base_url=base_url, ga4_id=ga4_id), encoding="utf-8"
+    )
+    privacy_dir = out_dir / "privacy"
+    privacy_dir.mkdir(exist_ok=True)
+    (privacy_dir / "index.html").write_text(site.render_privacy(base_url=base_url, ga4_id=ga4_id), encoding="utf-8")
 
     for lg in config.LEAGUES:
         games = games_by_league[lg.slug]
@@ -239,7 +260,7 @@ def _write_html(
         league_dir = out_dir / lg.slug
         league_dir.mkdir(exist_ok=True)
         (league_dir / "index.html").write_text(
-            site.render_league(league=league_payload, base_url=base_url), encoding="utf-8"
+            site.render_league(league=league_payload, base_url=base_url, ga4_id=ga4_id), encoding="utf-8"
         )
         for team in lg.teams:
             team_payload = site_data.team_data(
@@ -248,7 +269,7 @@ def _write_html(
             team_dir = league_dir / team.slug
             team_dir.mkdir(exist_ok=True)
             (team_dir / "index.html").write_text(
-                site.render_team(team=team_payload, base_url=base_url), encoding="utf-8"
+                site.render_team(team=team_payload, base_url=base_url, ga4_id=ga4_id), encoding="utf-8"
             )
 
 
@@ -273,7 +294,7 @@ def _write_static(out_dir: Path) -> None:
 
 
 def _write_sitemap_and_robots(out_dir: Path, base_url: str) -> None:
-    urls = [f"{base_url}/"]
+    urls = [f"{base_url}/", f"{base_url}{site.PRIVACY_PATH}"]
     for lg in config.LEAGUES:
         urls.append(f"{base_url}/{lg.slug}/")
         for team in lg.teams:
@@ -324,8 +345,20 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
 
+    ga4_id = analytics.GA4_MEASUREMENT_ID
+    if not ga4_id:
+        print(
+            "NOTE: analytics.GA4_MEASUREMENT_ID is empty, so no page carries "
+            "Google Analytics and the privacy copy says the site runs none. "
+            "Set it in pipeline/src/wsc_pipeline/analytics.py once the GA4 "
+            "property exists (DECISIONS 0012).",
+            file=sys.stderr,
+        )
+
     try:
-        coverage = build(out_dir=args.out, base_url=args.base_url, api_key=api_key, affiliate_id=affiliate_id)
+        coverage = build(
+            out_dir=args.out, base_url=args.base_url, api_key=api_key, affiliate_id=affiliate_id, ga4_id=ga4_id
+        )
     except TicketmasterFetchError as exc:
         print(f"BUILD FAILED: {exc}", file=sys.stderr)
         print("A failed fetch fails the build; nothing was published to --out.", file=sys.stderr)

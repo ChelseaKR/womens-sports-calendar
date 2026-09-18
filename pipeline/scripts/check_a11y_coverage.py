@@ -9,12 +9,13 @@ non-zero if any fails:
    skipped, none it invented -- and says every one of them passed
    (total == passes == number of URLs, errors == 0).
 2. The URL list covers every page the site config says a build must
-   produce: the index, one page per tracked league, one per tracked team
-   (wsc_pipeline.config.LEAGUES), plus the populated-games-table fixtures
-   from scripts/render_a11y_fixtures.py. A build that silently produced
-   fewer pages would otherwise hand pa11y-ci a shorter list and pass.
-3. Pages beyond that set (a future 404 page, say) are allowed -- they are
-   checked like any other -- but never counted in place of a missing one.
+   produce: the index, the privacy page, the 404 page, one page per tracked
+   league, one per tracked team (wsc_pipeline.config.LEAGUES), plus the
+   populated-games-table fixtures from scripts/render_a11y_fixtures.py. A
+   build that silently produced fewer pages would otherwise hand pa11y-ci
+   a shorter list and pass.
+3. Pages beyond that set are allowed -- they are checked like any other --
+   but never counted in place of a missing one.
 
 Usage: check_a11y_coverage.py <pa11y-ci-results.json> <url> [<url> ...]
 """
@@ -35,7 +36,7 @@ from scripts.render_a11y_fixtures import FIXTURE_PAGES  # noqa: E402
 
 
 def expected_paths() -> set[str]:
-    paths = {"index.html"}
+    paths = {"index.html", "privacy/index.html", "404.html"}
     for league in LEAGUES:
         paths.add(f"{league.slug}/index.html")
         for team in league.teams:

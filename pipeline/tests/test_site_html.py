@@ -43,8 +43,9 @@ def _pages():
 
 
 def test_no_script_tags_on_any_page():
-    """DECISIONS 0002 / brief: no JavaScript that contacts anyone but us --
-    the simplest and strongest guarantee is zero <script> elements at all."""
+    """With no GA4 measurement ID (the default -- DECISIONS 0012), a page
+    carries zero <script> elements at all. With an ID, the one allowed
+    script is the guarded GA4 loader, checked in tests/test_analytics.py."""
     for page_name, html in _pages().items():
         assert not SCRIPT_TAG_RE.search(html), f"{page_name} page contains a <script> tag"
 
@@ -89,9 +90,14 @@ def test_canonical_and_og_tags_present():
 
 
 def test_footer_privacy_note_is_present_and_literal():
-    html = _pages()["index"]
-    assert "Nothing leaves your browser" in html
-    assert "no tracking cookie" in html
+    """With no GA4 ID the footer says there is no analytics -- and links the
+    privacy page -- rather than claiming a measurement this build never
+    does. (The with-ID wording is checked in tests/test_analytics.py.)"""
+    for html in _pages().values():
+        assert "This site runs no analytics, no scripts, and\nsets no cookies" in html
+        assert "the calendar feeds are never tracked" in html
+        assert '<a href="/privacy/">Privacy: what this site measures' in html
+        assert "Google Analytics" not in html
 
 
 def test_footer_attribution_names_ticketmaster_terms():

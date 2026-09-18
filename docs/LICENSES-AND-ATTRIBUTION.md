@@ -459,9 +459,10 @@ licence-before-bytes rule (`docs/DECISIONS.md` 0003).
   carries the Impact publisher ID, the `url` field the Discovery API already
   returns per event **is** the affiliate link — Impact tracking is applied
   server-side by Ticketmaster, not by any script or wrapper we write. The
-  site renders `event.url` as a plain `<a href>`; nothing runs, nothing sets
-  a cookie on our side (DECISIONS 0002). This is the entire monetisation
-  mechanism.
+  site renders `event.url` as a plain `<a href>`; the link itself needs no
+  script and sets no cookie on our side (DECISIONS 0002). The pages' Google
+  Analytics (DECISIONS 0012) only observes a click on it, never wraps or
+  rewrites it. This is the entire monetisation mechanism.
 - **Revenue rule:** *"Our program rewards partners based on actual sales
   generated, not just traffic referrals."* *"Ticketmaster does not provide
   commission for primary ticket sales during presales or within the initial
