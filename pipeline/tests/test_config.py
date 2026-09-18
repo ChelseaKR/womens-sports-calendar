@@ -51,12 +51,36 @@ def test_team_slugs_are_unique_across_the_whole_registry():
     assert len(all_slugs) == len(set(all_slugs))
 
 
-def test_leagues_examined_not_included_still_has_four_entries():
-    """NCAA, Unrivaled, LOVB, and the three non-softball Athletes Unlimited
-    disciplines -- AUSL graduating to a tracked league renames this entry
-    rather than removing it, so the count is unchanged. Mirrors
+def test_leagues_examined_not_included_now_has_five_entries():
+    """NCAA, Unrivaled, LOVB, the three non-softball Athletes Unlimited
+    disciplines, and WPBL (docs/DECISIONS.md 0011, added 2026-09-16 --
+    zero Ticketmaster coverage, not a licensing block). Mirrors
     tests/test_build.py's site.json assertion on this same list."""
-    assert len(LEAGUES_EXAMINED_NOT_INCLUDED) == 4
+    assert len(LEAGUES_EXAMINED_NOT_INCLUDED) == 5
+
+
+def test_wpbl_is_examined_and_excluded_for_zero_ticketmaster_coverage():
+    """WPBL is a real, currently operating league with fixed team
+    franchises (same shape as WNBA/NWSL/PWHL/AUSL), so this must not read
+    like a licensing or team-identity exclusion -- the reason must name
+    the actual, empirical blocker: zero Ticketmaster coverage."""
+    matches = [item for item in LEAGUES_EXAMINED_NOT_INCLUDED if "WPBL" in item["name"]]
+    assert len(matches) == 1
+    entry = matches[0]
+    reason = entry["reason"].lower()
+    assert "ticketmaster" in reason
+    assert "zero" in reason
+    assert "not a licensing gap" in reason
+    assert "wnba" in reason or "ausl" in reason  # team-identity shape acknowledged, not the blocker
+
+
+def test_wpbl_is_not_a_tracked_league():
+    """The dispositive finding (zero Ticketmaster coverage across all four
+    2026 teams) means WPBL must not appear in the tracked LEAGUES tuple."""
+    slugs = [league.slug for league in LEAGUES]
+    assert "wpbl" not in slugs
+    names = [league.name for league in LEAGUES]
+    assert not any("WPBL" in name or "Women's Pro Baseball" in name for name in names)
 
 
 def test_athletes_unlimited_exclusion_is_scoped_to_non_softball_disciplines():
@@ -76,13 +100,13 @@ def test_athletes_unlimited_exclusion_is_scoped_to_non_softball_disciplines():
 
 
 def test_leagues_examined_not_included_reasons_still_present():
-    for expected in ("NCAA", "Unrivaled", "LOVB"):
+    for expected in ("NCAA", "Unrivaled", "LOVB", "WPBL"):
         assert any(expected in item["name"] for item in LEAGUES_EXAMINED_NOT_INCLUDED)
 
 
 def test_ncaaw_big_ten_is_tracked_with_eighteen_teams():
     """NCAA women's basketball (Big Ten only) was added 2026-09-16,
-    docs/DECISIONS.md 0009 -- the conference's 18 members for the 2026-27
+    docs/DECISIONS.md 0010 -- the conference's 18 members for the 2026-27
     season, after confirming real Ticketmaster inventory per team (unlike
     the other tracked leagues, a bare school nickname is shared across
     every sport, so team names carry a 'Womens Basketball' suffix)."""
