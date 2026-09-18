@@ -80,7 +80,9 @@ def test_failed_fetch_does_not_clobber_a_previous_good_build(tmp_path: Path, mon
     monkeypatch.setattr(build_module, "fetch_all_games", boom)
 
     with pytest.raises(TicketmasterFetchError):
-        build_module.build(out_dir=out_dir, base_url="https://calendar.chelseakr.com", api_key="fake-key", affiliate_id=None)
+        build_module.build(
+            out_dir=out_dir, base_url="https://calendar.chelseakr.com", api_key="fake-key", affiliate_id=None
+        )
 
     # out_dir must be exactly what the last successful build wrote.
     assert (out_dir / "index.html").read_text() == good_index
@@ -172,7 +174,14 @@ def test_favicon_and_social_card_assets_are_copied_into_the_build(tmp_path: Path
     build_module.build(out_dir=out_dir, base_url="https://calendar.chelseakr.com", api_key=None, affiliate_id=None)
 
     assert (out_dir / "favicon.svg").read_text(encoding="utf-8").startswith("<svg")
-    for name in ("favicon-32.png", "apple-touch-icon.png", "og-image.png", "og-image-wnba.png", "og-image-nwsl.png", "og-image-pwhl.png"):
+    for name in (
+        "favicon-32.png",
+        "apple-touch-icon.png",
+        "og-image.png",
+        "og-image-wnba.png",
+        "og-image-nwsl.png",
+        "og-image-pwhl.png",
+    ):
         assert (out_dir / name).is_file(), name
 
     # og:image:width/height in site.py both claim 1200x630 -- verify the
@@ -270,7 +279,9 @@ def test_head_to_head_game_is_listed_and_counted_once_per_league(tmp_path: Path,
     monkeypatch.setattr(build_module, "DiscoveryClient", lambda api_key: fake_client)
 
     out_dir = tmp_path / "dist"
-    coverage = build_module.build(out_dir=out_dir, base_url="https://nexthomegame.com", api_key="fake-key", affiliate_id=None)
+    coverage = build_module.build(
+        out_dir=out_dir, base_url="https://nexthomegame.com", api_key="fake-key", affiliate_id=None
+    )
 
     league_json = json.loads((out_dir / "data" / "wnba.json").read_text())
     assert [g["event_id"] for g in league_json["games"]] == ["EVT-H2H"]

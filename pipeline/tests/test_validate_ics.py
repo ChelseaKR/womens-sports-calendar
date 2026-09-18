@@ -71,7 +71,9 @@ def test_feed_that_drops_a_game_its_page_lists_fails(tmp_path: Path, monkeypatch
     feed = dist / "ics" / WNBA.slug / f"{TEAM_A.slug}.ics"
     cal = Calendar.from_ical(feed.read_bytes())
     before = len(cal.walk("VEVENT"))
-    cal.subcomponents = [c for c in cal.subcomponents if str(c.get("uid", "")) != "tm-EVT-A2@womens-sports-calendar.invalid"]
+    cal.subcomponents = [
+        c for c in cal.subcomponents if str(c.get("uid", "")) != "tm-EVT-A2@womens-sports-calendar.invalid"
+    ]
     feed.write_bytes(cal.to_ical())
     assert len(Calendar.from_ical(feed.read_bytes()).walk("VEVENT")) == before - 1  # the sabotage landed
     with pytest.raises(validate_ics.FeedError, match="disagree"):

@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from datetime import date
 from html import escape as e
+from typing import Any
 
 from .analytics import GA4_DATA_RETENTION, ga4_head_snippet, measurement_id
 from .sellers import affiliate_links_active
@@ -209,7 +210,7 @@ or use the direct feed URL:
 """
 
 
-def _buy_link(game: dict, matchup: str, *, css_class: str = "") -> str | None:
+def _buy_link(game: dict[str, Any], matchup: str, *, css_class: str = "") -> str | None:
     """The one "Buy tickets" link for a game, from site_data's `buy`
     (sellers.buy_link), with link text naming where it goes. None when
     there is nowhere to buy; callers say so in words. No price is ever
@@ -224,8 +225,8 @@ def _buy_link(game: dict, matchup: str, *, css_class: str = "") -> str | None:
     return f'<a{class_attr} href="{e(buy["url"])}">{e(text)}</a>'
 
 
-def _matchup_text(game: dict) -> str:
-    """"Home vs Away" when both were parsed; otherwise Ticketmaster's own
+def _matchup_text(game: dict[str, Any]) -> str:
+    """ "Home vs Away" when both were parsed; otherwise Ticketmaster's own
     event name. Never "TBD vs TBD": the live site showed that for events
     whose names carry no "vs" (e.g. "Washington Spirit Premium
     Experiences", tournament listings), stating two unknown teams when the
@@ -261,7 +262,7 @@ def _possibly_incomplete_note(subject: str) -> str:
     )
 
 
-def _next_game_hero(games: list[dict], *, team_name: str, fetched: bool = True) -> str:
+def _next_game_hero(games: list[dict[str, Any]], *, team_name: str, fetched: bool = True) -> str:
     """The dominant visual moment on a team page: the actual next home
     game (games[0] -- site_data.py already sorts soonest-first), or, when
     Ticketmaster has nothing listed right now, a plain, honest empty
@@ -285,9 +286,7 @@ your calendar automatically &mdash; nothing to check back for.</p>
     month_day = _month_day(g["start_local_date"])
     matchup = _matchup_text(g)
     venue = ", ".join(p for p in (g["venue_name"], g["venue_city"], g["venue_state"]) if p) or "Venue not available"
-    when = e(g["start_display"]) + (
-        "" if g["in_calendar_feed"] else " (date TBD &mdash; not yet in the calendar feed)"
-    )
+    when = e(g["start_display"]) + ("" if g["in_calendar_feed"] else " (date TBD &mdash; not yet in the calendar feed)")
     if month_day:
         month, day = month_day
         date_chip = f'<div class="next-game-date" aria-hidden="true"><span class="next-game-month">{e(month)}</span><span class="next-game-day">{e(day)}</span></div>'
@@ -309,7 +308,7 @@ your calendar automatically &mdash; nothing to check back for.</p>
 """
 
 
-def _games_table(games: list[dict], *, buy_link_subject: str, fetched: bool = True) -> str:
+def _games_table(games: list[dict[str, Any]], *, buy_link_subject: str, fetched: bool = True) -> str:
     if not fetched:
         return f'<p class="no-games-message">{e(NOT_FETCHED_MSG)}</p>'
     if not games:
@@ -349,7 +348,7 @@ def _games_table(games: list[dict], *, buy_link_subject: str, fetched: bool = Tr
 
 def render_index(
     *,
-    leagues: list[dict],
+    leagues: list[dict[str, Any]],
     not_included: list[dict[str, str]],
     base_url: str,
     ga4_id: str | None = None,
@@ -405,7 +404,7 @@ them):</p>
     )
 
 
-def render_not_found(*, leagues: list[dict], base_url: str, ga4_id: str | None = None) -> str:
+def render_not_found(*, leagues: list[dict[str, Any]], base_url: str, ga4_id: str | None = None) -> str:
     """dist/404.html, which GitHub Pages serves for any missing path --
     without it, a stale or mistyped link lands on GitHub's own "Page not
     found · GitHub Pages" page, with no way back to this site. noindex, and
@@ -522,7 +521,7 @@ no access to those logs.</p>
 
 def render_league(
     *,
-    league: dict,
+    league: dict[str, Any],
     base_url: str,
     ga4_id: str | None = None,
 ) -> str:
@@ -538,9 +537,7 @@ def render_league(
     def team_name(slug_: str) -> str:
         return team_names.get(slug_) or slug_.replace("-", " ").title()
 
-    team_links = "\n".join(
-        f'<li><a href="/{e(slug)}/{e(t)}/">{e(team_name(t))}</a></li>' for t in league["teams"]
-    )
+    team_links = "\n".join(f'<li><a href="/{e(slug)}/{e(t)}/">{e(team_name(t))}</a></li>' for t in league["teams"])
     incomplete = league.get("possibly_incomplete_teams") or []
     incomplete_note = (
         _possibly_incomplete_note(", ".join(team_name(t) for t in incomplete)) + "\n" if incomplete else ""
@@ -571,7 +568,7 @@ def render_league(
 
 def render_team(
     *,
-    team: dict,
+    team: dict[str, Any],
     base_url: str,
     ga4_id: str | None = None,
 ) -> str:
@@ -581,8 +578,8 @@ def render_team(
     ics_webcal = ics_https.replace("https://", "webcal://").replace("http://", "webcal://")
     fetched = team.get("fetched", True)
     incomplete_note = _possibly_incomplete_note(team["team_name"]) + "\n" if team.get("possibly_incomplete") else ""
-    body = f"""<nav aria-label="breadcrumb"><a href="/">All leagues</a> &rsaquo; <a href="/{e(league_slug)}/">{e(team['league_name'])}</a></nav>
-<h1>{e(team['team_name'])}</h1>
+    body = f"""<nav aria-label="breadcrumb"><a href="/">All leagues</a> &rsaquo; <a href="/{e(league_slug)}/">{e(team["league_name"])}</a></nav>
+<h1>{e(team["team_name"])}</h1>
 <p class="schedule-source-note">{e(team["schedule_source_note"])}</p>
 {incomplete_note}{_subscribe_block(ics_https_url=ics_https, ics_webcal_url=ics_webcal, label=team["team_name"])}
 {_next_game_hero(team["games"], team_name=team["team_name"], fetched=fetched)}

@@ -1,4 +1,16 @@
 .PHONY: install install-a11y test build verify clean a11y
+.PHONY: lint format-check typecheck markers wheel audit
+
+# Recipes run under bash with errexit, nounset and pipefail. .SHELLFLAGS needs
+# GNU make >= 3.82 (CI has 4.x); the make 3.81 that macOS ships ignores it, so
+# any recipe with a pipe also says `set -o pipefail` itself.
+SHELL := /bin/bash
+.SHELLFLAGS := -eu -o pipefail -c
+
+# Every `uv run` / `uv sync` below installs exactly uv.lock and never rewrites
+# it (CODE-QUALITY-STANDARD CQ-09). A bare `uv run` silently relocks first,
+# which would repair the very drift `install` exists to catch.
+export UV_FROZEN := 1
 
 BASE_URL ?= https://nexthomegame.com
 
@@ -6,8 +18,14 @@ BASE_URL ?= https://nexthomegame.com
 # install`, and it must not need npm, puppeteer, or a ~150MB Chromium
 # download to publish the site -- a registry or Chrome-CDN hiccup should
 # never be able to block tonight's calendar update.
+#
+# `uv lock --check` comes first and is the lockfile-drift gate: it exits 1
+# when pyproject.toml and uv.lock disagree. `uv sync --frozen` then installs
+# exactly the lock (runtime deps plus the PEP 735 `dev` group) -- on its own
+# it cannot notice drift, because it never reads pyproject.toml.
 install:
-	uv sync --extra dev
+	env -u UV_FROZEN uv lock --check
+	uv sync --frozen
 
 # npm ci installs pa11y-ci pinned+lockfiled in package.json/package-lock.json
 # (the `a11y` target's only JS dependency -- the pipeline itself is pure
@@ -19,8 +37,37 @@ install:
 install-a11y:
 	npm ci
 
+# Branch coverage with the floor in pyproject.toml ([tool.coverage.report]
+# fail_under, CQ-08): pytest exits non-zero below it.
 test:
-	uv run pytest -q
+	uv run pytest -q --cov=src --cov-branch --cov-report=term
+
+# CODE-QUALITY-STANDARD §2 / §9 static gates. ruff and mypy read their
+# configuration from pyproject.toml; nothing here restates a rule.
+lint:
+	uv run ruff check .
+
+format-check:
+	uv run ruff format --check .
+
+typecheck:
+	uv run mypy src
+
+# CQ-34 / CQ-35: no bare TODO/FIXME/HACK and no inline lint/type suppression
+# without an issue reference.
+markers:
+	uv run python scripts/check_markers.py src tests scripts
+
+# CQ-10: the package builds as a wheel with the hatchling backend. Built into
+# a throwaway directory -- dist/ is the site output.
+wheel:
+	tmp=$$(mktemp -d); uv build --wheel --out-dir "$$tmp"; rm -rf "$$tmp"
+
+# CQ-11 / SEC-11: every locked Python dependency against the PyPI/OSV
+# advisory databases. No `|| true`: a known vulnerability fails the gate. The
+# project itself is skipped because it is not a PyPI distribution.
+audit:
+	uv run pip-audit --skip-editable
 
 # BUILD_FLAGS is empty for local/CI builds (degraded no-key mode allowed);
 # the deploy workflow sets BUILD_FLAGS=--require-api-key.
@@ -105,7 +152,7 @@ a11y: install install-a11y build
 	./node_modules/.bin/pa11y-ci --config pa11y-ci.config.json $$urls; \
 	uv run python scripts/check_a11y_coverage.py pa11y-ci-results.json $$urls
 
-verify: install test build validate-html validate-ics a11y
+verify: install lint format-check typecheck markers test wheel build validate-html validate-ics a11y audit
 
 clean:
 	rm -rf dist dist.tmp .pytest_cache .venv node_modules pa11y-ci-results.json

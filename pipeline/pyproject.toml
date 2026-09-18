@@ -8,11 +8,18 @@ dependencies = [
   "icalendar>=6.0",
 ]
 
-[project.optional-dependencies]
+# PEP 735 dependency groups, not [project.optional-dependencies]: the linters,
+# type checker and test tools are development tooling and must never ship as
+# an installable extra of the package (CODE-QUALITY-STANDARD CQ-27). uv syncs
+# the `dev` group by default.
+[dependency-groups]
 dev = [
   "pytest>=8.0",
   "pytest-cov>=5.0",
   "html5validator>=0.4",
+  "ruff>=0.15.0",
+  "mypy>=1.18",
+  "pip-audit>=2.9",
 ]
 
 [build-system]
@@ -22,5 +29,63 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/wsc_pipeline"]
 
+# CODE-QUALITY-STANDARD §2, the portfolio default block. Values that differ
+# from the default, and why:
+#   line-length 120: the existing code was written to ~120 columns; 88 would
+#   rewrap most of the tree for no behavioural gain. The key is kept, only
+#   the value changes, as §2 allows.
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "SIM", "S", "C90", "RUF"]
+ignore = ["E501"]  # line length owned by the formatter
+# The site deliberately prints typographic quotes and an en dash in visible
+# copy (site.py documents each one); they are the intended characters, not
+# look-alikes smuggled into code.
+allowed-confusables = ["‘", "’", "–"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]  # assert is how pytest asserts
+# Run node on the GA4 snippet harnesses they have just written into their own
+# tmp_path, with argument lists (no shell, no outside input).
+"tests/test_analytics.py" = ["S101", "S603"]
+"tests/test_analytics_opt_out.py" = ["S101", "S603"]
+# site.py builds HTML, never SQL: there is no database anywhere in this
+# project. S608 matches the words "select ... From URL" in the calendar-app
+# instructions copy.
+"src/wsc_pipeline/site.py" = ["S608"]
+# A developer-run asset script that shells out to rsvg-convert with argument
+# lists built from committed file paths (no shell, no external input). S603
+# fires on every subprocess call regardless of input.
+"scripts/render_social_assets.py" = ["S603"]
+# Developer/CI scripts run as `python scripts/<name>.py`: they put the
+# pipeline root on sys.path before importing the package and the shared test
+# fixtures, so those imports necessarily follow code.
+"scripts/render_a11y_fixtures.py" = ["E402"]
+"scripts/check_a11y_coverage.py" = ["E402"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+strict = true
+warn_return_any = true
+disallow_untyped_defs = true
+
 [tool.pytest.ini_options]
+minversion = "8.0"
 testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config --import-mode=importlib"
+
+[tool.coverage.run]
+branch = true
+source = ["src"]
+
+[tool.coverage.report]
+fail_under = 85  # application floor (CQ-08); not a published library
+show_missing = true

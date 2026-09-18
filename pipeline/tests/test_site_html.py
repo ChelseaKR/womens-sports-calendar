@@ -6,6 +6,7 @@ from wsc_pipeline.config import LEAGUES, LEAGUES_EXAMINED_NOT_INCLUDED
 from wsc_pipeline.normalize import normalize_event
 from wsc_pipeline.site import render_index, render_league, render_team
 from wsc_pipeline.site_data import league_data, team_data
+
 from .conftest import make_raw_event
 
 LEAGUE = LEAGUES[0]  # wnba
@@ -16,9 +17,7 @@ SCRIPT_TAG_RE = re.compile(r"<script\b", re.IGNORECASE)
 
 def _game(event_id, **kwargs):
     raw = make_raw_event(event_id=event_id, **kwargs)
-    return normalize_event(
-        raw, league_slug=LEAGUE.slug, tracked_team_slug=TEAM.slug, tracked_team_name=TEAM.name
-    )
+    return normalize_event(raw, league_slug=LEAGUE.slug, tracked_team_slug=TEAM.slug, tracked_team_name=TEAM.name)
 
 
 def _pages():
@@ -36,7 +35,11 @@ def _pages():
     team_payload = team_data(TEAM, LEAGUE, games)
     leagues_summary = [{"slug": lg.slug, "name": lg.name, "games_count": 2} for lg in LEAGUES]
     return {
-        "index": render_index(leagues=leagues_summary, not_included=list(LEAGUES_EXAMINED_NOT_INCLUDED), base_url="https://calendar.chelseakr.com"),
+        "index": render_index(
+            leagues=leagues_summary,
+            not_included=list(LEAGUES_EXAMINED_NOT_INCLUDED),
+            base_url="https://calendar.chelseakr.com",
+        ),
         "league": render_league(league=league_payload, base_url="https://calendar.chelseakr.com"),
         "team": render_team(team=team_payload, base_url="https://calendar.chelseakr.com"),
     }
@@ -160,7 +163,7 @@ def test_og_image_tags_present_and_grounded_in_real_dimensions():
         assert 'property="og:image:width" content="1200"' in html, page_name
         assert 'property="og:image:height" content="630"' in html, page_name
         assert 'property="og:image:alt" content="' in html, page_name
-        assert 'https://calendar.chelseakr.com/og-image' in html, page_name
+        assert "https://calendar.chelseakr.com/og-image" in html, page_name
 
 
 def test_twitter_card_tags_present():

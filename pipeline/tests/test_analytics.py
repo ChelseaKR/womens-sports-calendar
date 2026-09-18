@@ -85,7 +85,9 @@ def _assert_guarded_ga(html: str, ga4_id: str) -> None:
     assert len(re.findall(r"<script\b", html, flags=re.IGNORECASE)) == 1
     script = scripts[0]
     assert script + "\n</head>" in html, "the GA loader must close out <head>"
-    first_effect = min(script.index("w.dataLayer"), script.index("createElement"), script.index('d.addEventListener("click"'))
+    first_effect = min(
+        script.index("w.dataLayer"), script.index("createElement"), script.index('d.addEventListener("click"')
+    )
     for guard in (f'if (w.location.hostname !== "{HOST}") return;', GPC_GUARD, DNT_GUARD):
         assert guard in script, f"missing guard: {guard}"
         assert script.index(guard) < first_effect, f"guard runs too late: {guard}"
@@ -351,7 +353,7 @@ def _run_snippet(tmp_path: Path, snippet: str, scenarios: list[dict]) -> dict[st
     (tmp_path / "snippet.html").write_text(snippet, encoding="utf-8")
     (tmp_path / "scenarios.json").write_text(json.dumps(scenarios), encoding="utf-8")
     # node plus three files this test just wrote into its own tmp_path.
-    proc = subprocess.run(  # noqa: S603
+    proc = subprocess.run(
         [_node(), str(tmp_path / "harness.js"), str(tmp_path / "snippet.html"), str(tmp_path / "scenarios.json")],
         capture_output=True,
         text=True,

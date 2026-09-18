@@ -56,8 +56,9 @@ def _expected_feeds(dist: Path) -> list[tuple[Path, Path]]:
     return pairs
 
 
-def validate_feed(feed: Path, data: Path) -> int:
-    """Returns the number of VEVENTs; raises FeedError on any problem."""
+def _parse_calendar(feed: Path) -> Calendar:
+    """The feed as a parsed VCALENDAR with its required calendar-level
+    properties; raises FeedError otherwise."""
     if not feed.is_file():
         raise FeedError(f"{feed}: missing -- the site links a subscribe URL that would 404")
     try:
@@ -69,7 +70,12 @@ def validate_feed(feed: Path, data: Path) -> int:
     for prop in ("prodid", "x-wr-calname"):
         if cal.get(prop) is None:
             raise FeedError(f"{feed}: VCALENDAR is missing {prop.upper()}")
+    return cal
 
+
+def _event_uids(feed: Path, cal: Calendar) -> list[str]:
+    """Every VEVENT's UID, in order; raises FeedError on a VEVENT missing a
+    required property or on any repeated UID."""
     uids: list[str] = []
     for vevent in cal.walk("VEVENT"):
         for prop in REQUIRED_VEVENT_PROPS:
@@ -79,7 +85,12 @@ def validate_feed(feed: Path, data: Path) -> int:
     if len(uids) != len(set(uids)):
         dupes = sorted({u for u in uids if uids.count(u) > 1})
         raise FeedError(f"{feed}: duplicate UIDs {dupes[:5]}")
+    return uids
 
+
+def _check_matches_page(feed: Path, data: Path, uids: list[str]) -> None:
+    """The feed's UIDs equal the UIDs of the games its page lists as in the
+    calendar feed; raises FeedError otherwise."""
     if not data.is_file():
         raise FeedError(f"{data}: missing -- cannot check {feed} against its page's data")
     games = json.loads(data.read_text(encoding="utf-8"))["games"]
@@ -91,6 +102,13 @@ def validate_feed(feed: Path, data: Path) -> int:
             f"{sorted(expected - actual)[:5]}; in the feed but not the page's data: "
             f"{sorted(actual - expected)[:5]}"
         )
+
+
+def validate_feed(feed: Path, data: Path) -> int:
+    """Returns the number of VEVENTs; raises FeedError on any problem."""
+    cal = _parse_calendar(feed)
+    uids = _event_uids(feed, cal)
+    _check_matches_page(feed, data, uids)
     return len(uids)
 
 

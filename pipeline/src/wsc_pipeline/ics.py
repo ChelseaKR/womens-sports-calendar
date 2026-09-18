@@ -20,7 +20,7 @@ from collections import Counter, defaultdict
 
 from icalendar import Calendar, Event, Timezone, vText
 
-from .normalize import Game, display_start, unique_by_event_id, zone_for
+from .normalize import Game, unique_by_event_id, zone_for
 
 UID_DOMAIN = "womens-sports-calendar.invalid"
 # PRODID only names the producing software; clients do not key on it, so it

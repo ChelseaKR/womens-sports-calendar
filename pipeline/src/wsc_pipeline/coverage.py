@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .config import League, Team
+from .config import League
 from .normalize import Game, unique_by_event_id
 
 
@@ -52,15 +52,15 @@ class BuildCoverage:
 
     @property
     def leagues_with_games(self) -> int:
-        return sum(1 for l in self.leagues if l.games_total > 0)
+        return sum(1 for lc in self.leagues if lc.games_total > 0)
 
     @property
     def games_total(self) -> int:
-        return sum(l.games_total for l in self.leagues)
+        return sum(lc.games_total for lc in self.leagues)
 
     @property
     def games_with_price_total(self) -> int:
-        return sum(l.games_with_price for l in self.leagues)
+        return sum(lc.games_with_price for lc in self.leagues)
 
 
 def compute_league_coverage(
@@ -108,10 +108,7 @@ def render_report(coverage: BuildCoverage) -> str:
         f"Games with a Ticketmaster price: {coverage.games_with_price_total} "
         f"of {coverage.games_total}."
     )
-    lines.append(
-        f"Crawl budget used: {coverage.requests_made} requests, "
-        f"{coverage.bytes_received} bytes received."
-    )
+    lines.append(f"Crawl budget used: {coverage.requests_made} requests, {coverage.bytes_received} bytes received.")
     lines.append("")
 
     for lc in coverage.leagues:

@@ -222,10 +222,7 @@ LEAGUES: tuple[League, ...] = (
 
 LEAGUES_EXAMINED_NOT_INCLUDED: tuple[dict[str, str], ...] = (
     {
-        "name": (
-            "NCAA women's basketball outside the Big Ten, and NCAA women's "
-            "sports other than basketball"
-        ),
+        "name": ("NCAA women's basketball outside the Big Ten, and NCAA women's sports other than basketball"),
         "reason": (
             "Big Ten women's basketball is a tracked league (see above) via "
             "Ticketmaster team-keyword search, same as WNBA/NWSL/PWHL/AUSL "
@@ -249,8 +246,8 @@ LEAGUES_EXAMINED_NOT_INCLUDED: tuple[dict[str, str], ...] = (
     {
         "name": "Unrivaled",
         "reason": (
-            "Terms of use ban automated collection and name \"collecting "
-            "product prices\" as a prohibited commercial purpose. Not "
+            'Terms of use ban automated collection and name "collecting '
+            'product prices" as a prohibited commercial purpose. Not '
             "configured as a tracked league (team roster/Ticketmaster "
             "coverage not yet scoped)."
         ),

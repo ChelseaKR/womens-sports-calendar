@@ -10,12 +10,15 @@ from wsc_pipeline.ics import (
     make_uid,
 )
 from wsc_pipeline.normalize import normalize_event
+
 from .conftest import make_raw_event
 
 
 def _game(event_id, **kwargs):
     raw = make_raw_event(event_id=event_id, **kwargs)
-    return normalize_event(raw, league_slug="wnba", tracked_team_slug="indiana-fever", tracked_team_name="Indiana Fever")
+    return normalize_event(
+        raw, league_slug="wnba", tracked_team_slug="indiana-fever", tracked_team_name="Indiana Fever"
+    )
 
 
 def test_uid_is_stable_across_two_builds():
@@ -27,8 +30,8 @@ def test_uid_is_stable_across_two_builds():
     game_b = _game("EVT1")
     cal_a = build_calendar([game_a], cal_name="Test A")
     cal_b = build_calendar([game_b], cal_name="Test B")
-    uid_a = [c["uid"] for c in cal_a.walk("VEVENT")][0]
-    uid_b = [c["uid"] for c in cal_b.walk("VEVENT")][0]
+    uid_a = next(c["uid"] for c in cal_a.walk("VEVENT"))
+    uid_b = next(c["uid"] for c in cal_b.walk("VEVENT"))
     assert str(uid_a) == str(uid_b)
 
 

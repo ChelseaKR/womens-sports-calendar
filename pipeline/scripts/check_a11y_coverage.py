@@ -31,8 +31,8 @@ PIPELINE_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PIPELINE_ROOT / "src"))
 sys.path.insert(0, str(PIPELINE_ROOT))
 
-from wsc_pipeline.config import LEAGUES  # noqa: E402
-from scripts.render_a11y_fixtures import FIXTURE_PAGES  # noqa: E402
+from scripts.render_a11y_fixtures import FIXTURE_PAGES
+from wsc_pipeline.config import LEAGUES
 
 
 def expected_paths() -> set[str]:

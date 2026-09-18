@@ -27,7 +27,7 @@ from pathlib import Path
 PIPELINE_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PIPELINE_ROOT))
 
-from tests.test_site_html import _pages  # noqa: E402
+from tests.test_site_html import _pages
 
 OUT_DIR = PIPELINE_ROOT / "dist" / "_a11y-fixtures"
 

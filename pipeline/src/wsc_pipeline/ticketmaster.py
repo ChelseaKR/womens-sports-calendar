@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from typing import Any
 
 import httpx
 
@@ -36,6 +37,21 @@ MAX_PAGES_PER_QUERY = 5
 class TicketmasterFetchError(RuntimeError):
     """Raised when a Discovery API call fails after retries. A failed fetch
     fails the build -- callers must not swallow this."""
+
+
+def _json_object(response: httpx.Response, keyword: str | None) -> dict[str, Any]:
+    """The 200 response body as a JSON object. A body that is not JSON, or
+    is JSON but not an object, is a failed fetch (TicketmasterFetchError),
+    not a crash with a traceback and not an empty result."""
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise TicketmasterFetchError(f"Discovery API returned a non-JSON 200 body for keyword={keyword!r}") from exc
+    if not isinstance(payload, dict):
+        raise TicketmasterFetchError(
+            f"Discovery API returned a 200 body that is not a JSON object for keyword={keyword!r}"
+        )
+    return payload
 
 
 @dataclass
@@ -73,7 +89,7 @@ class DiscoveryClient:
     def close(self) -> None:
         self._client.close()
 
-    def __enter__(self) -> "DiscoveryClient":
+    def __enter__(self) -> DiscoveryClient:
         return self
 
     def __exit__(self, *exc: object) -> None:
@@ -92,7 +108,7 @@ class DiscoveryClient:
         team_slug: str,
         team_name: str,
         country_codes: tuple[str, ...],
-    ) -> tuple[list[dict], bool]:
+    ) -> tuple[list[dict[str, Any]], bool]:
         """Return (raw Discovery API event dicts, truncated) for one team.
         One query per country in country_codes (the API takes a single
         countryCode per call), each read page by page until the API says
@@ -102,7 +118,7 @@ class DiscoveryClient:
         coverage report instead of publishing the first page as the whole
         schedule.
         """
-        events: list[dict] = []
+        events: list[dict[str, Any]] = []
         truncated = False
         for country in country_codes:
             country_events, country_truncated = self._search_one(team_slug, team_name, country)
@@ -110,7 +126,7 @@ class DiscoveryClient:
             truncated = truncated or country_truncated
         # de-duplicate by event id (a team can appear in more than one
         # country query near a border, or across paginated calls)
-        seen: set[str] = set()
+        seen: set[str | None] = set()
         deduped = []
         for event in events:
             event_id = event.get("id")
@@ -120,8 +136,8 @@ class DiscoveryClient:
             deduped.append(event)
         return deduped, truncated
 
-    def _search_one(self, team_slug: str, team_name: str, country_code: str) -> tuple[list[dict], bool]:
-        events: list[dict] = []
+    def _search_one(self, team_slug: str, team_name: str, country_code: str) -> tuple[list[dict[str, Any]], bool]:
+        events: list[dict[str, Any]] = []
         page_number = 0
         while True:
             params = {
@@ -152,7 +168,7 @@ class DiscoveryClient:
             if page_number >= MAX_PAGES_PER_QUERY:
                 return events, True
 
-    def _get_with_retry(self, params: dict[str, str]) -> dict:
+    def _get_with_retry(self, params: dict[str, str]) -> dict[str, Any]:
         last_error: Exception | None = None
         for attempt in range(1, self._max_retries + 1):
             self._throttle()
@@ -163,20 +179,17 @@ class DiscoveryClient:
                 continue
             self.budget.record(params.get("keyword", "?"), response)
             if response.status_code == 200:
-                return response.json()
+                return _json_object(response, params.get("keyword"))
             if response.status_code == 429:
                 # Respect the API's own backoff signal rather than hammering it.
                 retry_after = float(response.headers.get("Retry-After", "2"))
                 time.sleep(retry_after)
-                last_error = TicketmasterFetchError(
-                    f"429 rate limited on attempt {attempt}"
-                )
+                last_error = TicketmasterFetchError(f"429 rate limited on attempt {attempt}")
                 continue
             last_error = TicketmasterFetchError(
                 f"Discovery API returned {response.status_code} for "
                 f"keyword={params.get('keyword')!r}: {response.text[:300]}"
             )
         raise TicketmasterFetchError(
-            f"failed after {self._max_retries} attempts for "
-            f"keyword={params.get('keyword')!r}: {last_error}"
+            f"failed after {self._max_retries} attempts for keyword={params.get('keyword')!r}: {last_error}"
         )

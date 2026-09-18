@@ -5,18 +5,25 @@ import json
 from wsc_pipeline.config import League, Team
 from wsc_pipeline.normalize import normalize_event
 from wsc_pipeline.site_data import game_to_dict, league_data, site_summary, team_data
+
 from .conftest import make_raw_event
 
 TEAM = Team("indiana-fever", "Indiana Fever")
 LEAGUE = League(
-    slug="wnba", name="WNBA", country_codes=("US",), teams=(TEAM,),
-    schedule_source_used=False, schedule_source_note="not used, see docs",
+    slug="wnba",
+    name="WNBA",
+    country_codes=("US",),
+    teams=(TEAM,),
+    schedule_source_used=False,
+    schedule_source_note="not used, see docs",
 )
 
 
 def _game(event_id, **kwargs):
     raw = make_raw_event(event_id=event_id, **kwargs)
-    return normalize_event(raw, league_slug="wnba", tracked_team_slug="indiana-fever", tracked_team_name="Indiana Fever")
+    return normalize_event(
+        raw, league_slug="wnba", tracked_team_slug="indiana-fever", tracked_team_name="Indiana Fever"
+    )
 
 
 def test_no_price_is_published_even_when_ticketmaster_sent_one():
@@ -44,7 +51,10 @@ def test_buy_is_null_not_guessed_when_there_is_no_link():
 
 def test_team_data_only_includes_that_teams_games():
     other_team_game = normalize_event(
-        make_raw_event(event_id="EVT-OTHER"), league_slug="wnba", tracked_team_slug="new-york-liberty", tracked_team_name="New York Liberty"
+        make_raw_event(event_id="EVT-OTHER"),
+        league_slug="wnba",
+        tracked_team_slug="new-york-liberty",
+        tracked_team_name="New York Liberty",
     )
     this_team_game = _game("EVT-MINE")
     payload = team_data(TEAM, LEAGUE, [other_team_game, this_team_game])
@@ -65,7 +75,9 @@ def test_league_data_carries_schedule_source_note_even_when_games_exist():
 
 def test_site_summary_lists_leagues_not_included():
     summary = site_summary(
-        [LEAGUE], {"wnba": []}, api_key_present=True,
+        [LEAGUE],
+        {"wnba": []},
+        api_key_present=True,
         not_included=[{"name": "NCAA women's sports", "reason": "no unified feed"}],
     )
     assert summary["leagues_examined_not_included"][0]["name"] == "NCAA women's sports"

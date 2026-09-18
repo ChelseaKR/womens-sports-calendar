@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 from . import analytics, config, ics, site, site_data
-from .coverage import BuildCoverage, LeagueCoverage, compute_league_coverage, render_report
+from .coverage import BuildCoverage, compute_league_coverage, render_report
 from .normalize import Game, normalize_event, team_is_participant, unique_by_event_id
 from .ticketmaster import DiscoveryClient, TicketmasterFetchError
 
@@ -131,7 +131,7 @@ def build(
     """
     ga4_id = analytics.measurement_id(ga4_id)
     api_key_present = bool(api_key)
-    if api_key_present:
+    if api_key:
         games, truncated, mismatched, requests_made, bytes_received = fetch_all_games(api_key)  # may raise
     else:
         games, truncated, mismatched, requests_made, bytes_received = [], {}, {}, 0, 0
@@ -302,9 +302,7 @@ def _write_sitemap_and_robots(out_dir: Path, base_url: str) -> None:
     body = "\n".join(f"  <url><loc>{u}</loc></url>" for u in urls)
     sitemap = f'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n{body}\n</urlset>\n'
     (out_dir / "sitemap.xml").write_text(sitemap, encoding="utf-8")
-    (out_dir / "robots.txt").write_text(
-        f"User-agent: *\nAllow: /\nSitemap: {base_url}/sitemap.xml\n", encoding="utf-8"
-    )
+    (out_dir / "robots.txt").write_text(f"User-agent: *\nAllow: /\nSitemap: {base_url}/sitemap.xml\n", encoding="utf-8")
 
 
 def main(argv: list[str] | None = None) -> int:

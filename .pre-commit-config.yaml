@@ -1,0 +1,31 @@
+# Local fast feedback (CODE-QUALITY-STANDARD CQ-12, SECURITY-AND-SUPPLY-CHAIN-
+# STANDARD Gate 1). Install once per clone:
+#   pre-commit install && pre-commit install --hook-type pre-push
+# ruff and mypy run from pipeline/'s locked environment (docs/adr/0001), so a
+# hook can never disagree with `make verify` about the tool version.
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check (pipeline/, locked version)
+        entry: uv run --project pipeline --frozen ruff check --force-exclude
+        language: system
+        types: [python]
+        files: ^pipeline/
+      - id: ruff-format
+        name: ruff format --check (pipeline/, locked version)
+        entry: uv run --project pipeline --frozen ruff format --check --force-exclude
+        language: system
+        types: [python]
+        files: ^pipeline/
+      - id: mypy
+        name: mypy --strict (pipeline/src)
+        entry: make -C pipeline typecheck
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

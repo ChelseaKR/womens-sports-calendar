@@ -176,3 +176,24 @@ def test_throttle_sleeps_between_consecutive_requests(monkeypatch):
     # request must have been throttled by roughly 1.0 - 0.01s.
     assert len(sleeps) == 1
     assert sleeps[0] == pytest.approx(0.99, abs=0.01)
+
+
+@pytest.mark.parametrize(
+    ("body", "reason"),
+    [
+        (b"<html>Service Unavailable</html>", "non-JSON"),
+        (b'[{"id": "EVT1"}]', "not a JSON object"),
+    ],
+)
+def test_a_200_that_is_not_a_json_object_is_a_fetch_error_not_a_crash(body: bytes, reason: str) -> None:
+    """A proxy error page or a malformed body arriving with status 200 used
+    to escape as a bare ValueError/AttributeError traceback. It is a failed
+    fetch: TicketmasterFetchError, which the build turns into a clean
+    'nothing published' exit."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=body, headers={"Content-Type": "application/json"})
+
+    client = _client_with_transport(handler)
+    with pytest.raises(TicketmasterFetchError, match=reason):
+        client.search_team_events("indiana-fever", "Indiana Fever", ("US",))

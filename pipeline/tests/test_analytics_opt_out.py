@@ -121,7 +121,7 @@ def _run(tmp_path: Path, scenarios: list[dict], snippet: str | None = None) -> d
     (tmp_path / "snippet.html").write_text(snippet, encoding="utf-8")
     (tmp_path / "scenarios.json").write_text(json.dumps(scenarios), encoding="utf-8")
     # node plus three files this test just wrote into its own tmp_path.
-    proc = subprocess.run(  # noqa: S603
+    proc = subprocess.run(
         [_node(), str(tmp_path / "harness.js"), str(tmp_path / "snippet.html"), str(tmp_path / "scenarios.json")],
         capture_output=True,
         text=True,

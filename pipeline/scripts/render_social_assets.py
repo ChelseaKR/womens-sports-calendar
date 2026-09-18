@@ -28,6 +28,7 @@ graphical object) AA thresholds.
 from __future__ import annotations
 
 import math
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -64,7 +65,9 @@ def _soccer_ball(cx: float, cy: float, r: float) -> str:
         angle = math.radians(-90 + i * 72)
         pts.append((cx + r * 0.4 * math.cos(angle), cy + r * 0.4 * math.sin(angle)))
     pentagon = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
-    spokes = "".join(f'<path d="M{cx:.1f} {cy:.1f} L{x:.1f} {y:.1f}" stroke="{WHITE}" stroke-width="{r * 0.1}"/>' for x, y in pts)
+    spokes = "".join(
+        f'<path d="M{cx:.1f} {cy:.1f} L{x:.1f} {y:.1f}" stroke="{WHITE}" stroke-width="{r * 0.1}"/>' for x, y in pts
+    )
     return f"""
 <circle cx="{cx}" cy="{cy}" r="{r}" fill="{NAVY}"/>
 {spokes}
@@ -117,7 +120,9 @@ def _calendar_card(*, highlights: list[tuple[int, int, object]]) -> str:
                 cells.append(f'<rect x="{x}" y="{y}" width="{cell}" height="{cell}" rx="10" fill="{GOLD}"/>')
                 cells.append(glyph_fn(x + cell / 2, y + cell / 2, cell * 0.34))
             else:
-                cells.append(f'<rect x="{x}" y="{y}" width="{cell}" height="{cell}" rx="10" fill="{BORDER}" opacity="0.35"/>')
+                cells.append(
+                    f'<rect x="{x}" y="{y}" width="{cell}" height="{cell}" rx="10" fill="{BORDER}" opacity="0.35"/>'
+                )
 
     # LIGHT, not NAVY: these sit above the card, directly on the navy page
     # background, so a navy fill here would be invisible (same colour as
@@ -160,9 +165,7 @@ def _wrap(body: str, *, width: int = 1200, height: int = 630) -> str:
 """
 
 
-def og_image_svg(
-    *, highlights: list[tuple[int, int, object]], title: str, subtitle: str, footer: str
-) -> str:
+def og_image_svg(*, highlights: list[tuple[int, int, object]], title: str, subtitle: str, footer: str) -> str:
     """`title` is always exactly two lines (joined with "\\n") so the
     subtitle's fixed y-offset below it is always correct -- callers below
     only ever pass two-line titles. `subtitle` may be one or two lines;
@@ -196,12 +199,7 @@ def _tspans(text: str, *, x: int, line_height: int) -> str:
 
 
 def _escape(text: str) -> str:
-    return (
-        text.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-    )
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
 
 
 def favicon_svg() -> str:
@@ -257,10 +255,13 @@ def main() -> int:
     for slug in LEAGUE_GLYPHS:
         renders.append((f"og-image-{slug}.svg", f"og-image-{slug}.png", 1200, 630))
 
+    rsvg_convert = shutil.which("rsvg-convert")
+    if rsvg_convert is None:
+        raise SystemExit("rsvg-convert not found on PATH (brew install librsvg / apt install librsvg2-bin)")
     for src, out, w, h in renders:
         src_path, out_path = ASSETS / src, ASSETS / out
         subprocess.run(
-            ["rsvg-convert", "--width", str(w), "--height", str(h), str(src_path), "--output", str(out_path)],
+            [rsvg_convert, "--width", str(w), "--height", str(h), str(src_path), "--output", str(out_path)],
             check=True,
         )
         print(f"rendered {out_path} ({w}x{h})")

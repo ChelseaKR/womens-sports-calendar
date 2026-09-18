@@ -12,8 +12,10 @@ treated as real, or an omitted-but-implied value.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime, date
+from datetime import date, datetime
+from typing import Any
 from zoneinfo import ZoneInfo
 
 _VS_SPLIT = re.compile(r"\s+(?:vs\.?|v\.?|at|@)\s+", re.IGNORECASE)
@@ -50,7 +52,7 @@ class Game:
     raw_event_name: str
 
 
-def parse_teams(event_name: str, attractions: list[dict]) -> tuple[str | None, str | None]:
+def parse_teams(event_name: str, attractions: list[dict[str, Any]]) -> tuple[str | None, str | None]:
     """Best-effort home/away split. Ticketmaster convention (confirmed
     against a real PWHL sample in research) is "Home Team vs. Away Team" in
     the event name; _embedded.attractions, when present with exactly two
@@ -105,7 +107,7 @@ def _without_phrases(text: str, phrases: tuple[str, ...]) -> str:
     return out
 
 
-def team_is_participant(team_name: str, raw_event: dict, not_this_team: tuple[str, ...] = ()) -> bool:
+def team_is_participant(team_name: str, raw_event: dict[str, Any], not_this_team: tuple[str, ...] = ()) -> bool:
     """Validates that a Discovery API keyword-search result actually names
     the searched team as a participant, instead of trusting the keyword
     match blindly.
@@ -141,7 +143,7 @@ def team_is_participant(team_name: str, raw_event: dict, not_this_team: tuple[st
     return any(_phrase_match(team_name, c) for c in candidates)
 
 
-def _parse_price(price_ranges: list[dict] | None) -> PriceRange | None:
+def _parse_price(price_ranges: list[dict[str, Any]] | None) -> PriceRange | None:
     if not price_ranges:
         return None
     # Prefer the "standard" type range; Discovery API's own schema names
@@ -163,7 +165,7 @@ def _parse_price(price_ranges: list[dict] | None) -> PriceRange | None:
 
 
 def normalize_event(
-    raw: dict,
+    raw: dict[str, Any],
     *,
     league_slug: str,
     tracked_team_slug: str,
@@ -212,7 +214,6 @@ def normalize_event(
     attractions = embedded.get("attractions") or []
     home, away = parse_teams(raw.get("name", ""), attractions)
 
-    address = venue.get("address", {})
     city = venue.get("city", {})
     state = venue.get("state", {})
 
@@ -238,7 +239,7 @@ def normalize_event(
     )
 
 
-def unique_by_event_id(games) -> list[Game]:
+def unique_by_event_id(games: Iterable[Game]) -> list[Game]:
     """One Game per Ticketmaster event, first occurrence kept, order kept.
 
     Why this exists: fetch_all_games runs one keyword search per tracked

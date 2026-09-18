@@ -8,15 +8,15 @@ null when there is nowhere to buy. It is never a guessed URL.
 
 from __future__ import annotations
 
-from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import UTC, date, datetime
+from typing import Any
 
 from .config import League, Team
 from .normalize import Game, display_start, unique_by_event_id
 from .sellers import buy_link
 
 
-def game_to_dict(game: Game) -> dict:
+def game_to_dict(game: Game) -> dict[str, Any]:
     return {
         "event_id": game.event_id,
         # Ticketmaster's own event name -- what the page shows when home/away
@@ -52,7 +52,7 @@ def team_data(
     *,
     fetched: bool = True,
     possibly_incomplete: bool = False,
-) -> dict:
+) -> dict[str, Any]:
     """`fetched` is False when this build never queried Ticketmaster (no
     API key): an empty `games` list then means "not checked", never "no
     games", and every consumer must say so. `possibly_incomplete` is True
@@ -77,7 +77,7 @@ def league_data(
     *,
     fetched: bool = True,
     possibly_incomplete_teams: set[str] | frozenset[str] = frozenset(),
-) -> dict:
+) -> dict[str, Any]:
     # Once per event: a game between two tracked teams arrives as one Game
     # per team's search (see normalize.unique_by_event_id).
     league_games = unique_by_event_id(g for g in games if g.league_slug == league.slug)
@@ -94,7 +94,7 @@ def league_data(
     }
 
 
-def _sort_key(game: Game):
+def _sort_key(game: Game) -> tuple[bool, bool, datetime | None, date | None]:
     return (game.date_tbd, game.start_utc is None, game.start_utc, game.start_local_date)
 
 
@@ -105,8 +105,8 @@ def site_summary(
     api_key_present: bool,
     not_included: list[dict[str, str]],
     generated_at: datetime | None = None,
-) -> dict:
-    generated_at = generated_at or datetime.now(timezone.utc)
+) -> dict[str, Any]:
+    generated_at = generated_at or datetime.now(UTC)
     return {
         "generated_at": generated_at.isoformat(),
         "api_key_present": api_key_present,

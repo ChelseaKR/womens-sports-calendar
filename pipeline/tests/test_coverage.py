@@ -3,9 +3,15 @@ from __future__ import annotations
 from wsc_pipeline.config import League, Team
 from wsc_pipeline.coverage import BuildCoverage, LeagueCoverage, compute_league_coverage, render_report
 from wsc_pipeline.normalize import normalize_event
+
 from .conftest import make_raw_event
 
-LEAGUE = League(slug="wnba", name="WNBA", country_codes=("US",), teams=(Team("indiana-fever", "Indiana Fever"), Team("new-york-liberty", "New York Liberty")))
+LEAGUE = League(
+    slug="wnba",
+    name="WNBA",
+    country_codes=("US",),
+    teams=(Team("indiana-fever", "Indiana Fever"), Team("new-york-liberty", "New York Liberty")),
+)
 
 
 def _game(event_id, team_slug, team_name, **kwargs):
@@ -25,7 +31,12 @@ def test_league_coverage_team_hit_rate():
 
 def test_league_coverage_price_coverage():
     games = [
-        _game("EVT1", "indiana-fever", "Indiana Fever", price_ranges=[{"type": "standard", "currency": "USD", "min": 1.0, "max": 2.0}]),
+        _game(
+            "EVT1",
+            "indiana-fever",
+            "Indiana Fever",
+            price_ranges=[{"type": "standard", "currency": "USD", "min": 1.0, "max": 2.0}],
+        ),
         _game("EVT2", "indiana-fever", "Indiana Fever", price_ranges=None),
     ]
     lc = compute_league_coverage(LEAGUE, games, set())
@@ -42,8 +53,13 @@ def test_league_coverage_empty_is_zero_not_error():
 
 def test_render_report_includes_two_numbers_everywhere():
     lc = LeagueCoverage(
-        league_slug="wnba", league_name="WNBA", teams_configured=15, teams_with_games=10,
-        games_total=20, games_with_price=12, games_date_tbd=1,
+        league_slug="wnba",
+        league_name="WNBA",
+        teams_configured=15,
+        teams_with_games=10,
+        games_total=20,
+        games_with_price=12,
+        games_date_tbd=1,
     )
     coverage = BuildCoverage(leagues=[lc], requests_made=15, bytes_received=12345, api_key_present=True)
     report = render_report(coverage)

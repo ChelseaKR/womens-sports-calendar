@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from wsc_pipeline.normalize import display_start, normalize_event, parse_teams, team_is_participant
+
 from .conftest import make_raw_event
 
 
