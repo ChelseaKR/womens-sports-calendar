@@ -1,0 +1,16 @@
+Copyright (c) 2026 Chelsea Kelly-Reif. All rights reserved.
+
+No licence is granted to use, copy, modify or distribute the code,
+documentation or site content in this repository, except as the copyright
+holder agrees in writing.
+
+Third-party material in this repository keeps its own licence:
+
+- The fonts in pipeline/assets/fonts/ are under the SIL Open Font License
+  1.1. See pipeline/assets/fonts/README.md and the licence files beside
+  the fonts.
+- docs/standards/ is a vendored copy of the portfolio standards
+  (ChelseaKR/portfolio-standards), under that repository's licence.
+- Event data from the Ticketmaster Discovery API is used under Ticketmaster's
+  Developer Portal terms of use. It is fetched at build time and is not
+  stored in this repository (docs/data/ticketmaster-discovery-api.md).
