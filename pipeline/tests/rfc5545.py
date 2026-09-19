@@ -34,6 +34,7 @@ CONTENT_LINE = re.compile(
 CONTROL = re.compile(r"[\x00-\x08\x0a-\x1f\x7f]")
 UTC_DATE_TIME = re.compile(r"^\d{8}T\d{6}Z$")
 LOCAL_DATE_TIME = re.compile(r"^\d{8}T\d{6}$")
+DATE_ONLY = re.compile(r"^\d{8}$")
 
 # Properties whose value type is TEXT (RFC 5545 section 3.3.11, RFC 7986 for
 # NAME). The X-WR-CALNAME and X-WR-CALDESC extensions are deliberately not
@@ -217,12 +218,20 @@ def _check_vevent(vevent: Component, defined_zones: set[str]) -> None:
         raise RFC5545Error(f"{label}: DTSTAMP {stamp.value!r} is not a UTC date-time")
     datetime.strptime(stamp.value, "%Y%m%dT%H%M%SZ")
     _check_dtstart(label, start, defined_zones)
+    end = vevent.first("DTEND")
+    if end is not None and (end.param("VALUE"), end.param("TZID")) != (start.param("VALUE"), start.param("TZID")):
+        raise RFC5545Error(f"{label}: DTEND is not the same value type and zone as DTSTART")
     status = vevent.first("STATUS")
     if status is not None and status.value not in VEVENT_STATUS_VALUES:
         raise RFC5545Error(f"{label}: STATUS {status.value!r} is not TENTATIVE, CONFIRMED or CANCELLED")
 
 
 def _check_dtstart(label: str, start: Prop, defined_zones: set[str]) -> None:
+    if start.param("VALUE") == "DATE":
+        if not DATE_ONLY.match(start.value):
+            raise RFC5545Error(f"{label}: DTSTART;VALUE=DATE {start.value!r} is not a date")
+        datetime.strptime(start.value, "%Y%m%d")
+        return
     if UTC_DATE_TIME.match(start.value):
         return
     if not LOCAL_DATE_TIME.match(start.value):

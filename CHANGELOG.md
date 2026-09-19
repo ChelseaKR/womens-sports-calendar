@@ -42,6 +42,16 @@ archived and private.
 
 ### Changed
 
+- Games with a known date and no announced start time (most of the Big Ten
+  women's basketball schedule) now appear in the calendar feeds as all-day
+  events on their date, with "(time TBA)" ending the title, no time shown and
+  no end time. They keep the UID the timed event will have, so each becomes the
+  same event with a start time when Ticketmaster lists one. How Apple, Google
+  and Outlook calendars treat that change from all-day to timed is untested.
+  Games with no date at all stay out of the feeds. The page no longer says
+  these games are missing from the calendar feed, and the coverage report
+  counts all-day and every other excluded game (#18, `docs/DECISIONS.md`
+  0016).
 - Timed events in the calendar feeds now have an end time, estimated from
   the sport's usual game length (basketball 2 h 30 min, soccer 2 h, ice
   hockey 2 h 30 min, softball 2 h), because Ticketmaster publishes only a

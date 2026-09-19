@@ -381,7 +381,35 @@ should carry an estimated end rather than leave it out (issue #20).
   wherever a `DTEND` is written and a `DTEND` wherever the line appears.
 - A sport with no entry in the table gets no `DTEND` at all, never a guessed
   one, and a test fails when a tracked league's sport has no entry.
+- No `DTEND` is written for a game whose start time is not announced (0016).
 - `DTSTAMP` is the build's fetch time, passed into `build_calendar`. There
   is still no `SEQUENCE` or `LAST-MODIFIED`: either would need the previous
   published data to compare against, and a value derived without it would
   change on every build for every event.
+
+## 0016 — Games with a known date and no announced time are all-day calendar events (2026-09-19)
+
+The README used to say games with no exact start were left out of the feeds
+because "RFC 5545 has no clean TBD representation". It has one for a known
+date with no time: a `DTSTART;VALUE=DATE`, which calendar apps draw as an
+all-day event. On the live site most of the Big Ten women's basketball
+schedule is time-TBA, so its feeds carried a handful of events (issue #18).
+The maintainer decided to include these games.
+
+- A game with a real date and no announced time (`time_tba`, or no instant and
+  no local time) is an all-day event on its local date. Its summary ends with
+  " (time TBA)" and its description says the time is not announced. It has no
+  `DTEND` and no "end estimated" line (0015), and no time is shown or implied.
+- Its UID is `tm-<event id>@...` like every event's, so when Ticketmaster
+  lists the time it is the same event with a date-time start and a subscriber's
+  calendar can update it in place. **How Apple, Google and Outlook calendars
+  treat a change from an all-day start to a timed one under the same UID has
+  not been tested.**
+- A `time_tba` game is never published as a timed event, even when
+  Ticketmaster sends a placeholder `dateTime` with it (`normalize.feed_start`).
+- A game with no date at all (`date_tbd`) stays out of the feeds, and the
+  page still says why. A game with a local time but no exact instant also
+  stays out, as before.
+- The page's `in_calendar_feed` and the feed read the same rule, so they
+  agree, and `validate_ics` fails on any game whose feed entry shows a time
+  its page says is not announced.

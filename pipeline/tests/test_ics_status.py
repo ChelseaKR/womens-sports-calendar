@@ -10,6 +10,7 @@ according to a reader that does not use icalendar (tests/rfc5545.py).
 
 from __future__ import annotations
 
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -241,11 +242,15 @@ def test_the_fixture_sites_canceled_game_is_checked_against_its_feed(tmp_path: P
         validate_ics.validate_dist(dist)
 
 
-def test_uids_across_the_fixture_site_are_exactly_the_ones_published_before_this_change(tmp_path: Path):
+def test_uids_across_the_fixture_site_are_the_ones_published_before_this_change_plus_the_time_tba_game(
+    tmp_path: Path,
+):
     """Subscribers' calendars key on these lines. golden/fixture_site_ics_uids.txt
-    was captured from the feeds this pipeline wrote before statuses were
-    carried (one `path<TAB>UID:` line per event per feed); the UID lines a
-    build writes now must match it byte for byte."""
+    was captured from the feeds this pipeline wrote before statuses, build-time
+    stamps, end times or all-day time-TBA entries (one `path<TAB>UID:` line per
+    event per feed). Every one of those lines must still be written, byte for
+    byte; the only lines added are the new all-day entry for the fixture's
+    time-TBA game (FX-TIME-TBA), in the two feeds that carry it."""
     dist = tmp_path / "fixture"
     build_fixture_site(dist)
     lines = []
@@ -253,6 +258,9 @@ def test_uids_across_the_fixture_site_are_exactly_the_ones_published_before_this
         for raw in feed.read_bytes().split(b"\r\n"):
             if raw.startswith(b"UID:"):
                 lines.append(f"{feed.relative_to(dist).as_posix()}\t{raw.decode()}")
-    golden = (Path(__file__).parent / "golden" / "fixture_site_ics_uids.txt").read_text(encoding="utf-8")
-    assert "\n".join(lines) + "\n" == golden
-    assert len(lines) == 17  # a build that wrote no events would compare equal to nothing
+    golden = (Path(__file__).parent / "golden" / "fixture_site_ics_uids.txt").read_text(encoding="utf-8").splitlines()
+    assert len(golden) == 17  # a capture of nothing would be a vacuous pin
+    assert not (Counter(golden) - Counter(lines)), "a UID line published before this change is gone or changed"
+    added = sorted((Counter(lines) - Counter(golden)).elements())
+    uid = "UID:tm-FX-TIME-TBA@womens-sports-calendar.invalid"
+    assert added == [f"ics/wnba.ics\t{uid}", f"ics/wnba/las-vegas-aces.ics\t{uid}"]

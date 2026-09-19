@@ -169,9 +169,10 @@ def test_home_and_away_are_labelled_only_when_known(fixture_dist: Path):
 
 def test_dates_are_machine_marked_only_as_far_as_known(fixture_dist: Path):
     html = (fixture_dist / "wnba/las-vegas-aces/index.html").read_text()
-    assert (
-        '<time datetime="2026-09-24">Thu, Sep 24, 2026 (time TBA)</time></span> (not yet in the calendar feed)' in html
-    )
+    # Time TBA: the date is marked, and the game is in the feed (all-day), so
+    # the row no longer says it is missing from it.
+    assert '<time datetime="2026-09-24">Thu, Sep 24, 2026 (time TBA)</time></span>' in html
+    assert "(time TBA)</time></span> (not yet in the calendar feed)" not in html
     assert '<span class="game-date">Date TBD</span> (date TBD &mdash; not yet in the calendar feed)' in html
     assert '<time datetime="2026-10-01">' not in html  # the TBD game's placeholder date is never marked
 

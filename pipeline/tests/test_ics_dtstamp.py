@@ -170,7 +170,7 @@ def test_the_fixture_site_has_no_dtstamp_after_its_fetch_time(tmp_path: Path):
             stamp = datetime.strptime(vevent.first("DTSTAMP").value, "%Y%m%dT%H%M%SZ").replace(tzinfo=UTC)
             assert stamp == fetched, f"{feed}: {stamp} is not the build's fetch time"
             seen += 1
-    assert seen == 17  # the check looked at every event the fixture writes
+    assert seen == 19  # every event the fixture writes: 17 timed, 2 all-day (FX-TIME-TBA)
 
 
 def _sabotage_first_dtstamp(dist: Path, fetched: datetime, replacement: bytes) -> None:
