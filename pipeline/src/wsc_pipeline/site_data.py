@@ -29,7 +29,7 @@ NOTABLE_STATUSES = {
 
 def game_to_dict(game: Game) -> dict[str, Any]:
     start = local_start(game)
-    return {
+    data = {
         "event_id": game.event_id,
         # Ticketmaster's own event name -- what the page shows when home/away
         # could not be split out of it, instead of "TBD vs TBD".
@@ -71,6 +71,16 @@ def game_to_dict(game: Game) -> dict[str, Any]:
         # seller where known, else the event URL (see sellers.py).
         "buy": buy_link(game),
     }
+    # Additive keys, present only when the event name carried them, so every
+    # game without one is published byte for byte as before. Neither is part
+    # of a team name: the title is what sat in front of the first team ("McBride
+    # Homes Braggin' Rights"), the game type what followed the matchup
+    # ("Exhibition", "Game 2").
+    if game.event_title:
+        data["event_title"] = game.event_title
+    if game.game_type:
+        data["game_type"] = game.game_type
+    return data
 
 
 def team_data(

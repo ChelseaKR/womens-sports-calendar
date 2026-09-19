@@ -25,6 +25,19 @@ _AWAY_FIRST_SEPARATORS = frozenset({"at", "@"})
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
 _MIN_MATCH_LEN = 4
 
+# What Ticketmaster appends to the second side of a matchup name that is not
+# part of the team's name. Recognized by an allowlist, not by shape: a team
+# name can end in a parenthetical of its own ("Utah Royals (W)"), and a wrong
+# label would be worse than a label left where it was. A parenthetical that is
+# not one of these stays in the name, exactly as before.
+_GAME_LABEL = r"(?:exhibition|pre-?season|scrimmage|postseason|regular season|if necessary|(?:game|match|round)\s+\d+)"
+_TRAILING_PAREN_LABEL = re.compile(rf"\s*\(\s*({_GAME_LABEL}(?:\s*,\s*{_GAME_LABEL})*)\s*\)\s*$", re.IGNORECASE)
+_TRAILING_SERIES_LABEL = re.compile(r"\s+[-\u2013\u2014]\s+((?:game|match|round)\s+\d+)\s*$", re.IGNORECASE)
+# A title sponsor or event name in front of the first team: "McBride Homes
+# Braggin' Rights: Illinois Fighting Illini Womens Basketball". A team name
+# never contains ": ".
+_TITLE_SEPARATOR = ": "
+
 
 @dataclass(frozen=True)
 class PriceRange:
@@ -59,6 +72,12 @@ class Game:
     # at home is not known: nothing may then call either one the home team
     # (structured_data.py, site_data.py's home-game flag).
     home_away_known: bool = False
+    # The event's own title when the name had one in front of the first team
+    # ("McBride Homes Braggin' Rights"), and the game type Ticketmaster
+    # appended after the matchup ("Exhibition", "Game 2"). Both are kept out
+    # of the team names and are None when the name had neither.
+    event_title: str | None = None
+    game_type: str | None = None
     # Ticketmaster's venue street address, postcode and country code, used
     # only as the structured-data address. None when Ticketmaster sent none.
     venue_street: str | None = None
@@ -69,26 +88,86 @@ class Game:
     status_code: str | None = None
 
 
-def parse_matchup(event_name: str, attractions: list[dict[str, Any]]) -> tuple[str | None, str | None, bool]:
-    """(home, away, home_away_known). Ticketmaster's convention (confirmed
-    against a real PWHL sample in research, and by every WNBA listing on
-    the live site: "Seattle Storm vs Las Vegas Aces" is played in Seattle)
-    is "Home Team vs. Away Team" in the event name. "Away at Home" and
-    "Away @ Home" name the visitor first. When the name has no separator,
-    exactly two _embedded.attractions give the pair, in an order that says
-    nothing about who is at home, so home_away_known is False."""
+@dataclass(frozen=True)
+class Matchup:
+    """What an event name says about who is playing (parse_event_name)."""
+
+    home: str | None
+    away: str | None
+    home_away_known: bool
+    event_title: str | None = None
+    game_type: str | None = None
+
+
+def _split_game_type(side: str) -> tuple[str, str | None]:
+    """(team, label) with a trailing game type taken off the second side of a
+    matchup: "Seattle Storm - Game 2 (If Necessary)" is ("Seattle Storm",
+    "Game 2 (If Necessary)"). Only the allowlisted labels (_GAME_LABEL) come
+    off; anything else stays part of the name."""
+    paren = _TRAILING_PAREN_LABEL.search(side)
+    if paren:
+        side = side[: paren.start()]
+    series = _TRAILING_SERIES_LABEL.search(side)
+    if series:
+        side = side[: series.start()]
+    parts = [m.group(1).strip() for m in (series,) if m]
+    if paren:
+        parts.append(f"({paren.group(1).strip()})" if series else paren.group(1).strip())
+    return side.strip(), " ".join(parts) or None
+
+
+def _split_title(side: str) -> tuple[str, str | None]:
+    """(team, title) with a leading "<title>: " taken off the first side."""
+    title, separator, team = side.rpartition(_TITLE_SEPARATOR)
+    if separator and title.strip() and team.strip():
+        return team.strip(), title.strip()
+    return side.strip(), None
+
+
+def parse_event_name(event_name: str, attractions: list[dict[str, Any]], venue_name: str | None = None) -> Matchup:
+    """Who is playing, from an event name and its attractions.
+
+    Ticketmaster's convention (confirmed against a real PWHL sample in
+    research, and by every WNBA listing on the live site: "Seattle Storm vs
+    Las Vegas Aces" is played in Seattle) is "Home Team vs. Away Team" in the
+    event name. "Away at Home" and "Away @ Home" name the visitor first. When
+    the name has no separator, exactly two _embedded.attractions give the
+    pair, in an order that says nothing about who is at home, so
+    home_away_known is False.
+
+    Text around the teams is not part of a team's name and is returned
+    beside them, never inside them:
+    - a leading "<title>: " on the first side (a title sponsor) is the
+      event_title;
+    - a trailing allowlisted label on the second side ("(Exhibition)",
+      "- Game 2") is the game_type;
+    - when the text after "at" or "@" is the event's own venue ("Big Ten
+      Tournament at Target Center"), the name lists no home team, so home and
+      away are not taken from it: the venue is never named as the home team.
+    """
     match = _VS_SPLIT.search(event_name)
     if match:
-        first, second = event_name[: match.start()].strip() or None, event_name[match.end() :].strip() or None
-        if first and second:
-            if match.group(1).lower() in _AWAY_FIRST_SEPARATORS:
-                return second, first, True
-            return first, second, True
+        first, title = _split_title(event_name[: match.start()])
+        second, game_type = _split_game_type(event_name[match.end() :])
+        away_first = match.group(1).lower() in _AWAY_FIRST_SEPARATORS
+        names_the_venue = bool(away_first and venue_name and _phrase_match(second, venue_name))
+        if first and second and not names_the_venue:
+            home, away = (second, first) if away_first else (first, second)
+            return Matchup(home, away, True, event_title=title, game_type=game_type)
     if len(attractions) == 2:
         names = [a.get("name") for a in attractions if a.get("name")]
         if len(names) == 2:
-            return names[0], names[1], False
-    return None, None, False
+            return Matchup(names[0], names[1], False)
+    return Matchup(None, None, False)
+
+
+def parse_matchup(
+    event_name: str, attractions: list[dict[str, Any]], venue_name: str | None = None
+) -> tuple[str | None, str | None, bool]:
+    """(home, away, home_away_known); see parse_event_name. Pass the event's
+    venue name so an "<event> at <venue>" name is not read as a matchup."""
+    matchup = parse_event_name(event_name, attractions, venue_name)
+    return matchup.home, matchup.away, matchup.home_away_known
 
 
 def parse_teams(event_name: str, attractions: list[dict[str, Any]]) -> tuple[str | None, str | None]:
@@ -250,7 +329,7 @@ def normalize_event(
         return None
 
     attractions = embedded.get("attractions") or []
-    home, away, home_away_known = parse_matchup(raw.get("name", ""), attractions)
+    matchup = parse_event_name(raw.get("name", ""), attractions, venue.get("name"))
 
     city = venue.get("city") or {}
     state = venue.get("state") or {}
@@ -263,8 +342,8 @@ def normalize_event(
         league_slug=league_slug,
         tracked_team_slug=tracked_team_slug,
         tracked_team_name=tracked_team_name,
-        home_team=home,
-        away_team=away,
+        home_team=matchup.home,
+        away_team=matchup.away,
         venue_name=venue.get("name"),
         venue_city=city.get("name"),
         venue_state=(state.get("stateCode") or state.get("name")),
@@ -277,7 +356,9 @@ def normalize_event(
         price=_parse_price(raw.get("priceRanges")),
         ticket_url=safe_ticket_url(raw.get("url")),
         raw_event_name=raw.get("name", ""),
-        home_away_known=home_away_known,
+        home_away_known=matchup.home_away_known,
+        event_title=matchup.event_title,
+        game_type=matchup.game_type,
         venue_street=_text(address.get("line1")),
         venue_postal_code=_text(venue.get("postalCode")),
         venue_country=_text(country.get("countryCode")),

@@ -315,6 +315,25 @@ def _matchup_text(game: Mapping[str, Any]) -> str:
     return game.get("event_name") or "Event name not published by Ticketmaster"
 
 
+def _hero_game_type(game: Mapping[str, Any]) -> str:
+    """The game type as plain text after the matchup in the next-game
+    hero ("Exhibition" is worth knowing before buying); empty when none."""
+    return f" ({game['game_type']})" if game.get("game_type") else ""
+
+
+def _game_labels_html(game: Mapping[str, Any]) -> str:
+    """What the event name said around the matchup, beside it and never
+    inside a team's name: the game type ("Exhibition") as a small label, and
+    the event's own title (a title sponsor's "Braggin' Rights") on a line
+    under it. Empty for a game whose name had neither."""
+    html = ""
+    if game.get("game_type"):
+        html += f' <span class="home-away game-type">{e(game["game_type"])}</span>'
+    if game.get("event_title"):
+        html += f'<br><span class="event-title">{e(game["event_title"])}</span>'
+    return html
+
+
 def _month_day(iso_date: str | None) -> tuple[str, str] | None:
     """('JUN', '15') from a "start_local_date" ISO string -- parses the
     real date.date, never the human "start_display" string, so a tzid or
@@ -427,7 +446,7 @@ your calendar automatically &mdash; nothing to check back for.</p>
 <h2 id="next-game-heading" class="next-game-label">{label}</h2>
 {note}{date_chip}
 <div class="next-game-details">
-<p class="next-game-matchup">{e(matchup)}</p>
+<p class="next-game-matchup">{e(matchup)}{e(_hero_game_type(g))}</p>
 <p class="next-game-when">{when}</p>
 <p class="next-game-venue">{e(_venue_text(g))}</p>
 {cta}
@@ -452,7 +471,7 @@ def _games_table(
         rows.append(
             "<tr>"
             f'<td><span class="game-date">{_when_html(g)}</span>{date_note}</td>'
-            f"<td>{e(matchup)}{tag}</td>"
+            f"<td>{e(matchup)}{tag}{_game_labels_html(g)}</td>"
             f"<td>{e(_venue_text(g))}</td>"
             f"<td>{buy}</td>"
             "</tr>"

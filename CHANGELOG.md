@@ -12,6 +12,13 @@ archived and private.
 
 ### Added
 
+- A team's URL slug, display name and search names are now separate
+  settings (#24). A team that sets none of them publishes exactly what it
+  always did (a build of the fixture site before and after is byte-identical,
+  and a test pins every published slug and feed UID). A rename can keep the
+  slug, show a new display name, and keep searching for the old name; a team
+  whose URL must change serves the same feed at its former path and a notice
+  page that points to the new one. See `docs/DECISIONS.md` 0015.
 - Subscribable `.ics` calendar feeds per league and per team, and a static
   site with one page per league and team, built nightly from the
   Ticketmaster Discovery API (#1).
@@ -39,14 +46,6 @@ archived and private.
   Privacy Control or Do Not Track, ad features are off, and there's a
   `/privacy/` page (#15). A remembered "Opt out of analytics" control sits
   in every footer (#20). The calendar feeds are never tracked.
-
-- A team's URL slug, display name and search names are now separate
-  settings (#24). A team that sets none of them publishes exactly what it
-  always did (a build of the fixture site before and after is byte-identical,
-  and a test pins every published slug and feed UID). A rename can keep the
-  slug, show a new display name, and keep searching for the old name; a team
-  whose URL must change serves the same feed at its former path and a notice
-  page that points to the new one. See `docs/DECISIONS.md` 0015.
 
 ### Changed
 
@@ -79,3 +78,12 @@ archived and private.
 - Live-site defects: duplicate rows, wrong-team games, references to the
   private repository, the repository slug in page titles, and unfetched
   schedules shown as "no games" (#12).
+- A title sponsor in front of a matchup ("McBride Homes Braggin' Rights:
+  Illinois ... vs Missouri ...") and a game type after it ("... (Exhibition)",
+  "- Game 2") are no longer welded onto a team name, and an "<event> at
+  <venue>" name no longer names the venue as the home team (#23). The sponsor
+  is published as an additive `event_title` and the game type as `game_type`
+  (only on games that have one) and shown beside the matchup on the team
+  page. Measured on the live listings of 2026-09-19: 8 of 142 games change
+  (6 NWSL, 2 NCAA); a team's slug, feed path and every UID are unchanged, and
+  a calendar event's summary still carries the full Ticketmaster name.
