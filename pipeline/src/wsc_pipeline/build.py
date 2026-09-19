@@ -436,6 +436,17 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     print(render_report(coverage))
+    fallback_count = sum(len(lc.zone_fallbacks) for lc in coverage.leagues)
+    if fallback_count:
+        # Also on stderr (and as a workflow annotation in Actions), so a bad
+        # venue time zone is noticed in the run log, not only in COVERAGE.txt.
+        message = (
+            f"{fallback_count} game(s) were written to the calendars with a UTC start because their venue "
+            "time zone is missing or unrecognized; see COVERAGE.txt for which"
+        )
+        print(f"WARNING: {message}", file=sys.stderr)
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            print(f"::warning title=Unknown venue time zone::{message}", file=sys.stderr)
     return 0
 
 

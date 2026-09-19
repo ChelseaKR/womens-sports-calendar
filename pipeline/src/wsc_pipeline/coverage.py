@@ -11,7 +11,20 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .config import League
-from .normalize import Game, unique_by_event_id
+from .normalize import Game, unique_by_event_id, zone_problem
+
+# How many games a report line names before it counts the rest.
+MAX_NAMED_GAMES = 20
+
+
+@dataclass(frozen=True)
+class ZoneFallback:
+    """A game written to the calendar with a UTC start because its venue
+    time zone is missing or unrecognized."""
+
+    event_id: str
+    event_name: str
+    reason: str
 
 
 @dataclass
@@ -25,6 +38,7 @@ class LeagueCoverage:
     games_date_tbd: int
     teams_truncated: list[str] = field(default_factory=list)
     teams_with_mismatched_events: list[str] = field(default_factory=list)
+    zone_fallbacks: list[ZoneFallback] = field(default_factory=list)
 
     @property
     def team_hit_rate(self) -> float:
@@ -83,7 +97,22 @@ def compute_league_coverage(
         games_date_tbd=sum(1 for g in unique_games if g.date_tbd),
         teams_truncated=sorted(truncated_team_slugs),
         teams_with_mismatched_events=sorted(mismatched_team_slugs or set()),
+        zone_fallbacks=zone_fallbacks(unique_games),
     )
+
+
+def zone_fallbacks(games: list[Game]) -> list[ZoneFallback]:
+    """The games in the calendar feed whose venue time zone could not be
+    used, so they are written with a UTC start (ics.py). Only games that are
+    in the feed: a date-TBD game has no start to express in any zone."""
+    out = []
+    for g in sorted(games, key=lambda g: g.event_id):
+        if g.date_tbd or g.start_utc is None:
+            continue
+        reason = zone_problem(g.tzid)
+        if reason:
+            out.append(ZoneFallback(event_id=g.event_id, event_name=g.raw_event_name, reason=reason))
+    return out
 
 
 def render_report(coverage: BuildCoverage) -> str:
@@ -134,6 +163,14 @@ def render_report(coverage: BuildCoverage) -> str:
                 f"that did not actually name the team (a false-positive "
                 f"match, e.g. wrong sport/wrong team at the same venue or "
                 f"city) for: {', '.join(lc.teams_with_mismatched_events)}"
+            )
+        if lc.zone_fallbacks:
+            named = "; ".join(f"{z.event_id} ({z.event_name}): {z.reason}" for z in lc.zone_fallbacks[:MAX_NAMED_GAMES])
+            more = len(lc.zone_fallbacks) - MAX_NAMED_GAMES
+            lines.append(
+                f"  WARNING: {len(lc.zone_fallbacks)} game(s) are in the calendar with a UTC start because the "
+                f"venue time zone is unknown (the instant is Ticketmaster's; the venue's own zone is never "
+                f"guessed): {named}" + (f"; and {more} more" if more > 0 else "")
             )
         lines.append("")
 
