@@ -38,6 +38,19 @@ used (requests, bytes).
   `TicketmasterFetchError` is the "a failed fetch fails the build"
   contract — `build.py` lets it propagate rather than swallowing it into a
   silently-thinned result.
+- `guard.py` — the publish guard (`../docs/adr/0006-publish-guard-for-vanished-games.md`).
+  Reads the live site's `data/<league>/<team>.json` back and compares each
+  league and team with what this build just fetched. A game has *vanished*
+  when the last publish listed it, it starts more than 24 hours after this
+  build, it was not marked cancelled or postponed, and it is gone now; a
+  season that ended vanishes nothing. A league that would publish an empty
+  calendar over a non-empty one, a league losing more than half of at least
+  three upcoming games, or a team losing all of at least three, makes the
+  build raise `PublishRefused` before anything is written, so the last good
+  deploy stays live. Every build lists what vanished in `COVERAGE.txt`. The
+  thresholds and the dated per-league override are in `config.py`
+  (`PUBLISH_GUARD`, `PUBLISH_GUARD_OVERRIDES`). An unreadable previous
+  publish never blocks but is reported.
 - `normalize.py` — turns a raw Discovery API event into a `Game`. Parses
   home/away teams from the event name ("Home vs Away", or "Away at Home"),
   falling back to `_embedded.attractions` for the pair only — then
@@ -131,7 +144,11 @@ used (requests, bytes).
   success, so a failed fetch never leaves a partial/broken build where a
   good one used to be — the "a stale build is never published as current"
   rule, enforced locally as well as by the GitHub Actions job stopping
-  before the deploy step on any failure. Also copies the favicon and
+  before the deploy step on any failure. What a build refuses to publish:
+  a fetch that fails, a fetch that finds no games for any team, and (the
+  publish guard) a build that would take a league's or team's upcoming
+  games away. What it does not: a smaller drop, a changed game, or a
+  slow decline over many nights; those are listed in `COVERAGE.txt` at most. Also copies the favicon and
   social-card assets from `assets/` into `--out` (raising if one is
   missing, rather than shipping a page whose `og:image` 404s).
 - `assets/` — the favicon and Open Graph / Twitter card images: hand-

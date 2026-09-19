@@ -42,6 +42,7 @@ listing in a 16-club spot-check -- see LEAGUES_EXAMINED_NOT_INCLUDED below.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 
 
 @dataclass(frozen=True)
@@ -342,6 +343,79 @@ LEAGUES_EXAMINED_NOT_INCLUDED: tuple[dict[str, str], ...] = (
         ),
     },
 )
+
+
+@dataclass(frozen=True)
+class PublishGuard:
+    """Thresholds for the vanished-games check (guard.py, docs/adr/0006).
+
+    The check compares each build with what the live site published last.
+    A game "vanishes" when the previous publish listed it, it was to start
+    more than `settle_hours` after this build, and this build no longer
+    lists it (and the previous publish had not marked it cancelled or
+    postponed). Games that simply started and left the listing since last
+    night are not counted, so a season that ends, or a league that is out
+    of season, vanishes nothing.
+
+    A build is REFUSED (nothing is written, the last good deploy stays
+    live) when, for any league that has no active override below:
+
+    - the league's calendar would be empty although the previous publish
+      had at least one upcoming game (no minimum: an empty feed is never
+      published over a non-empty one), or
+    - the league had at least `min_previous_upcoming` upcoming games and
+      more than `max_league_vanished_share` of them vanished, or
+    - a team had at least `min_previous_upcoming` upcoming games and every
+      one of them vanished.
+
+    Smaller drops are listed in COVERAGE.txt but never block.
+
+    These numbers were chosen, not measured: there is no history of
+    night-to-night listing churn to measure them against (the site is
+    stateless; the only record is the live site). They are deliberately
+    slow to fire: one broken team keyword loses a team's whole schedule
+    (the team rule), and a broken league query loses most of a league's
+    (the share rule); losing a game or two is ordinary listing churn.
+    """
+
+    settle_hours: int = 24
+    min_previous_upcoming: int = 3
+    max_league_vanished_share: float = 0.5
+
+
+PUBLISH_GUARD = PublishGuard()
+
+
+@dataclass(frozen=True)
+class GuardOverride:
+    """A deliberate, dated acceptance that a league's upcoming games shrink.
+
+    While it is active (today, in UTC, is on or before `until`), the
+    publish guard still measures and prints that league's vanished games,
+    but does not refuse the build for it. It stops applying by itself on
+    `until`, so an off-season or a real removal cannot leave the league
+    unguarded forever; the build says so once it has expired.
+
+    `reason` is printed in every build that uses the override.
+    """
+
+    league_slug: str
+    reason: str
+    until: date
+
+
+# Empty on purpose. Add an entry only for a shrink you have checked is real
+# (Ticketmaster withdrew the listings, the league canceled the games), e.g.:
+#
+#   GuardOverride(
+#       league_slug="pwhl",
+#       reason="PWHL has withdrawn its remaining 2026 listings; checked 2026-10-02.",
+#       until=date(2026, 10, 16),
+#   )
+#
+# then re-run the pages workflow. Remove the entry once the league has games
+# again; it stops applying on its own after `until` either way.
+PUBLISH_GUARD_OVERRIDES: tuple[GuardOverride, ...] = ()
 
 
 def all_teams() -> list[tuple[League, Team]]:
