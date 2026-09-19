@@ -52,6 +52,14 @@ archived and private.
 
 ### Fixed
 
+- A canceled game was written to the calendar feeds as an ordinary
+  confirmed event, so subscribers' calendars kept showing it. It now has
+  `STATUS:CANCELLED` and "Canceled: " before its title; a postponed game has
+  `STATUS:TENTATIVE` and "Postponed: " before its title; a rescheduled game
+  says so in its description. Event UIDs and feed URLs are unchanged, so
+  calendars update the events they already hold. `make validate-ics` fails
+  when a feed lacks the status its page shows, including for the fixture
+  site's canceled game (#19).
 - The sitemap check in `make validate-seo` parses `sitemap.xml` with
   `defusedxml` and refuses a DTD or an entity, instead of the standard
   library parser Semgrep flags. `sitemap.py` escapes with `html.escape`,

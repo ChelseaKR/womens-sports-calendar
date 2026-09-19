@@ -17,11 +17,13 @@ purpose; it is an opaque id, not a link.
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from icalendar import Calendar, Event, Timezone, vText
 
 from .normalize import Game, unique_by_event_id, zone_for
+from .site_data import NOTABLE_STATUSES
 
 UID_DOMAIN = "womens-sports-calendar.invalid"
 # PRODID only names the producing software; clients do not key on it, so it
@@ -34,6 +36,59 @@ SITE_NAME = "Next Home Game"
 # daily (RFC 7986 REFRESH-INTERVAL, and X-PUBLISHED-TTL for Outlook). Apps
 # may poll less often; none is asked to poll more often than the data moves.
 REFRESH_INTERVAL = timedelta(days=1)
+
+
+@dataclass(frozen=True)
+class FeedStatus:
+    """What a subscriber's calendar is told about a game Ticketmaster does
+    not list as simply going ahead: the machine-readable RFC 5545 STATUS
+    (None leaves the property off, so the event stays an ordinary one), a
+    visible prefix on SUMMARY for the apps that hide or ignore STATUS, and
+    the first line of DESCRIPTION. Visible text is American English; the
+    page's own status word ("Cancelled", site_data.NOTABLE_STATUSES) is a
+    published value and is not touched."""
+
+    ics_status: str | None
+    summary_prefix: str
+    note: str
+
+
+# Keyed by the page's status word (game_to_dict's `status`), so the feed and
+# the page read one rule for which games have a status. validate_ics holds
+# every feed to this table against its page's data. "Rescheduled" keeps the
+# event confirmed at the time Ticketmaster lists and only says so in the
+# description; it does not claim which date the listing carries.
+FEED_STATUS = {
+    "Cancelled": FeedStatus(
+        ics_status="CANCELLED",
+        summary_prefix="Canceled: ",
+        note="Canceled: Ticketmaster lists this game as canceled.",
+    ),
+    "Postponed": FeedStatus(
+        ics_status="TENTATIVE",
+        summary_prefix="Postponed: ",
+        note=(
+            "Postponed: Ticketmaster lists this game as postponed. The date and time shown may be the "
+            "original ones; check the Ticketmaster listing for a new date."
+        ),
+    ),
+    "Rescheduled": FeedStatus(
+        ics_status=None,
+        summary_prefix="",
+        note=(
+            "Rescheduled: Ticketmaster lists this game as rescheduled. Check the Ticketmaster listing "
+            "for the current date and time."
+        ),
+    ),
+}
+
+
+def feed_status(game: Game) -> FeedStatus | None:
+    """The game's feed status, or None for a game with nothing notable
+    (Ticketmaster's onsale, offsale or no status say nothing about whether
+    the game is on)."""
+    word = NOTABLE_STATUSES.get(game.status_code or "")
+    return FEED_STATUS[word] if word else None
 
 
 class DuplicateUIDError(ValueError):
@@ -89,6 +144,11 @@ def build_calendar(
     games are still visible on the site (see site_data.py), just not in
     the .ics. This is documented, not silent.
 
+    A game Ticketmaster lists as cancelled, postponed or rescheduled stays
+    in the feed and carries that status (FEED_STATUS): a feed that dropped it
+    would leave the subscriber's calendar showing a game that is off, and a
+    feed that kept it unmarked would be worse.
+
     page_url, when given, is the calendar's page on the site: the
     calendar's URL property, and the last line of every event's
     description. Nothing about it reaches a UID, so adding or changing it
@@ -143,11 +203,17 @@ def _event(game: Game, start_utc: datetime, *, page_url: str | None) -> Event:
     dtstart = start_utc.astimezone(zone) if zone else start_utc
     event.add("dtstart", dtstart)
     summary = game.raw_event_name or f"{game.home_team or '?'} vs {game.away_team or '?'}"
+    status = feed_status(game)
+    if status:
+        summary = status.summary_prefix + summary
+        if status.ics_status:
+            event.add("status", status.ics_status)
     event.add("summary", vText(summary))
     location_parts = [p for p in (game.venue_name, game.venue_city, game.venue_state) if p]
     if location_parts:
         event.add("location", vText(", ".join(location_parts)))
-    description_lines = [f"League: {game.league_slug.upper()}"]
+    description_lines = [status.note] if status else []
+    description_lines.append(f"League: {game.league_slug.upper()}")
     if game.price:
         description_lines.append(
             f"Tickets: {game.price.currency} {game.price.min:.2f}-{game.price.max:.2f} (Ticketmaster)"

@@ -20,6 +20,11 @@ publish a broken or inconsistent feed:
    games in the matching data/*.json with in_calendar_feed true. A feed
    that silently drops a game the page lists -- or carries one the page
    does not -- fails here.
+5. A game the page marks Cancelled, Postponed or Rescheduled carries the
+   matching STATUS, SUMMARY marker and DESCRIPTION note in its feed entry
+   (ics.FEED_STATUS), and a game the page marks with nothing carries no
+   STATUS: a canceled game must never be an ordinary confirmed event in a
+   subscriber's calendar.
 
 Usage: python -m wsc_pipeline.validate_ics <dist-dir>
 """
@@ -29,11 +34,12 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
-from icalendar import Calendar
+from icalendar import Calendar, Component
 
 from . import config
-from .ics import make_uid
+from .ics import FEED_STATUS, make_uid
 
 REQUIRED_VEVENT_PROPS = ("uid", "dtstamp", "dtstart", "summary")
 
@@ -85,44 +91,85 @@ def _check_links_back(feed: Path, cal: Calendar, page_path: str) -> None:
         raise FeedError(f"{feed}: X-WR-CALDESC does not link to {url}")
 
 
-def _event_uids(feed: Path, cal: Calendar) -> list[str]:
-    """Every VEVENT's UID, in order; raises FeedError on a VEVENT missing a
-    required property or on any repeated UID."""
+def _events(feed: Path, cal: Calendar) -> dict[str, Component]:
+    """Every VEVENT by UID; raises FeedError on a VEVENT missing a required
+    property or on any repeated UID."""
     uids: list[str] = []
+    events: dict[str, Component] = {}
     for vevent in cal.walk("VEVENT"):
         for prop in REQUIRED_VEVENT_PROPS:
             if vevent.get(prop) is None:
                 raise FeedError(f"{feed}: a VEVENT is missing {prop.upper()}")
-        uids.append(str(vevent.get("uid")))
+        uid = str(vevent.get("uid"))
+        uids.append(uid)
+        events[uid] = vevent
     if len(uids) != len(set(uids)):
         dupes = sorted({u for u in uids if uids.count(u) > 1})
         raise FeedError(f"{feed}: duplicate UIDs {dupes[:5]}")
-    return uids
+    return events
 
 
-def _check_matches_page(feed: Path, data: Path, uids: list[str]) -> None:
-    """The feed's UIDs equal the UIDs of the games its page lists as in the
-    calendar feed; raises FeedError otherwise."""
+def _page_games(feed: Path, data: Path) -> list[dict[str, Any]]:
+    """The games of the data JSON the feed's page renders from."""
     if not data.is_file():
         raise FeedError(f"{data}: missing -- cannot check {feed} against its page's data")
-    games = json.loads(data.read_text(encoding="utf-8"))["games"]
+    games: list[dict[str, Any]] = json.loads(data.read_text(encoding="utf-8"))["games"]
+    return games
+
+
+def _check_matches_page(feed: Path, games: list[dict[str, Any]], uids: set[str]) -> None:
+    """The feed's UIDs equal the UIDs of the games its page lists as in the
+    calendar feed; raises FeedError otherwise."""
     expected = {make_uid(g["event_id"]) for g in games if g["in_calendar_feed"]}
-    actual = set(uids)
-    if actual != expected:
+    if uids != expected:
         raise FeedError(
             f"{feed}: feed and page disagree -- in the page's data but not the feed: "
-            f"{sorted(expected - actual)[:5]}; in the feed but not the page's data: "
-            f"{sorted(actual - expected)[:5]}"
+            f"{sorted(expected - uids)[:5]}; in the feed but not the page's data: "
+            f"{sorted(uids - expected)[:5]}"
         )
+
+
+def _check_status_matches_page(feed: Path, games: list[dict[str, Any]], events: dict[str, Component]) -> None:
+    """A game the page marks Cancelled, Postponed or Rescheduled carries that
+    status in its feed entry, and a game with no page status carries no
+    STATUS; raises FeedError otherwise. Only games in the feed are checked
+    here (_check_matches_page owns which games those are)."""
+    for game in games:
+        if not game["in_calendar_feed"]:
+            continue
+        uid = make_uid(game["event_id"])
+        vevent = events[uid]
+        word = game.get("status")
+        expected = None
+        if word:
+            expected = FEED_STATUS.get(word)
+            if expected is None:
+                raise FeedError(f"{feed}: {uid} has page status {word!r}, which the feed has no rule for")
+        raw_status = vevent.get("status")
+        actual_status = str(raw_status) if raw_status is not None else None
+        expected_status = expected.ics_status if expected else None
+        if actual_status != expected_status:
+            raise FeedError(
+                f"{feed}: {uid} is {word or 'unmarked'} on its page but its STATUS is {actual_status!r} "
+                f"in the feed (expected {expected_status!r})"
+            )
+        if expected is None:
+            continue
+        if not str(vevent.get("summary")).startswith(expected.summary_prefix):
+            raise FeedError(f"{feed}: {uid} is {word} on its page but its SUMMARY does not say so")
+        if not str(vevent.get("description", "")).startswith(expected.note):
+            raise FeedError(f"{feed}: {uid} is {word} on its page but its DESCRIPTION does not say so")
 
 
 def validate_feed(feed: Path, data: Path, page_path: str) -> int:
     """Returns the number of VEVENTs; raises FeedError on any problem."""
     cal = _parse_calendar(feed)
     _check_links_back(feed, cal, page_path)
-    uids = _event_uids(feed, cal)
-    _check_matches_page(feed, data, uids)
-    return len(uids)
+    events = _events(feed, cal)
+    games = _page_games(feed, data)
+    _check_matches_page(feed, games, set(events))
+    _check_status_matches_page(feed, games, events)
+    return len(events)
 
 
 def validate_dist(dist: Path) -> tuple[int, int]:

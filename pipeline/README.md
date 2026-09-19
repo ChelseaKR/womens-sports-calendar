@@ -61,7 +61,13 @@ used (requests, bytes).
   `check_no_duplicate_uids` raises on any collision within one calendar.
   Games with no exact start instant (`date_tbd` or no `dateTime`) are
   excluded from the `.ics` — RFC 5545 has no clean "TBD" representation —
-  but stay visible on the site.
+  but stay visible on the site. A game Ticketmaster lists as cancelled or
+  postponed stays in the feed and says so (`FEED_STATUS`): cancelled is
+  `STATUS:CANCELLED` with "Canceled: " before the summary, postponed is
+  `STATUS:TENTATIVE` with "Postponed: " before it, and rescheduled has no
+  `STATUS` and a note in the description; each also opens the description
+  with a one-line note. `validate_ics.py` holds every feed to the status its
+  page shows.
 - `coverage.py` — the printed coverage report. "Join hit-rate" from the
   original brief is reinterpreted here (see `docs/DECISIONS.md` 0006):
   since there is no second feed to join against Ticketmaster, it is the
