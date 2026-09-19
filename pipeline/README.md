@@ -77,7 +77,10 @@ used (requests, bytes).
   recorded per entry. Otherwise it uses the Ticketmaster event URL, labelled
   with the site it actually points to. `AFFILIATE_LINK_TEMPLATES` is the
   single place an affiliate ID would go. It is empty, and the footer
-  disclosure is rendered from it. The `.ics` feeds do not use this module.
+  disclosure is rendered from it. A link that went through a template also
+  carries `rel="sponsored noopener"` (`is_affiliate_link`, applied in
+  `site.py`); a plain link carries no `rel` at all. The `.ics` feeds do not
+  use this module.
 - `analytics.py` — Google Analytics 4 (`../docs/DECISIONS.md` 0012).
   `GA4_MEASUREMENT_ID` is the one place the measurement ID goes (committed:
   it is public); empty means no page carries any analytics. When set, every

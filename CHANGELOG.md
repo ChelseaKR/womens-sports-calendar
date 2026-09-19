@@ -49,6 +49,9 @@ archived and private.
 - Calendar-first: no prices anywhere. Each game has one ticket link to the
   home team's official seller where it's known, otherwise to the
   Ticketmaster listing (#17).
+- A ticket link that goes through an affiliate template carries
+  `rel="sponsored noopener"`, so search engines can tell it is paid. No
+  affiliate template is set, so no page changes today (#27).
 
 ### Fixed
 

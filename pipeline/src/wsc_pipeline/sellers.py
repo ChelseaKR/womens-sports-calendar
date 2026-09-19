@@ -92,7 +92,12 @@ PRIMARY_SELLERS: dict[tuple[str, str], Seller] = {
 # tracking link. Empty on purpose: no affiliate programme is active, so every
 # link is the seller's plain URL and the footer says this site is not paid
 # for them. Adding an entry here is the whole change needed once an
-# application is approved; the footer disclosure follows automatically.
+# application is approved. These follow from it automatically: the buy link's
+# URL (with_affiliate), the commission disclosure in the footer and on the
+# privacy page (site.AFFILIATE_NOTE_ACTIVE), and rel="sponsored noopener" on
+# exactly the links that went through a template (is_affiliate_link, used by
+# site._buy_link). The ticket_click event does not: analytics.py matches a
+# link by its host, so an affiliate host needs its own entry there.
 AFFILIATE_LINK_TEMPLATES: dict[str, str] = {}
 
 # Labels for the hosts Ticketmaster Discovery event URLs point at.
@@ -119,11 +124,19 @@ def affiliate_links_active() -> bool:
     return bool(AFFILIATE_LINK_TEMPLATES)
 
 
+def is_affiliate_link(seller: str) -> bool:
+    """True when a buy link for this seller went through with_affiliate, that
+    is, when AFFILIATE_LINK_TEMPLATES has a non-empty template for it. Keyed
+    on the same seller name buy_link passes to with_affiliate (the "seller"
+    of a `buy` dict), so the render step can mark exactly the links that were
+    rewritten without a new field in the published data."""
+    return bool(AFFILIATE_LINK_TEMPLATES.get(seller))
+
+
 def with_affiliate(url: str, seller: str) -> str:
-    template = AFFILIATE_LINK_TEMPLATES.get(seller)
-    if not template:
+    if not is_affiliate_link(seller):
         return url
-    return template.format(url=quote(url, safe=""))
+    return AFFILIATE_LINK_TEMPLATES[seller].format(url=quote(url, safe=""))
 
 
 def seller_label_for_url(url: str) -> str:
