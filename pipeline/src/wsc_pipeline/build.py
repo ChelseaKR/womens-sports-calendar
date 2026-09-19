@@ -23,7 +23,7 @@ from datetime import UTC, date, datetime
 from importlib.metadata import version as package_version
 from pathlib import Path
 
-from . import analytics, config, ics, site, site_data, sitemap
+from . import analytics, config, guard, ics, site, site_data, sitemap
 from .coverage import BuildCoverage, compute_league_coverage, render_report
 from .normalize import Game, normalize_event, team_is_participant, unique_by_event_id
 from .ticketmaster import DiscoveryClient, TicketmasterFetchError
@@ -120,6 +120,8 @@ def build(
     affiliate_id: str | None,
     ga4_id: str | None = None,
     previous_state: dict[str, sitemap.PageState] | None = None,
+    previous_publish: guard.PreviousPublish | None = None,
+    now: datetime | None = None,
 ) -> BuildCoverage:
     """Fetches and writes to a temp directory first, then atomically
     replaces --out only on full success. A fetch failure raises before the
@@ -150,7 +152,15 @@ def build(
     # allows at most three fractional digits (the 2026-09-18 nightly deploy
     # failed on six, #37), and it is also every changed page's sitemap
     # <lastmod>, which validate_seo holds to whole seconds.
-    fetched_at = datetime.now(UTC).replace(microsecond=0) if api_key_present else None
+    fetched_at = (now or datetime.now(UTC)).replace(microsecond=0) if api_key_present else None
+    guard_report: guard.GuardReport | None = None
+    if fetched_at is not None:
+        if previous_publish is None:
+            guard_report = guard.not_compared("the previous publish was not read")
+        else:
+            guard_report = guard.evaluate(previous_publish, games, truncated, now=fetched_at)
+            if guard_report.refused:
+                raise guard.PublishRefused(guard_report)
 
     tmp_dir = out_dir.with_name(out_dir.name + ".tmp")
     if tmp_dir.exists():
@@ -175,6 +185,7 @@ def build(
         requests_made=requests_made,
         bytes_received=bytes_received,
         api_key_present=api_key_present,
+        publish_guard=guard_report,
     )
 
     _write_ics(tmp_dir, base_url, games_by_league, api_key_present)
@@ -420,6 +431,8 @@ def main(argv: list[str] | None = None) -> int:
     # Read only for a build that will fetch listings: a degraded build
     # records no dates, so it has nothing to compare.
     previous_state = sitemap.fetch_previous_state(args.base_url) if api_key else None
+    # And, for the publish guard, what each team's page data said last night.
+    previous_publish = guard.fetch_previous_publish(args.base_url) if api_key else None
 
     try:
         coverage = build(
@@ -429,12 +442,21 @@ def main(argv: list[str] | None = None) -> int:
             affiliate_id=affiliate_id,
             ga4_id=ga4_id,
             previous_state=previous_state,
+            previous_publish=previous_publish,
         )
     except TicketmasterFetchError as exc:
         print(f"BUILD FAILED: {exc}", file=sys.stderr)
         print("A failed fetch fails the build; nothing was published to --out.", file=sys.stderr)
         return 1
+    except guard.PublishRefused as exc:
+        print(f"BUILD FAILED: {exc}", file=sys.stderr)
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            for violation in exc.report.violations:
+                print(f"::error title=Publish guard refused the build::{violation.message}", file=sys.stderr)
+        return 1
 
+    if coverage.publish_guard is not None:
+        guard.announce(coverage.publish_guard, github_actions=os.environ.get("GITHUB_ACTIONS") == "true")
     print(render_report(coverage))
     fallback_count = sum(len(lc.zone_fallbacks) for lc in coverage.leagues)
     if fallback_count:

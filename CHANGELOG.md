@@ -40,6 +40,15 @@ archived and private.
   `/privacy/` page (#15). A remembered "Opt out of analytics" control sits
   in every footer (#20). The calendar feeds are never tracked.
 
+- A publish guard: the nightly build reads back what the live site last
+  published and refuses to publish (the last good deploy stays live) when a
+  league would publish an empty calendar over a non-empty one, a league
+  loses more than half of at least three upcoming games, or a team loses all
+  of at least three, and names the team and games (#21). A season that
+  simply ended vanishes nothing. `COVERAGE.txt` lists every vanished game
+  and says when the previous publish could not be read. The thresholds and
+  a dated per-league override are in `config.py`.
+
 ### Changed
 
 - The repository is public as of 2026-09-18, and the code is licensed under

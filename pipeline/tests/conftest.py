@@ -10,12 +10,13 @@ from __future__ import annotations
 
 import pytest
 
-from wsc_pipeline import sitemap
+from wsc_pipeline import guard, sitemap
 
 # The real reader of the live site's data/lastmod.json, kept before the
 # autouse fixture below replaces it, for the tests that exercise it against
 # a mock transport.
 REAL_FETCH_PREVIOUS_STATE = sitemap.fetch_previous_state
+REAL_FETCH_PREVIOUS_PUBLISH = guard.fetch_previous_publish
 
 
 @pytest.fixture(autouse=True)
@@ -24,6 +25,7 @@ def _no_live_site_reads(monkeypatch):
     previous lastmod manifest whenever an API key is set, and several tests
     set a fake one."""
     monkeypatch.setattr(sitemap, "fetch_previous_state", lambda base_url, **kwargs: None)
+    monkeypatch.setattr(guard, "fetch_previous_publish", lambda base_url, **kwargs: guard.PreviousPublish())
 
 
 def make_raw_event(
