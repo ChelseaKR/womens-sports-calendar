@@ -8,9 +8,16 @@ timezone}, _embedded.attractions[].name, and top-level id/name/url.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 
 from wsc_pipeline import sitemap
+
+# A build's fetch time, pinned: what tests hand the calendar builders as
+# `dtstamp` (ics.build_calendar never reads the clock). Before the games in
+# the fixtures, so a DTSTAMP after it would be a game's own start time.
+BUILD_TIME = datetime(2026, 6, 1, 8, 30, 0, tzinfo=UTC)
 
 # The real reader of the live site's data/lastmod.json, kept before the
 # autouse fixture below replaces it, for the tests that exercise it against

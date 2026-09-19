@@ -67,7 +67,12 @@ used (requests, bytes).
   `STATUS:TENTATIVE` with "Postponed: " before it, and rescheduled has no
   `STATUS` and a note in the description; each also opens the description
   with a one-line note. `validate_ics.py` holds every feed to the status its
-  page shows.
+  page shows. Every event's `DTSTAMP` is the build's fetch time (RFC 5545:
+  when this copy of the calendar was made), passed into `build_calendar` so
+  the module never reads the clock; `validate_ics.py` fails on one after the
+  fetch time. No `DTEND`, `SEQUENCE` or `LAST-MODIFIED` is written:
+  Ticketmaster publishes no end time, and the other two need the previous
+  published data to compare against.
 - `coverage.py` — the printed coverage report. "Join hit-rate" from the
   original brief is reinterpreted here (see `docs/DECISIONS.md` 0006):
   since there is no second feed to join against Ticketmaster, it is the

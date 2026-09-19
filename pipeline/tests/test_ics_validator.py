@@ -12,7 +12,7 @@ from wsc_pipeline.config import LEAGUES
 from wsc_pipeline.ics import league_calendar, make_uid, team_calendar
 from wsc_pipeline.normalize import normalize_event
 
-from .conftest import make_raw_event
+from .conftest import BUILD_TIME, make_raw_event
 
 REQUIRED_VEVENT_PROPS = ("uid", "dtstamp", "dtstart", "summary")
 
@@ -45,7 +45,7 @@ def _validate_calendar_bytes(raw: bytes) -> Calendar:
 def test_every_league_calendar_is_valid_rfc5545():
     for league in LEAGUES:
         games = _sample_games_for(league)
-        cal = league_calendar(league.slug, league.name, games)
+        cal = league_calendar(league.slug, league.name, games, dtstamp=BUILD_TIME)
         _validate_calendar_bytes(cal.to_ical())
 
 
@@ -53,7 +53,7 @@ def test_every_team_calendar_is_valid_rfc5545():
     for league in LEAGUES:
         games = _sample_games_for(league)
         for team in league.teams[:3]:
-            cal = team_calendar(team.slug, team.name, games)
+            cal = team_calendar(team.slug, team.name, games, dtstamp=BUILD_TIME)
             _validate_calendar_bytes(cal.to_ical())
 
 
@@ -66,12 +66,12 @@ def test_no_duplicate_uids_across_a_full_build():
     not)."""
     for league in LEAGUES:
         games = _sample_games_for(league)
-        league_cal = league_calendar(league.slug, league.name, games)
+        league_cal = league_calendar(league.slug, league.name, games, dtstamp=BUILD_TIME)
         league_uids = [str(v["uid"]) for v in league_cal.walk("VEVENT")]
         assert len(league_uids) == len(set(league_uids)), f"duplicate UIDs in {league.slug} calendar"
 
         for team in league.teams[:3]:
-            team_cal = team_calendar(team.slug, team.name, games)
+            team_cal = team_calendar(team.slug, team.name, games, dtstamp=BUILD_TIME)
             team_uids = [str(v["uid"]) for v in team_cal.walk("VEVENT")]
             assert len(team_uids) == len(set(team_uids)), f"duplicate UIDs in {team.slug} calendar"
 
@@ -79,7 +79,7 @@ def test_no_duplicate_uids_across_a_full_build():
 def test_uid_format_matches_make_uid_for_every_event():
     league = LEAGUES[0]
     games = _sample_games_for(league)
-    cal = league_calendar(league.slug, league.name, games)
+    cal = league_calendar(league.slug, league.name, games, dtstamp=BUILD_TIME)
     expected_uids = {make_uid(g.event_id) for g in games}
     actual_uids = {str(v["uid"]) for v in cal.walk("VEVENT")}
     assert actual_uids.issubset(expected_uids)

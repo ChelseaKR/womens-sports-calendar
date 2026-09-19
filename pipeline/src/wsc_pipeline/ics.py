@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from icalendar import Calendar, Event, Timezone, vText
 
@@ -136,6 +136,7 @@ def build_calendar(
     fetched: bool = True,
     cal_desc: str | None = None,
     page_url: str | None = None,
+    dtstamp: datetime | None = None,
 ) -> Calendar:
     """Games with no usable date were already dropped by normalize_event;
     games with date_tbd=True (a real Ticketmaster date placeholder, not a
@@ -153,6 +154,15 @@ def build_calendar(
     calendar's URL property, and the last line of every event's
     description. Nothing about it reaches a UID, so adding or changing it
     never duplicates a subscriber's events.
+
+    dtstamp is when this copy of the calendar was built (RFC 5545 section
+    3.8.7.2: for METHOD:PUBLISH, when the calendar object was created), the
+    same for every event, timezone-aware, kept to whole seconds. The caller
+    passes the build's fetch time in: this module never reads the clock, so
+    a given build is reproducible and a test can pin it. It is required as
+    soon as any event is written; a build that wrote no events (nothing
+    fetched) has none to stamp. It is never the game's own start time, which
+    is in the future for an upcoming game and moves when a game does.
     """
     games = unique_by_event_id(games)
     check_no_duplicate_uids(games)
@@ -161,18 +171,29 @@ def build_calendar(
         cal_desc = "Ticketmaster-listed games; see the site for licensing notes." if fetched else NOT_FETCHED_CALDESC
     cal = _calendar_header(cal_name=cal_name, cal_desc=cal_desc, page_url=page_url)
 
+    stamp = _as_dtstamp(dtstamp) if dtstamp is not None else None
     tzids_seen: set[str] = set()
     for game in sorted(games, key=lambda g: (g.start_utc is None, g.start_utc or g.start_local_date)):
         if game.date_tbd or game.start_utc is None:
             continue
+        if stamp is None:
+            raise ValueError("build_calendar needs dtstamp (the build's time) to write an event")
         if game.tzid and game.tzid not in tzids_seen:
             tzids_seen.add(game.tzid)
             vtz = Timezone.from_tzid(game.tzid)
             if vtz is not None:
                 cal.add_component(vtz)
-        cal.add_component(_event(game, game.start_utc, page_url=page_url))
+        cal.add_component(_event(game, game.start_utc, page_url=page_url, dtstamp=stamp))
 
     return cal
+
+
+def _as_dtstamp(when: datetime) -> datetime:
+    """`when` as a UTC, whole-second DTSTAMP; naive times are refused, since
+    a floating DTSTAMP is not RFC 5545 and would be a guess about the zone."""
+    if when.tzinfo is None:
+        raise ValueError("dtstamp must be timezone-aware (the build's UTC time)")
+    return when.astimezone(UTC).replace(microsecond=0)
 
 
 def _calendar_header(*, cal_name: str, cal_desc: str, page_url: str | None) -> Calendar:
@@ -194,11 +215,20 @@ def _calendar_header(*, cal_name: str, cal_desc: str, page_url: str | None) -> C
     return cal
 
 
-def _event(game: Game, start_utc: datetime, *, page_url: str | None) -> Event:
-    """One VEVENT, for a game whose real start instant is start_utc."""
+def _event(game: Game, start_utc: datetime, *, page_url: str | None, dtstamp: datetime) -> Event:
+    """One VEVENT, for a game whose real start instant is start_utc, in a
+    calendar built at dtstamp.
+
+    No DTEND or DURATION is written on purpose: Ticketmaster publishes no end
+    time, so any value would be an assumption presented as data. Whether to
+    estimate one is the maintainer's call (issue 20), not made here. Nor is
+    SEQUENCE or LAST-MODIFIED: either needs the previous published data to
+    compare against, and a value derived without it would change on every
+    build for every event.
+    """
     event = Event()
     event.add("uid", make_uid(game.event_id))
-    event.add("dtstamp", start_utc)
+    event.add("dtstamp", dtstamp)
     zone = zone_for(game.tzid)
     dtstart = start_utc.astimezone(zone) if zone else start_utc
     event.add("dtstart", dtstart)
@@ -236,6 +266,7 @@ def league_calendar(
     *,
     fetched: bool = True,
     base_url: str | None = None,
+    dtstamp: datetime | None = None,
 ) -> Calendar:
     page_url = f"{base_url}/{league_slug}/" if base_url else None
     return build_calendar(
@@ -244,6 +275,7 @@ def league_calendar(
         fetched=fetched,
         cal_desc=calendar_description(league_name, page_url=page_url, fetched=fetched),
         page_url=page_url,
+        dtstamp=dtstamp,
     )
 
 
@@ -255,6 +287,7 @@ def team_calendar(
     fetched: bool = True,
     base_url: str | None = None,
     league_slug: str | None = None,
+    dtstamp: datetime | None = None,
 ) -> Calendar:
     team_games = [g for g in games if g.tracked_team_slug == team_slug]
     page_url = f"{base_url}/{league_slug}/{team_slug}/" if base_url and league_slug else None
@@ -264,6 +297,7 @@ def team_calendar(
         fetched=fetched,
         cal_desc=calendar_description(team_name, page_url=page_url, fetched=fetched),
         page_url=page_url,
+        dtstamp=dtstamp,
     )
 
 

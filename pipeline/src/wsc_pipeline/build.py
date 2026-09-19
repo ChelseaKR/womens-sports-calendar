@@ -177,7 +177,7 @@ def build(
         api_key_present=api_key_present,
     )
 
-    _write_ics(tmp_dir, base_url, games_by_league, api_key_present)
+    _write_ics(tmp_dir, base_url, games_by_league, api_key_present, dtstamp=fetched_at)
     fingerprints = _write_data(tmp_dir, base_url, games_by_league, api_key_present, truncated, fetched_at=fetched_at)
     _write_html(tmp_dir, base_url, games_by_league, api_key_present, truncated, ga4_id, fetched_at=fetched_at)
     _write_static(tmp_dir)
@@ -193,16 +193,26 @@ def build(
     return coverage
 
 
-def _write_ics(out_dir: Path, base_url: str, games_by_league: dict[str, list[Game]], fetched: bool) -> None:
+def _write_ics(
+    out_dir: Path,
+    base_url: str,
+    games_by_league: dict[str, list[Game]],
+    fetched: bool,
+    *,
+    dtstamp: datetime | None,
+) -> None:
+    """dtstamp is the build's fetch time (None only when nothing was fetched,
+    so no event is written to stamp): every event's DTSTAMP, the same in
+    every feed of one build."""
     for lg in config.LEAGUES:
         games = games_by_league[lg.slug]
-        cal = ics.league_calendar(lg.slug, lg.name, games, fetched=fetched, base_url=base_url)
+        cal = ics.league_calendar(lg.slug, lg.name, games, fetched=fetched, base_url=base_url, dtstamp=dtstamp)
         (out_dir / "ics" / f"{lg.slug}.ics").write_bytes(cal.to_ical())
         team_dir = out_dir / "ics" / lg.slug
         team_dir.mkdir(exist_ok=True)
         for team in lg.teams:
             team_cal = ics.team_calendar(
-                team.slug, team.name, games, fetched=fetched, base_url=base_url, league_slug=lg.slug
+                team.slug, team.name, games, fetched=fetched, base_url=base_url, league_slug=lg.slug, dtstamp=dtstamp
             )
             (team_dir / f"{team.slug}.ics").write_bytes(team_cal.to_ical())
 
