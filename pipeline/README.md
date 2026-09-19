@@ -11,7 +11,7 @@ and the static site into `dist/`.
 ## Run it
 
 ```sh
-uv sync --extra dev
+uv sync                          # runtime dependencies plus the `dev` group
 uv run pytest -q                 # the whole suite; negative controls described below
 
 # Degraded mode (no key) -- always safe, always produces a valid site:
@@ -20,6 +20,12 @@ uv run python -m wsc_pipeline.build --out dist --base-url https://nexthomegame.c
 # Real build:
 TICKETMASTER_API_KEY=... uv run python -m wsc_pipeline.build --out dist --base-url https://nexthomegame.com
 ```
+
+The tools (pytest, ruff, mypy and the rest) are a PEP 735 dependency group
+named `dev` in `pyproject.toml`, not an extra, so `uv sync` installs them
+without a flag (`uv sync --extra dev` fails). `make install`, which CI runs,
+is `uv lock --check` followed by `uv sync --frozen`: it installs exactly
+`uv.lock` and fails if `pyproject.toml` and the lockfile disagree.
 
 Every build prints a coverage report (also written to `dist/COVERAGE.txt`):
 leagues examined vs. queried, teams with at least one game found, games
@@ -30,7 +36,9 @@ used (requests, bytes).
 
 - `config.py` — the static team/league registry (data, not code) that
   drives Discovery API keyword queries, plus the leagues examined and
-  *not* configured (`LEAGUES_EXAMINED_NOT_INCLUDED`) with why.
+  *not* configured (`LEAGUES_EXAMINED_NOT_INCLUDED`) with why. Adding a
+  team or a league also touches the seller table, the social cards, the
+  tests and the licensing notes: `../CONTRIBUTING.md` has the checklist.
 - `ticketmaster.py` — the Discovery API client. Self-limits to 1
   request/second (below both published rate numbers — the two official
   Ticketmaster pages disagree, 2 vs. 5 req/s), retries on 429/5xx, and
@@ -104,8 +112,10 @@ used (requests, bytes).
   says is at home. Also `<link rel="canonical">`,
   a favicon (SVG primary + PNG/apple-touch-icon fallbacks), Open Graph and
   Twitter Card tags — including a real `og:image` per page (the site-wide
-  default on the index, a per-league card on every league and team page,
-  see `assets/` below) — semantic landmarks, table headers with `scope`,
+  default on the index and on every page without a card of its own, a
+  per-league card on the WNBA, NWSL and PWHL league and team pages; AUSL and
+  NCAA women's basketball have no card yet, see `assets/` below and
+  `CONTRIBUTING.md`) — semantic landmarks, table headers with `scope`,
   link text that names its destination ("Buy tickets for X vs Y on
   \<date\> from SeatGeek, the official seller for … home games", never bare
   "Buy" or "click here"), no price anywhere, a
@@ -163,8 +173,9 @@ missing).
 
 `tests/test_analytics.py` covers GA4 (`../docs/DECISIONS.md` 0012): a build
 with no ID emits no GA on any page; a build with an ID puts the same guarded
-loader in the `<head>` of all 75 pages (index, privacy, 404, 5 league, 67
-team); the `.ics` feeds are byte-identical with and without an ID (and
+loader in the `<head>` of every page the build writes (the index, the privacy,
+accessibility and 404 pages, one page per league and one per team); the `.ics`
+feeds are byte-identical with and without an ID (and
 `data/*.json` too, apart from `site.json`'s build timestamp); ticket links
 stay plain Ticketmaster URLs; a malformed ID fails the build before anything
 is written. The loader itself is executed in Node against stubbed
@@ -199,28 +210,31 @@ pre-sabotage `git hash-object`.
 Also run (not part of `pytest`, but part of `make verify` and so CI-gated on
 every push/PR, not a one-time manual check):
 
-- `make validate-html` — `html5validator` against every generated page (75
-  pages in the degraded, no-API-key build CI runs: the index, the privacy
-  page, the 404 page, 5 league pages, 67 team pages).
+- `make validate-html` — `html5validator` against every generated page of
+  the degraded, no-API-key build CI runs: the index, the privacy,
+  accessibility and 404 pages, one page per league and one per team, so the
+  count follows `config.py` (`find dist -name '*.html' | wc -l` prints it).
 - `make a11y` — `pa11y --standard WCAG2AA` (via `pa11y-ci`, 5 pages at a
-  time) against every generated page (the same 75) **plus** two fixture
+  time) against every generated page (the same ones) **plus** two fixture
   pages rendered with a populated games table (a priced game, an unpriced
   game, and a date-TBD game together — the exact shape
   `tests/test_site_html.py::_pages()` builds and asserts on, reused via
   `scripts/render_a11y_fixtures.py` rather than duplicated) — these two exist
   because the degraded build CI runs never has a non-empty games table to
-  check. 77 pages in all — see `pipeline/Makefile`'s `a11y` target and
-  `pipeline/pa11y-ci.config.json` for exactly what runs. The URL list is
-  rebuilt from `find dist -name '*.html'` on every run, and
+  check. That is two more pages than the build alone writes; see
+  `pipeline/Makefile`'s `a11y` target and `pipeline/pa11y-ci.config.json` for
+  exactly what runs. The URL list is rebuilt from
+  `find dist -name '*.html'` on every run, and
   `scripts/check_a11y_coverage.py` then fails the gate unless pa11y-ci's own
   JSON report names every URL it was handed, all passing, and that list
-  covers every index/privacy/404/league/team page `wsc_pipeline.config` says
-  the build must produce, so a faster sweep can't quietly check fewer pages.
+  covers every index, privacy, accessibility, 404, league and team page
+  `wsc_pipeline.config` says the build must produce, so a faster sweep can't
+  quietly check fewer pages.
   The pages carry the GA4 loader (the committed ID is set), but it returns
   before loading anything on 127.0.0.1, so the sweep never contacts Google.
   `make a11y` installs its own npm dependency (`make install-a11y`); plain
   `make install`, which the nightly deploy runs, is Python-only.
 
-No human screen-reader walkthrough has been performed (this is a brand-new
-private product, not yet public); that stays a manually-tracked open item,
-separate from the two automated, CI-enforced checks above.
+No human screen-reader walkthrough has been performed; that stays a
+manually-tracked open item (#5), separate from the two automated,
+CI-enforced checks above.

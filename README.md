@@ -22,7 +22,7 @@ Needs `uv` (it fetches Python 3.12) and, for the accessibility and
 performance checks, Node 22.
 
 ```sh
-git clone git@github.com:ChelseaKR/womens-sports-calendar.git
+git clone https://github.com/ChelseaKR/womens-sports-calendar.git
 cd womens-sports-calendar
 make verify                    # every gate CI runs
 make -C pipeline build         # the site, into pipeline/dist/
