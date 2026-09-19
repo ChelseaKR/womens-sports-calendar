@@ -59,9 +59,17 @@ used (requests, bytes).
   from the Ticketmaster event id (`tm-<event_id>@womens-sports-calendar.invalid`),
   so re-subscribing or a nightly rebuild never duplicates entries.
   `check_no_duplicate_uids` raises on any collision within one calendar.
-  Games with no exact start instant (`date_tbd` or no `dateTime`) are
-  excluded from the `.ics` — RFC 5545 has no clean "TBD" representation —
-  but stay visible on the site. A game Ticketmaster lists as cancelled or
+  A game with a real date and no announced start time (`time_tba`) is an
+  all-day event on its local date (`DTSTART;VALUE=DATE`) with " (time TBA)"
+  ending its summary and a note in its description; it has no `DTEND`, no
+  time is shown or implied, and a `time_tba` game that arrives with a
+  placeholder `dateTime` is still all-day. Its UID is the one the timed
+  event will have, so it becomes the same event with a start time when
+  Ticketmaster lists one (`normalize.feed_start` is the one rule; how
+  calendar apps treat that date-to-date-time change is untested). A game with
+  no date at all (`date_tbd`) has nothing a calendar entry could say, and is
+  left out of the `.ics` but stays visible on the site; the coverage report
+  counts it, the all-day games, and any other exclusion. A game Ticketmaster lists as cancelled or
   postponed stays in the feed and says so (`FEED_STATUS`): cancelled is
   `STATUS:CANCELLED` with "Canceled: " before the summary, postponed is
   `STATUS:TENTATIVE` with "Postponed: " before it, and rescheduled has no

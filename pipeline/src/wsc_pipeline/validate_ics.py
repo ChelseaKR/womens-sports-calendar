@@ -30,7 +30,12 @@ publish a broken or inconsistent feed:
    copy was made, so one in the future (the game's own start time was written
    there before) is wrong, and a build with events but no fetch time to check
    them against is refused.
-7. An event has a DTEND exactly when its description says the end is
+7. A game the page lists as in the feed with no announced start time
+   (`time_tba`, or no exact start) is an all-day event on its local date,
+   with "(time TBA)" ending its SUMMARY, the time-TBA note in its
+   DESCRIPTION and no DTEND; a game with an exact start is a timed event.
+   No time is ever shown for a game whose time is not announced.
+8. An event has a DTEND exactly when its description says the end is
    estimated (ics.END_ESTIMATE_NOTE), and the DTEND is after the start:
    Ticketmaster publishes no end time, so a DTEND without that line would
    present an estimate as data, and the line without a DTEND would be
@@ -43,14 +48,14 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 from icalendar import Calendar, Component
 
 from . import config
-from .ics import END_ESTIMATE_NOTE, FEED_STATUS, make_uid
+from .ics import END_ESTIMATE_NOTE, FEED_STATUS, TIME_TBA_NOTE, TIME_TBA_SUFFIX, make_uid
 
 REQUIRED_VEVENT_PROPS = ("uid", "dtstamp", "dtstart", "summary")
 
@@ -172,6 +177,34 @@ def _check_status_matches_page(feed: Path, games: list[dict[str, Any]], events: 
             raise FeedError(f"{feed}: {uid} is {word} on its page but its DESCRIPTION does not say so")
 
 
+def _check_start_kinds(feed: Path, games: list[dict[str, Any]], events: dict[str, Component]) -> None:
+    """A game whose start time the page shows as not announced is an all-day
+    event on its local date, and any other game in the feed is a timed one;
+    raises FeedError otherwise."""
+    for game in games:
+        if not game["in_calendar_feed"]:
+            continue
+        uid = make_uid(game["event_id"])
+        vevent = events[uid]
+        start = vevent.decoded("dtstart")
+        all_day = bool(game.get("time_tba")) or game.get("start_utc") is None
+        if not all_day:
+            if not isinstance(start, datetime):
+                raise FeedError(f"{feed}: {uid} has an exact start on its page but an all-day DTSTART in the feed")
+            continue
+        if isinstance(start, datetime) or start != date.fromisoformat(game["start_local_date"]):
+            raise FeedError(
+                f"{feed}: {uid} has no announced time on its page ({game['start_local_date']}) but its DTSTART "
+                f"is {start!r}: it must be an all-day event on that date, never a made-up time"
+            )
+        if not str(vevent.get("summary")).endswith(TIME_TBA_SUFFIX):
+            raise FeedError(f"{feed}: {uid} is all-day but its SUMMARY does not say the time is TBA")
+        if TIME_TBA_NOTE not in str(vevent.get("description", "")):
+            raise FeedError(f"{feed}: {uid} is all-day but its DESCRIPTION lacks the time-TBA note")
+        if vevent.get("dtend") is not None or vevent.get("duration") is not None:
+            raise FeedError(f"{feed}: {uid} is all-day but has an end time; none is ever estimated for it")
+
+
 def _check_dtstamps(feed: Path, events: dict[str, Component], fetched_at: str | None) -> None:
     """Every DTSTAMP is a UTC date-time no later than the build's fetch time;
     raises FeedError otherwise."""
@@ -215,6 +248,7 @@ def validate_feed(feed: Path, data: Path, page_path: str) -> int:
     games = page["games"]
     _check_matches_page(feed, games, set(events))
     _check_status_matches_page(feed, games, events)
+    _check_start_kinds(feed, games, events)
     _check_dtstamps(feed, events, page.get("fetched_at"))
     _check_end_times(feed, events)
     return len(events)

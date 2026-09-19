@@ -98,7 +98,7 @@ RAW_EVENTS_BY_TEAM: dict[str, list[dict[str, Any]]] = {
             timezone="America/Phoenix",
             url="https://www.ticketmaster.com/event/FX-AT",
         ),
-        # Date known, time TBA: listed, not in the feed, no SportsEvent.
+        # Date known, time TBA: listed, an all-day event in the feed, no SportsEvent.
         make_raw_event(
             event_id="FX-TIME-TBA",
             name="Las Vegas Aces vs Atlanta Dream",

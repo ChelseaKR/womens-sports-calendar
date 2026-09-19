@@ -9,9 +9,10 @@ substitution is documented here and in the printed report, not hidden.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from .config import League
-from .normalize import Game, unique_by_event_id
+from .normalize import Game, feed_start, unique_by_event_id
 
 
 @dataclass
@@ -23,6 +24,11 @@ class LeagueCoverage:
     games_total: int
     games_with_price: int
     games_date_tbd: int
+    # Games in the .ics as all-day events because their start time is not
+    # announced (normalize.feed_start), and games left out of the .ics for
+    # any reason other than a TBD date (a date TBD is games_date_tbd).
+    games_all_day: int = 0
+    games_other_excluded: int = 0
     teams_truncated: list[str] = field(default_factory=list)
     teams_with_mismatched_events: list[str] = field(default_factory=list)
 
@@ -73,6 +79,7 @@ def compute_league_coverage(
     # Games are counted once per event; teams_with_games above still uses
     # every per-team record, since a head-to-head game counts for both teams.
     unique_games = unique_by_event_id(games)
+    starts = [(g, feed_start(g)) for g in unique_games]
     return LeagueCoverage(
         league_slug=league.slug,
         league_name=league.name,
@@ -81,6 +88,8 @@ def compute_league_coverage(
         games_total=len(unique_games),
         games_with_price=sum(1 for g in unique_games if g.price is not None),
         games_date_tbd=sum(1 for g in unique_games if g.date_tbd),
+        games_all_day=sum(1 for _, s in starts if s is not None and not isinstance(s, datetime)),
+        games_other_excluded=sum(1 for g, s in starts if s is None and not g.date_tbd),
         teams_truncated=sorted(truncated_team_slugs),
         teams_with_mismatched_events=sorted(mismatched_team_slugs or set()),
     )
@@ -121,7 +130,8 @@ def render_report(coverage: BuildCoverage) -> str:
         lines.append(
             f"  games: {lc.games_total}; with price: {lc.games_with_price} "
             f"({lc.price_coverage:.0%}); date TBD (excluded from .ics): "
-            f"{lc.games_date_tbd}"
+            f"{lc.games_date_tbd}; time TBA (all-day in .ics): {lc.games_all_day}; "
+            f"other games excluded from .ics: {lc.games_other_excluded}"
         )
         if lc.teams_truncated:
             lines.append(
