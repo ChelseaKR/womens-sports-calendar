@@ -206,13 +206,23 @@ def _write_ics(
     every feed of one build."""
     for lg in config.LEAGUES:
         games = games_by_league[lg.slug]
-        cal = ics.league_calendar(lg.slug, lg.name, games, fetched=fetched, base_url=base_url, dtstamp=dtstamp)
+        duration = config.estimated_duration(lg)
+        cal = ics.league_calendar(
+            lg.slug, lg.name, games, fetched=fetched, base_url=base_url, dtstamp=dtstamp, game_duration=duration
+        )
         (out_dir / "ics" / f"{lg.slug}.ics").write_bytes(cal.to_ical())
         team_dir = out_dir / "ics" / lg.slug
         team_dir.mkdir(exist_ok=True)
         for team in lg.teams:
             team_cal = ics.team_calendar(
-                team.slug, team.name, games, fetched=fetched, base_url=base_url, league_slug=lg.slug, dtstamp=dtstamp
+                team.slug,
+                team.name,
+                games,
+                fetched=fetched,
+                base_url=base_url,
+                league_slug=lg.slug,
+                dtstamp=dtstamp,
+                game_duration=duration,
             )
             (team_dir / f"{team.slug}.ics").write_bytes(team_cal.to_ical())
 

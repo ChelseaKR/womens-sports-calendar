@@ -70,8 +70,12 @@ used (requests, bytes).
   page shows. Every event's `DTSTAMP` is the build's fetch time (RFC 5545:
   when this copy of the calendar was made), passed into `build_calendar` so
   the module never reads the clock; `validate_ics.py` fails on one after the
-  fetch time. No `DTEND`, `SEQUENCE` or `LAST-MODIFIED` is written:
-  Ticketmaster publishes no end time, and the other two need the previous
+  fetch time. Ticketmaster publishes no end time, so each timed event's
+  `DTEND` is an estimate: the start plus the sport's usual game length
+  (`config.GAME_DURATIONS`, overridable per league), with "End time
+  estimated; not published by the ticket source." in its description
+  (`docs/DECISIONS.md` 0015); a sport with no entry gets no `DTEND`. No
+  `SEQUENCE` or `LAST-MODIFIED` is written: both need the previous
   published data to compare against.
 - `coverage.py` — the printed coverage report. "Join hit-rate" from the
   original brief is reinterpreted here (see `docs/DECISIONS.md` 0006):

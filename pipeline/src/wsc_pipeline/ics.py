@@ -36,6 +36,11 @@ SITE_NAME = "Next Home Game"
 # daily (RFC 7986 REFRESH-INTERVAL, and X-PUBLISHED-TTL for Outlook). Apps
 # may poll less often; none is asked to poll more often than the data moves.
 REFRESH_INTERVAL = timedelta(days=1)
+# The line in every event that carries an estimated DTEND. Ticketmaster
+# publishes no end time (DECISIONS 0015), so the end is a per-sport estimate
+# (config.GAME_DURATIONS) and the event says so rather than presenting it as
+# data. validate_ics requires it wherever a DTEND is written.
+END_ESTIMATE_NOTE = "End time estimated; not published by the ticket source."
 
 
 @dataclass(frozen=True)
@@ -137,6 +142,7 @@ def build_calendar(
     cal_desc: str | None = None,
     page_url: str | None = None,
     dtstamp: datetime | None = None,
+    game_duration: timedelta | None = None,
 ) -> Calendar:
     """Games with no usable date were already dropped by normalize_event;
     games with date_tbd=True (a real Ticketmaster date placeholder, not a
@@ -163,6 +169,11 @@ def build_calendar(
     soon as any event is written; a build that wrote no events (nothing
     fetched) has none to stamp. It is never the game's own start time, which
     is in the future for an upcoming game and moves when a game does.
+
+    game_duration is the assumed length of one game of this calendar's sport
+    (config.estimated_duration): each timed event gets a DTEND that long
+    after its start and a description line saying the end is estimated. None
+    (a sport with no estimate) writes no DTEND at all.
     """
     games = unique_by_event_id(games)
     check_no_duplicate_uids(games)
@@ -183,7 +194,7 @@ def build_calendar(
             vtz = Timezone.from_tzid(game.tzid)
             if vtz is not None:
                 cal.add_component(vtz)
-        cal.add_component(_event(game, game.start_utc, page_url=page_url, dtstamp=stamp))
+        cal.add_component(_event(game, game.start_utc, page_url=page_url, dtstamp=stamp, duration=game_duration))
 
     return cal
 
@@ -215,16 +226,24 @@ def _calendar_header(*, cal_name: str, cal_desc: str, page_url: str | None) -> C
     return cal
 
 
-def _event(game: Game, start_utc: datetime, *, page_url: str | None, dtstamp: datetime) -> Event:
+def _event(
+    game: Game,
+    start_utc: datetime,
+    *,
+    page_url: str | None,
+    dtstamp: datetime,
+    duration: timedelta | None,
+) -> Event:
     """One VEVENT, for a game whose real start instant is start_utc, in a
     calendar built at dtstamp.
 
-    No DTEND or DURATION is written on purpose: Ticketmaster publishes no end
-    time, so any value would be an assumption presented as data. Whether to
-    estimate one is the maintainer's call (issue 20), not made here. Nor is
-    SEQUENCE or LAST-MODIFIED: either needs the previous published data to
-    compare against, and a value derived without it would change on every
-    build for every event.
+    DTEND is start_utc plus `duration` when there is one: an estimate, not
+    Ticketmaster data, and the description says so (END_ESTIMATE_NOTE). It is
+    added to the UTC instant and then shown in the venue's zone, so a game
+    that spans a clock change still ends the estimated time later. There is
+    no SEQUENCE or LAST-MODIFIED: either needs the previous published data
+    to compare against, and a value derived without it would change on
+    every build for every event.
     """
     event = Event()
     event.add("uid", make_uid(game.event_id))
@@ -232,6 +251,9 @@ def _event(game: Game, start_utc: datetime, *, page_url: str | None, dtstamp: da
     zone = zone_for(game.tzid)
     dtstart = start_utc.astimezone(zone) if zone else start_utc
     event.add("dtstart", dtstart)
+    if duration is not None:
+        end_utc = start_utc + duration
+        event.add("dtend", end_utc.astimezone(zone) if zone else end_utc)
     summary = game.raw_event_name or f"{game.home_team or '?'} vs {game.away_team or '?'}"
     status = feed_status(game)
     if status:
@@ -244,6 +266,8 @@ def _event(game: Game, start_utc: datetime, *, page_url: str | None, dtstamp: da
         event.add("location", vText(", ".join(location_parts)))
     description_lines = [status.note] if status else []
     description_lines.append(f"League: {game.league_slug.upper()}")
+    if duration is not None:
+        description_lines.append(END_ESTIMATE_NOTE)
     if game.price:
         description_lines.append(
             f"Tickets: {game.price.currency} {game.price.min:.2f}-{game.price.max:.2f} (Ticketmaster)"
@@ -267,6 +291,7 @@ def league_calendar(
     fetched: bool = True,
     base_url: str | None = None,
     dtstamp: datetime | None = None,
+    game_duration: timedelta | None = None,
 ) -> Calendar:
     page_url = f"{base_url}/{league_slug}/" if base_url else None
     return build_calendar(
@@ -276,6 +301,7 @@ def league_calendar(
         cal_desc=calendar_description(league_name, page_url=page_url, fetched=fetched),
         page_url=page_url,
         dtstamp=dtstamp,
+        game_duration=game_duration,
     )
 
 
@@ -288,6 +314,7 @@ def team_calendar(
     base_url: str | None = None,
     league_slug: str | None = None,
     dtstamp: datetime | None = None,
+    game_duration: timedelta | None = None,
 ) -> Calendar:
     team_games = [g for g in games if g.tracked_team_slug == team_slug]
     page_url = f"{base_url}/{league_slug}/{team_slug}/" if base_url and league_slug else None
@@ -298,6 +325,7 @@ def team_calendar(
         cal_desc=calendar_description(team_name, page_url=page_url, fetched=fetched),
         page_url=page_url,
         dtstamp=dtstamp,
+        game_duration=game_duration,
     )
 
 

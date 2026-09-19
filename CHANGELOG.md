@@ -42,6 +42,14 @@ archived and private.
 
 ### Changed
 
+- Timed events in the calendar feeds now have an end time, estimated from
+  the sport's usual game length (basketball 2 h 30 min, soccer 2 h, ice
+  hockey 2 h 30 min, softball 2 h), because Ticketmaster publishes only a
+  start and some calendar apps draw an event with no end as a zero-length
+  marker. Each such event says "End time estimated; not published by the
+  ticket source." in its description. The lengths are defaults in
+  `config.GAME_DURATIONS` and can be overridden per league (#20,
+  `docs/DECISIONS.md` 0015).
 - The repository is public as of 2026-09-18, and the code is licensed under
   the Elastic License 2.0. `NOTICE` lists what the license doesn't cover:
   schedule, event and price data, league and team marks, the fonts and the
@@ -65,8 +73,7 @@ archived and private.
   It is now the time of the nightly build that wrote the feed (its fetch
   time), the same for every event and later each night. `make validate-ics`
   fails on a `DTSTAMP` after the build's fetch time. Event UIDs and feed
-  URLs are unchanged. Events still have no end time: Ticketmaster does not
-  publish one, and whether to estimate one is open (#20).
+  URLs are unchanged (#20).
 - The sitemap check in `make validate-seo` parses `sitemap.xml` with
   `defusedxml` and refuses a DTD or an entity, instead of the standard
   library parser Semgrep flags. `sitemap.py` escapes with `html.escape`,
