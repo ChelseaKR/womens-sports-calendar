@@ -110,12 +110,11 @@ def test_the_uid_does_not_depend_on_the_dtstamp(status):
     assert _lines(a, b"UID") == _lines(b, b"UID") == [f"UID:{make_uid('U1')}".encode()]
 
 
-def test_no_end_time_sequence_or_last_modified_is_written():
-    """DTEND: Ticketmaster publishes no end time, and estimating one is the
-    maintainer's decision (issue 20). SEQUENCE and LAST-MODIFIED: nothing here
-    could give them a value that stays stable across identical rebuilds."""
+def test_no_sequence_or_last_modified_is_written():
+    """Nothing here could give them a value that stays stable across
+    identical rebuilds. (DTEND is separate: test_ics_end_time.py.)"""
     raw = build_calendar([_game("X1")], cal_name="T", dtstamp=BUILD_TIME).to_ical()
-    for prop in (b"DTEND", b"DURATION", b"SEQUENCE", b"LAST-MODIFIED"):
+    for prop in (b"SEQUENCE", b"LAST-MODIFIED"):
         assert not _lines(raw, prop), prop
 
 

@@ -30,6 +30,11 @@ publish a broken or inconsistent feed:
    copy was made, so one in the future (the game's own start time was written
    there before) is wrong, and a build with events but no fetch time to check
    them against is refused.
+7. An event has a DTEND exactly when its description says the end is
+   estimated (ics.END_ESTIMATE_NOTE), and the DTEND is after the start:
+   Ticketmaster publishes no end time, so a DTEND without that line would
+   present an estimate as data, and the line without a DTEND would be
+   false.
 
 Usage: python -m wsc_pipeline.validate_ics <dist-dir>
 """
@@ -45,7 +50,7 @@ from typing import Any
 from icalendar import Calendar, Component
 
 from . import config
-from .ics import FEED_STATUS, make_uid
+from .ics import END_ESTIMATE_NOTE, FEED_STATUS, make_uid
 
 REQUIRED_VEVENT_PROPS = ("uid", "dtstamp", "dtstart", "summary")
 
@@ -186,6 +191,21 @@ def _check_dtstamps(feed: Path, events: dict[str, Component], fetched_at: str | 
             )
 
 
+def _check_end_times(feed: Path, events: dict[str, Component]) -> None:
+    """DTEND appears exactly with the "end time estimated" line, and after
+    DTSTART; raises FeedError otherwise."""
+    for uid, vevent in events.items():
+        has_end = vevent.get("dtend") is not None
+        says_estimated = END_ESTIMATE_NOTE in str(vevent.get("description", ""))
+        if has_end != says_estimated:
+            raise FeedError(
+                f"{feed}: {uid} has {'a' if has_end else 'no'} DTEND but its DESCRIPTION "
+                f"{'lacks' if has_end else 'carries'} the end-time-estimated line"
+            )
+        if has_end and vevent.decoded("dtend") <= vevent.decoded("dtstart"):
+            raise FeedError(f"{feed}: {uid} DTEND is not after DTSTART")
+
+
 def validate_feed(feed: Path, data: Path, page_path: str) -> int:
     """Returns the number of VEVENTs; raises FeedError on any problem."""
     cal = _parse_calendar(feed)
@@ -196,6 +216,7 @@ def validate_feed(feed: Path, data: Path, page_path: str) -> int:
     _check_matches_page(feed, games, set(events))
     _check_status_matches_page(feed, games, events)
     _check_dtstamps(feed, events, page.get("fetched_at"))
+    _check_end_times(feed, events)
     return len(events)
 
 

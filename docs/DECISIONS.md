@@ -363,3 +363,25 @@ and addendum:
   itself. `config.py`'s `LEAGUES_EXAMINED_NOT_INCLUDED` gets a "USL W
   League" entry; `LEAGUES` is unchanged. Revisit only if Ticketmaster's own
   listings for these clubs change.
+
+## 0015 — Calendar events carry an estimated end time, labeled as an estimate (2026-09-19)
+
+Ticketmaster publishes a start time and never an end. An event with no
+`DTEND` or `DURATION` ends the moment it starts (RFC 5545 §3.6.1), which some
+calendar apps draw as a zero-length marker. The maintainer decided the feeds
+should carry an estimated end rather than leave it out (issue #20).
+
+- Each timed event gets a `DTEND` one assumed game length after its start.
+  The length is per sport, in `config.GAME_DURATIONS` (basketball 2 h 30 min,
+  soccer 2 h, ice hockey 2 h 30 min, softball 2 h), and a league can override
+  it with `League.game_duration`. The values are rounded-up typical lengths
+  chosen as defaults, not measurements; change them in one place.
+- Every event with a `DTEND` says so in its description: "End time estimated;
+  not published by the ticket source." `validate_ics` requires the line
+  wherever a `DTEND` is written and a `DTEND` wherever the line appears.
+- A sport with no entry in the table gets no `DTEND` at all, never a guessed
+  one, and a test fails when a tracked league's sport has no entry.
+- `DTSTAMP` is the build's fetch time, passed into `build_calendar`. There
+  is still no `SEQUENCE` or `LAST-MODIFIED`: either would need the previous
+  published data to compare against, and a value derived without it would
+  change on every build for every event.

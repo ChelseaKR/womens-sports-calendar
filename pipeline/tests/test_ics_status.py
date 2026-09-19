@@ -129,9 +129,9 @@ def test_the_feed_is_still_valid_rfc5545_with_statuses_commas_and_multibyte_name
     assert vevents[make_uid("V2")].first("STATUS").value == "TENTATIVE"
 
 
-def test_the_feed_does_not_invent_an_end_time():
-    """Ticketmaster publishes no end time; whether to estimate one is the
-    owner's decision (issue 20), so no DTEND or DURATION is written."""
+def test_a_calendar_built_without_a_duration_writes_no_end_time():
+    """Only a sport with a known game length gets an estimated end
+    (test_ics_end_time.py); nothing else is ever guessed."""
     cal = rfc5545.parse(_calendar_bytes([_game("E1", "cancelled"), _game("E2", None)]))
     for vevent in cal.walk("VEVENT"):
         assert vevent.first("DTEND") is None and vevent.first("DURATION") is None
