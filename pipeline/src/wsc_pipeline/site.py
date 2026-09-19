@@ -352,8 +352,10 @@ def _when_html(game: Mapping[str, Any]) -> str:
 
 
 def _feed_note(game: Mapping[str, Any]) -> str:
-    """Why a listed game is not in the calendar feed yet: its date is TBD,
-    or its date is known but its start time is not."""
+    """Why a listed game is not in the calendar feed: its date is TBD, or (a
+    rare listing) it has a local time but no exact start. A game whose date
+    is known and whose time is not announced IS in the feed, as an all-day
+    event (normalize.feed_start), so it gets no note."""
     if game["in_calendar_feed"]:
         return ""
     if game.get("date_tbd") or not game.get("start_local_date"):

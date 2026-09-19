@@ -42,6 +42,24 @@ archived and private.
 
 ### Changed
 
+- Games with a known date and no announced start time (most of the Big Ten
+  women's basketball schedule) now appear in the calendar feeds as all-day
+  events on their date, with "(time TBA)" ending the title, no time shown and
+  no end time. They keep the UID the timed event will have, so each becomes the
+  same event with a start time when Ticketmaster lists one. How Apple, Google
+  and Outlook calendars treat that change from all-day to timed is untested.
+  Games with no date at all stay out of the feeds. The page no longer says
+  these games are missing from the calendar feed, and the coverage report
+  counts all-day and every other excluded game (#18, `docs/DECISIONS.md`
+  0016).
+- Timed events in the calendar feeds now have an end time, estimated from
+  the sport's usual game length (basketball 2 h 30 min, soccer 2 h, ice
+  hockey 2 h 30 min, softball 2 h), because Ticketmaster publishes only a
+  start and some calendar apps draw an event with no end as a zero-length
+  marker. Each such event says "End time estimated; not published by the
+  ticket source." in its description. The lengths are defaults in
+  `config.GAME_DURATIONS` and can be overridden per league (#20,
+  `docs/DECISIONS.md` 0015).
 - The repository is public as of 2026-09-18, and the code is licensed under
   the Elastic License 2.0. `NOTICE` lists what the license doesn't cover:
   schedule, event and price data, league and team marks, the fonts and the
@@ -52,6 +70,20 @@ archived and private.
 
 ### Fixed
 
+- A canceled game was written to the calendar feeds as an ordinary
+  confirmed event, so subscribers' calendars kept showing it. It now has
+  `STATUS:CANCELLED` and "Canceled: " before its title; a postponed game has
+  `STATUS:TENTATIVE` and "Postponed: " before its title; a rescheduled game
+  says so in its description. Event UIDs and feed URLs are unchanged, so
+  calendars update the events they already hold. `make validate-ics` fails
+  when a feed lacks the status its page shows, including for the fixture
+  site's canceled game (#19).
+- Every event's `DTSTAMP` in the calendar feeds was the game's own start
+  time, a date in the future for an upcoming game that moved with the game.
+  It is now the time of the nightly build that wrote the feed (its fetch
+  time), the same for every event and later each night. `make validate-ics`
+  fails on a `DTSTAMP` after the build's fetch time. Event UIDs and feed
+  URLs are unchanged (#20).
 - The sitemap check in `make validate-seo` parses `sitemap.xml` with
   `defusedxml` and refuses a DTD or an entity, instead of the standard
   library parser Semgrep flags. `sitemap.py` escapes with `html.escape`,

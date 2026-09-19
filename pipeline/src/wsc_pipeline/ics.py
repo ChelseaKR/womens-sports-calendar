@@ -17,11 +17,13 @@ purpose; it is an opaque id, not a link.
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from datetime import datetime, timedelta
+from dataclasses import dataclass
+from datetime import UTC, date, datetime, time, timedelta
 
 from icalendar import Calendar, Event, Timezone, vText
 
-from .normalize import Game, unique_by_event_id, zone_for
+from .normalize import Game, feed_start, unique_by_event_id, zone_for
+from .site_data import NOTABLE_STATUSES
 
 UID_DOMAIN = "womens-sports-calendar.invalid"
 # PRODID only names the producing software; clients do not key on it, so it
@@ -34,6 +36,71 @@ SITE_NAME = "Next Home Game"
 # daily (RFC 7986 REFRESH-INTERVAL, and X-PUBLISHED-TTL for Outlook). Apps
 # may poll less often; none is asked to poll more often than the data moves.
 REFRESH_INTERVAL = timedelta(days=1)
+# The line in every event that carries an estimated DTEND. Ticketmaster
+# publishes no end time (DECISIONS 0015), so the end is a per-sport estimate
+# (config.GAME_DURATIONS) and the event says so rather than presenting it as
+# data. validate_ics requires it wherever a DTEND is written.
+END_ESTIMATE_NOTE = "End time estimated; not published by the ticket source."
+# A game with a known date and no announced start time is an all-day event
+# (DTSTART;VALUE=DATE) whose summary ends with this and whose description
+# carries the note; it has no DTEND, and no time is shown or implied. The
+# UID is the same one the timed event will have, so when Ticketmaster lists
+# the time the event is the same event with a date-time start.
+TIME_TBA_SUFFIX = " (time TBA)"
+TIME_TBA_NOTE = "Time TBA: Ticketmaster has not announced a start time. This entry shows the date only until it does."
+
+
+@dataclass(frozen=True)
+class FeedStatus:
+    """What a subscriber's calendar is told about a game Ticketmaster does
+    not list as simply going ahead: the machine-readable RFC 5545 STATUS
+    (None leaves the property off, so the event stays an ordinary one), a
+    visible prefix on SUMMARY for the apps that hide or ignore STATUS, and
+    the first line of DESCRIPTION. Visible text is American English; the
+    page's own status word ("Cancelled", site_data.NOTABLE_STATUSES) is a
+    published value and is not touched."""
+
+    ics_status: str | None
+    summary_prefix: str
+    note: str
+
+
+# Keyed by the page's status word (game_to_dict's `status`), so the feed and
+# the page read one rule for which games have a status. validate_ics holds
+# every feed to this table against its page's data. "Rescheduled" keeps the
+# event confirmed at the time Ticketmaster lists and only says so in the
+# description; it does not claim which date the listing carries.
+FEED_STATUS = {
+    "Cancelled": FeedStatus(
+        ics_status="CANCELLED",
+        summary_prefix="Canceled: ",
+        note="Canceled: Ticketmaster lists this game as canceled.",
+    ),
+    "Postponed": FeedStatus(
+        ics_status="TENTATIVE",
+        summary_prefix="Postponed: ",
+        note=(
+            "Postponed: Ticketmaster lists this game as postponed. The date and time shown may be the "
+            "original ones; check the Ticketmaster listing for a new date."
+        ),
+    ),
+    "Rescheduled": FeedStatus(
+        ics_status=None,
+        summary_prefix="",
+        note=(
+            "Rescheduled: Ticketmaster lists this game as rescheduled. Check the Ticketmaster listing "
+            "for the current date and time."
+        ),
+    ),
+}
+
+
+def feed_status(game: Game) -> FeedStatus | None:
+    """The game's feed status, or None for a game with nothing notable
+    (Ticketmaster's onsale, offsale or no status say nothing about whether
+    the game is on)."""
+    word = NOTABLE_STATUSES.get(game.status_code or "")
+    return FEED_STATUS[word] if word else None
 
 
 class DuplicateUIDError(ValueError):
@@ -81,18 +148,40 @@ def build_calendar(
     fetched: bool = True,
     cal_desc: str | None = None,
     page_url: str | None = None,
+    dtstamp: datetime | None = None,
+    game_duration: timedelta | None = None,
 ) -> Calendar:
-    """Games with no usable date were already dropped by normalize_event;
-    games with date_tbd=True (a real Ticketmaster date placeholder, not a
-    missing field) are also excluded here -- a calendar entry needs a real
-    date, and RFC 5545 does not have a clean "TBD" representation. Those
-    games are still visible on the site (see site_data.py), just not in
-    the .ics. This is documented, not silent.
+    """Games with no usable date were already dropped by normalize_event.
+    Games with date_tbd=True (a real Ticketmaster date placeholder, not a
+    missing field) are excluded here: there is no date for an entry to say.
+    They are still visible on the site (see site_data.py), just not in the
+    .ics. This is documented, not silent. A game with a real date and no
+    announced start time is written as an all-day event (normalize.feed_start,
+    TIME_TBA_NOTE), never with an invented time.
+
+    A game Ticketmaster lists as cancelled, postponed or rescheduled stays
+    in the feed and carries that status (FEED_STATUS): a feed that dropped it
+    would leave the subscriber's calendar showing a game that is off, and a
+    feed that kept it unmarked would be worse.
 
     page_url, when given, is the calendar's page on the site: the
     calendar's URL property, and the last line of every event's
     description. Nothing about it reaches a UID, so adding or changing it
     never duplicates a subscriber's events.
+
+    dtstamp is when this copy of the calendar was built (RFC 5545 section
+    3.8.7.2: for METHOD:PUBLISH, when the calendar object was created), the
+    same for every event, timezone-aware, kept to whole seconds. The caller
+    passes the build's fetch time in: this module never reads the clock, so
+    a given build is reproducible and a test can pin it. It is required as
+    soon as any event is written; a build that wrote no events (nothing
+    fetched) has none to stamp. It is never the game's own start time, which
+    is in the future for an upcoming game and moves when a game does.
+
+    game_duration is the assumed length of one game of this calendar's sport
+    (config.estimated_duration): each timed event gets a DTEND that long
+    after its start and a description line saying the end is estimated. None
+    (a sport with no estimate) writes no DTEND at all.
     """
     games = unique_by_event_id(games)
     check_no_duplicate_uids(games)
@@ -101,18 +190,36 @@ def build_calendar(
         cal_desc = "Ticketmaster-listed games; see the site for licensing notes." if fetched else NOT_FETCHED_CALDESC
     cal = _calendar_header(cal_name=cal_name, cal_desc=cal_desc, page_url=page_url)
 
+    stamp = _as_dtstamp(dtstamp) if dtstamp is not None else None
     tzids_seen: set[str] = set()
-    for game in sorted(games, key=lambda g: (g.start_utc is None, g.start_utc or g.start_local_date)):
-        if game.date_tbd or game.start_utc is None:
-            continue
-        if game.tzid and game.tzid not in tzids_seen:
+    starts = [(game, feed_start(game)) for game in games]
+    for game, start in sorted(((g, s) for g, s in starts if s is not None), key=lambda gs: _sort_key(gs[1])):
+        if stamp is None:
+            raise ValueError("build_calendar needs dtstamp (the build's time) to write an event")
+        if isinstance(start, datetime) and game.tzid and game.tzid not in tzids_seen:
             tzids_seen.add(game.tzid)
             vtz = Timezone.from_tzid(game.tzid)
             if vtz is not None:
                 cal.add_component(vtz)
-        cal.add_component(_event(game, game.start_utc, page_url=page_url))
+        cal.add_component(_event(game, start, page_url=page_url, dtstamp=stamp, duration=game_duration))
 
     return cal
+
+
+def _sort_key(start: datetime | date) -> datetime:
+    """Chronological order for a mix of exact starts and all-day dates (an
+    all-day game sorts at midnight UTC of its local date)."""
+    if isinstance(start, datetime):
+        return start if start.tzinfo else start.replace(tzinfo=UTC)
+    return datetime.combine(start, time.min, tzinfo=UTC)
+
+
+def _as_dtstamp(when: datetime) -> datetime:
+    """`when` as a UTC, whole-second DTSTAMP; naive times are refused, since
+    a floating DTSTAMP is not RFC 5545 and would be a guess about the zone."""
+    if when.tzinfo is None:
+        raise ValueError("dtstamp must be timezone-aware (the build's UTC time)")
+    return when.astimezone(UTC).replace(microsecond=0)
 
 
 def _calendar_header(*, cal_name: str, cal_desc: str, page_url: str | None) -> Calendar:
@@ -134,33 +241,82 @@ def _calendar_header(*, cal_name: str, cal_desc: str, page_url: str | None) -> C
     return cal
 
 
-def _event(game: Game, start_utc: datetime, *, page_url: str | None) -> Event:
-    """One VEVENT, for a game whose real start instant is start_utc."""
+def _event(
+    game: Game,
+    start: datetime | date,
+    *,
+    page_url: str | None,
+    dtstamp: datetime,
+    duration: timedelta | None,
+) -> Event:
+    """One VEVENT, in a calendar built at dtstamp. `start` is the game's
+    exact UTC start (normalize.feed_start), or, for a game whose start time
+    is not announced, its local date, which makes an all-day event.
+
+    A timed event's DTEND is the start plus `duration` when there is one: an
+    estimate, not Ticketmaster data, and the description says so
+    (END_ESTIMATE_NOTE). It is added to the UTC instant and then shown in the
+    venue's zone, so a game that spans a clock change still ends the
+    estimated time later. An all-day event has no DTEND (RFC 5545: a date
+    start with no end lasts that one day) and no estimate. There is no
+    SEQUENCE or LAST-MODIFIED: either needs the previous published data to
+    compare against, and a value derived without it would change on every
+    build for every event.
+    """
     event = Event()
     event.add("uid", make_uid(game.event_id))
-    event.add("dtstamp", start_utc)
-    zone = zone_for(game.tzid)
-    dtstart = start_utc.astimezone(zone) if zone else start_utc
-    event.add("dtstart", dtstart)
+    event.add("dtstamp", dtstamp)
+    all_day = not isinstance(start, datetime)
+    _add_start_and_end(event, game, start, None if all_day else duration)
     summary = game.raw_event_name or f"{game.home_team or '?'} vs {game.away_team or '?'}"
+    status = feed_status(game)
+    if status:
+        summary = status.summary_prefix + summary
+        if status.ics_status:
+            event.add("status", status.ics_status)
+    if all_day:
+        summary += TIME_TBA_SUFFIX
     event.add("summary", vText(summary))
     location_parts = [p for p in (game.venue_name, game.venue_city, game.venue_state) if p]
     if location_parts:
         event.add("location", vText(", ".join(location_parts)))
-    description_lines = [f"League: {game.league_slug.upper()}"]
-    if game.price:
-        description_lines.append(
-            f"Tickets: {game.price.currency} {game.price.min:.2f}-{game.price.max:.2f} (Ticketmaster)"
-        )
-    else:
-        description_lines.append("Tickets: price not available from Ticketmaster")
     if game.ticket_url:
-        description_lines.append(f"Buy: {game.ticket_url}")
         event.add("url", game.ticket_url)
+    lines = _description_lines(game, status, all_day=all_day, estimated_end=duration is not None and not all_day)
     if page_url:
-        description_lines.append(f"More games and calendars: {page_url}")
-    event.add("description", vText("\n".join(description_lines)))
+        lines.append(f"More games and calendars: {page_url}")
+    event.add("description", vText("\n".join(lines)))
     return event
+
+
+def _add_start_and_end(event: Event, game: Game, start: datetime | date, duration: timedelta | None) -> None:
+    """DTSTART (a UTC start shown in the venue's zone, or an all-day date)
+    and, for a timed event with a known game length, the estimated DTEND."""
+    if not isinstance(start, datetime):
+        event.add("dtstart", start)
+        return
+    zone = zone_for(game.tzid)
+    event.add("dtstart", start.astimezone(zone) if zone else start)
+    if duration is not None:
+        end_utc = start + duration
+        event.add("dtend", end_utc.astimezone(zone) if zone else end_utc)
+
+
+def _description_lines(game: Game, status: FeedStatus | None, *, all_day: bool, estimated_end: bool) -> list[str]:
+    """The event's description, one line each, without the page link."""
+    lines = [status.note] if status else []
+    lines.append(f"League: {game.league_slug.upper()}")
+    if all_day:
+        lines.append(TIME_TBA_NOTE)
+    if estimated_end:
+        lines.append(END_ESTIMATE_NOTE)
+    if game.price:
+        lines.append(f"Tickets: {game.price.currency} {game.price.min:.2f}-{game.price.max:.2f} (Ticketmaster)")
+    else:
+        lines.append("Tickets: price not available from Ticketmaster")
+    if game.ticket_url:
+        lines.append(f"Buy: {game.ticket_url}")
+    return lines
 
 
 def league_calendar(
@@ -170,6 +326,8 @@ def league_calendar(
     *,
     fetched: bool = True,
     base_url: str | None = None,
+    dtstamp: datetime | None = None,
+    game_duration: timedelta | None = None,
 ) -> Calendar:
     page_url = f"{base_url}/{league_slug}/" if base_url else None
     return build_calendar(
@@ -178,6 +336,8 @@ def league_calendar(
         fetched=fetched,
         cal_desc=calendar_description(league_name, page_url=page_url, fetched=fetched),
         page_url=page_url,
+        dtstamp=dtstamp,
+        game_duration=game_duration,
     )
 
 
@@ -189,6 +349,8 @@ def team_calendar(
     fetched: bool = True,
     base_url: str | None = None,
     league_slug: str | None = None,
+    dtstamp: datetime | None = None,
+    game_duration: timedelta | None = None,
 ) -> Calendar:
     team_games = [g for g in games if g.tracked_team_slug == team_slug]
     page_url = f"{base_url}/{league_slug}/{team_slug}/" if base_url and league_slug else None
@@ -198,6 +360,8 @@ def team_calendar(
         fetched=fetched,
         cal_desc=calendar_description(team_name, page_url=page_url, fetched=fetched),
         page_url=page_url,
+        dtstamp=dtstamp,
+        game_duration=game_duration,
     )
 
 

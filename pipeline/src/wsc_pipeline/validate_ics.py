@@ -20,6 +20,26 @@ publish a broken or inconsistent feed:
    games in the matching data/*.json with in_calendar_feed true. A feed
    that silently drops a game the page lists -- or carries one the page
    does not -- fails here.
+5. A game the page marks Cancelled, Postponed or Rescheduled carries the
+   matching STATUS, SUMMARY marker and DESCRIPTION note in its feed entry
+   (ics.FEED_STATUS), and a game the page marks with nothing carries no
+   STATUS: a canceled game must never be an ordinary confirmed event in a
+   subscriber's calendar.
+6. Every event's DTSTAMP is a UTC date-time that is not after the build's
+   fetch time (the data JSON's `fetched_at`): a DTSTAMP is when the calendar
+   copy was made, so one in the future (the game's own start time was written
+   there before) is wrong, and a build with events but no fetch time to check
+   them against is refused.
+7. A game the page lists as in the feed with no announced start time
+   (`time_tba`, or no exact start) is an all-day event on its local date,
+   with "(time TBA)" ending its SUMMARY, the time-TBA note in its
+   DESCRIPTION and no DTEND; a game with an exact start is a timed event.
+   No time is ever shown for a game whose time is not announced.
+8. An event has a DTEND exactly when its description says the end is
+   estimated (ics.END_ESTIMATE_NOTE), and the DTEND is after the start:
+   Ticketmaster publishes no end time, so a DTEND without that line would
+   present an estimate as data, and the line without a DTEND would be
+   false.
 
 Usage: python -m wsc_pipeline.validate_ics <dist-dir>
 """
@@ -28,12 +48,14 @@ from __future__ import annotations
 
 import json
 import sys
+from datetime import date, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
-from icalendar import Calendar
+from icalendar import Calendar, Component
 
 from . import config
-from .ics import make_uid
+from .ics import END_ESTIMATE_NOTE, FEED_STATUS, TIME_TBA_NOTE, TIME_TBA_SUFFIX, make_uid
 
 REQUIRED_VEVENT_PROPS = ("uid", "dtstamp", "dtstart", "summary")
 
@@ -85,44 +107,151 @@ def _check_links_back(feed: Path, cal: Calendar, page_path: str) -> None:
         raise FeedError(f"{feed}: X-WR-CALDESC does not link to {url}")
 
 
-def _event_uids(feed: Path, cal: Calendar) -> list[str]:
-    """Every VEVENT's UID, in order; raises FeedError on a VEVENT missing a
-    required property or on any repeated UID."""
+def _events(feed: Path, cal: Calendar) -> dict[str, Component]:
+    """Every VEVENT by UID; raises FeedError on a VEVENT missing a required
+    property or on any repeated UID."""
     uids: list[str] = []
+    events: dict[str, Component] = {}
     for vevent in cal.walk("VEVENT"):
         for prop in REQUIRED_VEVENT_PROPS:
             if vevent.get(prop) is None:
                 raise FeedError(f"{feed}: a VEVENT is missing {prop.upper()}")
-        uids.append(str(vevent.get("uid")))
+        uid = str(vevent.get("uid"))
+        uids.append(uid)
+        events[uid] = vevent
     if len(uids) != len(set(uids)):
         dupes = sorted({u for u in uids if uids.count(u) > 1})
         raise FeedError(f"{feed}: duplicate UIDs {dupes[:5]}")
-    return uids
+    return events
 
 
-def _check_matches_page(feed: Path, data: Path, uids: list[str]) -> None:
-    """The feed's UIDs equal the UIDs of the games its page lists as in the
-    calendar feed; raises FeedError otherwise."""
+def _page_data(feed: Path, data: Path) -> dict[str, Any]:
+    """The data JSON the feed's page renders from."""
     if not data.is_file():
         raise FeedError(f"{data}: missing -- cannot check {feed} against its page's data")
-    games = json.loads(data.read_text(encoding="utf-8"))["games"]
+    payload: dict[str, Any] = json.loads(data.read_text(encoding="utf-8"))
+    return payload
+
+
+def _check_matches_page(feed: Path, games: list[dict[str, Any]], uids: set[str]) -> None:
+    """The feed's UIDs equal the UIDs of the games its page lists as in the
+    calendar feed; raises FeedError otherwise."""
     expected = {make_uid(g["event_id"]) for g in games if g["in_calendar_feed"]}
-    actual = set(uids)
-    if actual != expected:
+    if uids != expected:
         raise FeedError(
             f"{feed}: feed and page disagree -- in the page's data but not the feed: "
-            f"{sorted(expected - actual)[:5]}; in the feed but not the page's data: "
-            f"{sorted(actual - expected)[:5]}"
+            f"{sorted(expected - uids)[:5]}; in the feed but not the page's data: "
+            f"{sorted(uids - expected)[:5]}"
         )
+
+
+def _check_status_matches_page(feed: Path, games: list[dict[str, Any]], events: dict[str, Component]) -> None:
+    """A game the page marks Cancelled, Postponed or Rescheduled carries that
+    status in its feed entry, and a game with no page status carries no
+    STATUS; raises FeedError otherwise. Only games in the feed are checked
+    here (_check_matches_page owns which games those are)."""
+    for game in games:
+        if not game["in_calendar_feed"]:
+            continue
+        uid = make_uid(game["event_id"])
+        vevent = events[uid]
+        word = game.get("status")
+        expected = None
+        if word:
+            expected = FEED_STATUS.get(word)
+            if expected is None:
+                raise FeedError(f"{feed}: {uid} has page status {word!r}, which the feed has no rule for")
+        raw_status = vevent.get("status")
+        actual_status = str(raw_status) if raw_status is not None else None
+        expected_status = expected.ics_status if expected else None
+        if actual_status != expected_status:
+            raise FeedError(
+                f"{feed}: {uid} is {word or 'unmarked'} on its page but its STATUS is {actual_status!r} "
+                f"in the feed (expected {expected_status!r})"
+            )
+        if expected is None:
+            continue
+        if not str(vevent.get("summary")).startswith(expected.summary_prefix):
+            raise FeedError(f"{feed}: {uid} is {word} on its page but its SUMMARY does not say so")
+        if not str(vevent.get("description", "")).startswith(expected.note):
+            raise FeedError(f"{feed}: {uid} is {word} on its page but its DESCRIPTION does not say so")
+
+
+def _check_start_kinds(feed: Path, games: list[dict[str, Any]], events: dict[str, Component]) -> None:
+    """A game whose start time the page shows as not announced is an all-day
+    event on its local date, and any other game in the feed is a timed one;
+    raises FeedError otherwise."""
+    for game in games:
+        if not game["in_calendar_feed"]:
+            continue
+        uid = make_uid(game["event_id"])
+        vevent = events[uid]
+        start = vevent.decoded("dtstart")
+        all_day = bool(game.get("time_tba")) or game.get("start_utc") is None
+        if not all_day:
+            if not isinstance(start, datetime):
+                raise FeedError(f"{feed}: {uid} has an exact start on its page but an all-day DTSTART in the feed")
+            continue
+        if isinstance(start, datetime) or start != date.fromisoformat(game["start_local_date"]):
+            raise FeedError(
+                f"{feed}: {uid} has no announced time on its page ({game['start_local_date']}) but its DTSTART "
+                f"is {start!r}: it must be an all-day event on that date, never a made-up time"
+            )
+        if not str(vevent.get("summary")).endswith(TIME_TBA_SUFFIX):
+            raise FeedError(f"{feed}: {uid} is all-day but its SUMMARY does not say the time is TBA")
+        if TIME_TBA_NOTE not in str(vevent.get("description", "")):
+            raise FeedError(f"{feed}: {uid} is all-day but its DESCRIPTION lacks the time-TBA note")
+        if vevent.get("dtend") is not None or vevent.get("duration") is not None:
+            raise FeedError(f"{feed}: {uid} is all-day but has an end time; none is ever estimated for it")
+
+
+def _check_dtstamps(feed: Path, events: dict[str, Component], fetched_at: str | None) -> None:
+    """Every DTSTAMP is a UTC date-time no later than the build's fetch time;
+    raises FeedError otherwise."""
+    if not events:
+        return
+    if not fetched_at:
+        raise FeedError(f"{feed}: has events but its page's data records no fetch time to check DTSTAMP against")
+    built = datetime.fromisoformat(fetched_at)
+    for uid, vevent in events.items():
+        stamp = vevent.decoded("dtstamp")
+        if not isinstance(stamp, datetime) or stamp.tzinfo is None or stamp.utcoffset() != timedelta(0):
+            raise FeedError(f"{feed}: {uid} DTSTAMP is not a UTC date-time")
+        if stamp > built:
+            raise FeedError(
+                f"{feed}: {uid} DTSTAMP {stamp.isoformat()} is after the build's fetch time {built.isoformat()} "
+                "-- a DTSTAMP is when the calendar copy was made, never a game's future start time"
+            )
+
+
+def _check_end_times(feed: Path, events: dict[str, Component]) -> None:
+    """DTEND appears exactly with the "end time estimated" line, and after
+    DTSTART; raises FeedError otherwise."""
+    for uid, vevent in events.items():
+        has_end = vevent.get("dtend") is not None
+        says_estimated = END_ESTIMATE_NOTE in str(vevent.get("description", ""))
+        if has_end != says_estimated:
+            raise FeedError(
+                f"{feed}: {uid} has {'a' if has_end else 'no'} DTEND but its DESCRIPTION "
+                f"{'lacks' if has_end else 'carries'} the end-time-estimated line"
+            )
+        if has_end and vevent.decoded("dtend") <= vevent.decoded("dtstart"):
+            raise FeedError(f"{feed}: {uid} DTEND is not after DTSTART")
 
 
 def validate_feed(feed: Path, data: Path, page_path: str) -> int:
     """Returns the number of VEVENTs; raises FeedError on any problem."""
     cal = _parse_calendar(feed)
     _check_links_back(feed, cal, page_path)
-    uids = _event_uids(feed, cal)
-    _check_matches_page(feed, data, uids)
-    return len(uids)
+    events = _events(feed, cal)
+    page = _page_data(feed, data)
+    games = page["games"]
+    _check_matches_page(feed, games, set(events))
+    _check_status_matches_page(feed, games, events)
+    _check_start_kinds(feed, games, events)
+    _check_dtstamps(feed, events, page.get("fetched_at"))
+    _check_end_times(feed, events)
+    return len(events)
 
 
 def validate_dist(dist: Path) -> tuple[int, int]:
