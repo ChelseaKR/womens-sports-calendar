@@ -25,6 +25,11 @@ publish a broken or inconsistent feed:
    (ics.FEED_STATUS), and a game the page marks with nothing carries no
    STATUS: a canceled game must never be an ordinary confirmed event in a
    subscriber's calendar.
+6. Every event's DTSTAMP is a UTC date-time that is not after the build's
+   fetch time (the data JSON's `fetched_at`): a DTSTAMP is when the calendar
+   copy was made, so one in the future (the game's own start time was written
+   there before) is wrong, and a build with events but no fetch time to check
+   them against is refused.
 
 Usage: python -m wsc_pipeline.validate_ics <dist-dir>
 """
@@ -33,6 +38,7 @@ from __future__ import annotations
 
 import json
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -109,12 +115,12 @@ def _events(feed: Path, cal: Calendar) -> dict[str, Component]:
     return events
 
 
-def _page_games(feed: Path, data: Path) -> list[dict[str, Any]]:
-    """The games of the data JSON the feed's page renders from."""
+def _page_data(feed: Path, data: Path) -> dict[str, Any]:
+    """The data JSON the feed's page renders from."""
     if not data.is_file():
         raise FeedError(f"{data}: missing -- cannot check {feed} against its page's data")
-    games: list[dict[str, Any]] = json.loads(data.read_text(encoding="utf-8"))["games"]
-    return games
+    payload: dict[str, Any] = json.loads(data.read_text(encoding="utf-8"))
+    return payload
 
 
 def _check_matches_page(feed: Path, games: list[dict[str, Any]], uids: set[str]) -> None:
@@ -161,14 +167,35 @@ def _check_status_matches_page(feed: Path, games: list[dict[str, Any]], events: 
             raise FeedError(f"{feed}: {uid} is {word} on its page but its DESCRIPTION does not say so")
 
 
+def _check_dtstamps(feed: Path, events: dict[str, Component], fetched_at: str | None) -> None:
+    """Every DTSTAMP is a UTC date-time no later than the build's fetch time;
+    raises FeedError otherwise."""
+    if not events:
+        return
+    if not fetched_at:
+        raise FeedError(f"{feed}: has events but its page's data records no fetch time to check DTSTAMP against")
+    built = datetime.fromisoformat(fetched_at)
+    for uid, vevent in events.items():
+        stamp = vevent.decoded("dtstamp")
+        if not isinstance(stamp, datetime) or stamp.tzinfo is None or stamp.utcoffset() != timedelta(0):
+            raise FeedError(f"{feed}: {uid} DTSTAMP is not a UTC date-time")
+        if stamp > built:
+            raise FeedError(
+                f"{feed}: {uid} DTSTAMP {stamp.isoformat()} is after the build's fetch time {built.isoformat()} "
+                "-- a DTSTAMP is when the calendar copy was made, never a game's future start time"
+            )
+
+
 def validate_feed(feed: Path, data: Path, page_path: str) -> int:
     """Returns the number of VEVENTs; raises FeedError on any problem."""
     cal = _parse_calendar(feed)
     _check_links_back(feed, cal, page_path)
     events = _events(feed, cal)
-    games = _page_games(feed, data)
+    page = _page_data(feed, data)
+    games = page["games"]
     _check_matches_page(feed, games, set(events))
     _check_status_matches_page(feed, games, events)
+    _check_dtstamps(feed, events, page.get("fetched_at"))
     return len(events)
 
 

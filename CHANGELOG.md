@@ -60,6 +60,13 @@ archived and private.
   calendars update the events they already hold. `make validate-ics` fails
   when a feed lacks the status its page shows, including for the fixture
   site's canceled game (#19).
+- Every event's `DTSTAMP` in the calendar feeds was the game's own start
+  time, a date in the future for an upcoming game that moved with the game.
+  It is now the time of the nightly build that wrote the feed (its fetch
+  time), the same for every event and later each night. `make validate-ics`
+  fails on a `DTSTAMP` after the build's fetch time. Event UIDs and feed
+  URLs are unchanged. Events still have no end time: Ticketmaster does not
+  publish one, and whether to estimate one is open (#20).
 - The sitemap check in `make validate-seo` parses `sitemap.xml` with
   `defusedxml` and refuses a DTD or an entity, instead of the standard
   library parser Semgrep flags. `sitemap.py` escapes with `html.escape`,

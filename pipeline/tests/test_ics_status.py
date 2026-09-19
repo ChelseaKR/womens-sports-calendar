@@ -22,7 +22,7 @@ from wsc_pipeline.normalize import normalize_event
 from wsc_pipeline.site_data import NOTABLE_STATUSES
 
 from . import rfc5545
-from .conftest import make_raw_event
+from .conftest import BUILD_TIME, make_raw_event
 from .fixture_site import build_fixture_site
 
 WNBA = LEAGUES[0]
@@ -45,7 +45,7 @@ def _vevent(game):
 
 
 def _calendar_bytes(games) -> bytes:
-    return league_calendar("wnba", "WNBA", games, base_url="https://nexthomegame.com").to_ical()
+    return league_calendar("wnba", "WNBA", games, base_url="https://nexthomegame.com", dtstamp=BUILD_TIME).to_ical()
 
 
 def _text(prop) -> str:
