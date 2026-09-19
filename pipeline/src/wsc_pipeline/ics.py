@@ -107,12 +107,28 @@ def build_calendar(
             continue
         if game.tzid and game.tzid not in tzids_seen:
             tzids_seen.add(game.tzid)
-            vtz = Timezone.from_tzid(game.tzid)
+            vtz = _vtimezone(game.tzid)
             if vtz is not None:
                 cal.add_component(vtz)
         cal.add_component(_event(game, game.start_utc, page_url=page_url))
 
     return cal
+
+
+def _vtimezone(tzid: str) -> Timezone | None:
+    """The VTIMEZONE block for tzid, or None when the zone is unknown.
+
+    Timezone.from_tzid raises ValueError on a name it cannot resolve; it
+    does not return None. zone_for is the one place that decides whether a
+    venue zone is usable (an unknown name is None, and _event then writes
+    the game's UTC start), so it is asked first. One unrecognized zone on
+    one event must never stop the nightly build for every league (#22)."""
+    if zone_for(tzid) is None:
+        return None
+    try:
+        return Timezone.from_tzid(tzid)
+    except ValueError:
+        return None
 
 
 def _calendar_header(*, cal_name: str, cal_desc: str, page_url: str | None) -> Calendar:

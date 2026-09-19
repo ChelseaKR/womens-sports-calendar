@@ -52,6 +52,12 @@ archived and private.
 
 ### Fixed
 
+- One event with an unrecognized venue time zone no longer stops the nightly
+  build for every league (#22). The `.ics` writer now asks the same zone
+  lookup the rest of the pipeline uses, so that game is written with its
+  real UTC start and keeps its UID, and `COVERAGE.txt` and the run log name
+  it. The venue's zone is never guessed. Games with a valid zone are
+  written exactly as before.
 - The sitemap check in `make validate-seo` parses `sitemap.xml` with
   `defusedxml` and refuses a DTD or an entity, instead of the standard
   library parser Semgrep flags. `sitemap.py` escapes with `html.escape`,

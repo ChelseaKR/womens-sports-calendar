@@ -368,6 +368,23 @@ def zone_for(tzid: str | None) -> ZoneInfo | None:
         return None
 
 
+def zone_problem(tzid: str | None) -> str | None:
+    """Why a venue time zone cannot be used, or None when it resolves.
+
+    Two different absences, kept apart because the fix differs: Ticketmaster
+    sent no zone at all, or sent a name this build's zone database does not
+    know ("Mars/Olympus", a typo, a retired alias). Either way the game's
+    start is still a real instant (Ticketmaster's UTC `dateTime`), so the
+    calendar carries it in UTC; what is unknown is the venue's own zone, and
+    that is never guessed from the venue's city or state.
+    """
+    if not tzid or not tzid.strip():
+        return "no venue time zone sent"
+    if zone_for(tzid) is None:
+        return f"unrecognized venue time zone {tzid!r}"
+    return None
+
+
 def safe_ticket_url(url: object) -> str | None:
     """The event's ticket URL only if it is an http(s) URL, else None.
 
