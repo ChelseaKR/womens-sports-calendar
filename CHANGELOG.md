@@ -49,18 +49,17 @@ archived and private.
 - Calendar-first: no prices anywhere. Each game has one ticket link to the
   home team's official seller where it's known, otherwise to the
   Ticketmaster listing (#17).
-- A ticket link that goes through an affiliate template carries
-  `rel="sponsored noopener"`, so search engines can tell it is paid. No
-  affiliate template is set, so no page changes today (#27).
 
 ### Fixed
 
-- One event with an unrecognized venue time zone no longer stops the nightly
-  build for every league (#22). The `.ics` writer now asks the same zone
-  lookup the rest of the pipeline uses, so that game is written with its
-  real UTC start and keeps its UID, and `COVERAGE.txt` and the run log name
-  it. The venue's zone is never guessed. Games with a valid zone are
-  written exactly as before.
+- A canceled game was written to the calendar feeds as an ordinary
+  confirmed event, so subscribers' calendars kept showing it. It now has
+  `STATUS:CANCELLED` and "Canceled: " before its title; a postponed game has
+  `STATUS:TENTATIVE` and "Postponed: " before its title; a rescheduled game
+  says so in its description. Event UIDs and feed URLs are unchanged, so
+  calendars update the events they already hold. `make validate-ics` fails
+  when a feed lacks the status its page shows, including for the fixture
+  site's canceled game (#19).
 - The sitemap check in `make validate-seo` parses `sitemap.xml` with
   `defusedxml` and refuses a DTD or an entity, instead of the standard
   library parser Semgrep flags. `sitemap.py` escapes with `html.escape`,
