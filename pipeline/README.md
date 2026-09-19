@@ -30,7 +30,10 @@ used (requests, bytes).
 
 - `config.py` — the static team/league registry (data, not code) that
   drives Discovery API keyword queries, plus the leagues examined and
-  *not* configured (`LEAGUES_EXAMINED_NOT_INCLUDED`) with why.
+  *not* configured (`LEAGUES_EXAMINED_NOT_INCLUDED`) with why. A team's URL
+  `slug`, Ticketmaster keyword (`name`), `display_name`, `search_names` and
+  `former_slugs` are separate fields, so a rename never moves a subscribed
+  feed (`../docs/DECISIONS.md` 0015 says how to rename a team).
 - `ticketmaster.py` — the Discovery API client. Self-limits to 1
   request/second (below both published rate numbers — the two official
   Ticketmaster pages disagree, 2 vs. 5 req/s), retries on 429/5xx, and

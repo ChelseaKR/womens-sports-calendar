@@ -363,3 +363,54 @@ and addendum:
   itself. `config.py`'s `LEAGUES_EXAMINED_NOT_INCLUDED` gets a "USL W
   League" entry; `LEAGUES` is unchanged. Revisit only if Ticketmaster's own
   listings for these clubs change.
+
+## 0015 — A team's slug, display name and search names are separate; how to rename a team (2026-09-19)
+
+A team's name used to do four jobs at once: its URL slug, the keyword sent to
+Ticketmaster, the name pages and calendars show, and the text that recognizes
+it in an event. Renaming it moved its page and its calendar feed URL, and a
+static host cannot redirect an `.ics` request, so every subscriber to the old
+URL would have got a 404 and quietly stopped receiving games. `Team` in
+`config.py` now has one field for each job, and each optional one defaults to
+the old behavior, so a team that sets none of them publishes exactly what it
+always did.
+
+| Field | Job | Default |
+| --- | --- | --- |
+| `slug` | the URL segment of the page, the feed (`/ics/<league>/<slug>.ics`) and the data file | derived from `name` by `_teams()` |
+| `name` | the Ticketmaster keyword | required |
+| `display_name` | what pages, calendar names and link text show | `name` |
+| `search_names` | extra names to search for and to accept as this team in an event | none |
+| `former_slugs` | slugs the team used to have | none |
+
+**Renaming a team (say "PWHL Detroit" becomes "Detroit Foxes"):**
+
+1. Do not change `slug`. Write the team as `Team(slug="pwhl-detroit",
+   name="Detroit Foxes", display_name="Detroit Foxes", search_names=("PWHL
+   Detroit",))`. The slug keeps the feed URL, the page URL and every
+   subscriber's calendar exactly where they are. `name` moves to the new
+   Ticketmaster keyword; `search_names` keeps the old name searched, and
+   accepted in event names, for as long as Ticketmaster still bills games
+   under it (each search name is one more request per build, counted in the
+   crawl budget). Drop it once no listing uses the old name.
+2. If the URL itself must change as well, set the new `slug` and put the old
+   one in `former_slugs`. The build then writes the same feed, byte for byte
+   (same UIDs), at the old path, and a small noindex notice page at the old
+   page path that points to the new one. The sitemap lists the current slug
+   only. `make validate-ics` checks the two feeds are identical, and
+   `make validate-seo` does not count the notice page as a second listing.
+   Keep every former slug published for as long as anyone might still
+   subscribe to it: there is no way to see who does.
+3. `tests/test_team_identity.py` pins every slug published on 2026-09-19 and
+   the UIDs of the fixture site's feeds. It fails if a published slug changes
+   or disappears, which is what changing `name` on a team that derives its
+   slug from it would do. Add a new team's slug to `PUBLISHED_SLUGS` the day it
+   first publishes.
+4. `check_registry()` refuses, at import, a slug or former slug used twice in
+   a league or that is not a plain URL segment, so one team's feed can never
+   silently overwrite another's.
+
+Nothing was renamed by this change, and no current slug, feed path or UID
+moved: a build of the fixture site before and after is byte-identical (237
+files). Whether the four PWHL working names ("PWHL Detroit", "PWHL Hamilton",
+"PWHL Las Vegas", "PWHL San Jose") have real names yet has not been checked.

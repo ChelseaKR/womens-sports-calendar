@@ -22,10 +22,11 @@ import sys
 from datetime import UTC, date, datetime
 from importlib.metadata import version as package_version
 from pathlib import Path
+from typing import Any
 
 from . import analytics, config, ics, site, site_data, sitemap
 from .coverage import BuildCoverage, compute_league_coverage, render_report
-from .normalize import Game, normalize_event, team_is_participant, unique_by_event_id
+from .normalize import Game, normalize_event, team_is_participant_as_any, unique_by_event_id
 from .ticketmaster import DiscoveryClient, TicketmasterFetchError
 
 DEFAULT_BASE_URL = "https://nexthomegame.com"
@@ -60,6 +61,26 @@ STATIC_FONT_FILES = (
 )
 
 
+def _search_team(
+    client: DiscoveryClient, league: config.League, team: config.Team
+) -> tuple[list[dict[str, Any]], bool]:
+    """Every raw event for a team: the search under its Ticketmaster keyword
+    (`name`), then one more search per `search_names` entry, each counted in
+    the crawl budget. An event several searches return is kept once."""
+    events: list[dict[str, Any]] = []
+    seen: set[object] = set()
+    truncated = False
+    for name in team.all_names:
+        found, cut_short = client.search_team_events(team.slug, name, league.country_codes)
+        truncated = truncated or cut_short
+        for raw in found:
+            if raw.get("id") in seen:
+                continue
+            seen.add(raw.get("id"))
+            events.append(raw)
+    return events, truncated
+
+
 def fetch_all_games(api_key: str) -> tuple[list[Game], dict[str, set[str]], dict[str, set[str]], int, int]:
     """Returns (games, truncated_team_slugs_by_league,
     mismatched_team_slugs_by_league, requests_made, bytes_received).
@@ -82,11 +103,11 @@ def fetch_all_games(api_key: str) -> tuple[list[Game], dict[str, set[str]], dict
     mismatched: dict[str, set[str]] = {lg.slug: set() for lg in config.LEAGUES}
     with DiscoveryClient(api_key) as client:
         for league, team in config.all_teams():
-            raw_events, team_truncated = client.search_team_events(team.slug, team.name, league.country_codes)
+            raw_events, team_truncated = _search_team(client, league, team)
             if team_truncated:
                 truncated[league.slug].add(team.slug)
             for raw in raw_events:
-                if not team_is_participant(team.name, raw, team.not_this_team):
+                if not team_is_participant_as_any(team.all_names, raw, team.not_this_team):
                     mismatched[league.slug].add(team.slug)
                     continue
                 game = normalize_event(
@@ -202,9 +223,16 @@ def _write_ics(out_dir: Path, base_url: str, games_by_league: dict[str, list[Gam
         team_dir.mkdir(exist_ok=True)
         for team in lg.teams:
             team_cal = ics.team_calendar(
-                team.slug, team.name, games, fetched=fetched, base_url=base_url, league_slug=lg.slug
+                team.slug, team.shown_name, games, fetched=fetched, base_url=base_url, league_slug=lg.slug
             )
-            (team_dir / f"{team.slug}.ics").write_bytes(team_cal.to_ical())
+            feed = team_cal.to_ical()
+            (team_dir / f"{team.slug}.ics").write_bytes(feed)
+            # The same feed at every path this team used to have: a static
+            # host cannot redirect an .ics request, and a subscriber's app
+            # holds the old URL. Same bytes, so same UIDs and the same
+            # `URL` (the current page).
+            for former in team.former_slugs:
+                (team_dir / f"{former}.ics").write_bytes(feed)
 
 
 def _write_data(
@@ -313,6 +341,20 @@ def _write_html(
             (team_dir / "index.html").write_text(
                 site.render_team(team=team_payload, base_url=base_url, ga4_id=ga4_id), encoding="utf-8"
             )
+            for former in team.former_slugs:
+                former_dir = league_dir / former
+                former_dir.mkdir(exist_ok=True)
+                (former_dir / "index.html").write_text(
+                    site.render_moved_team(
+                        team_name=team.shown_name,
+                        league_name=lg.name,
+                        league_slug=lg.slug,
+                        team_slug=team.slug,
+                        base_url=base_url,
+                        ga4_id=ga4_id,
+                    ),
+                    encoding="utf-8",
+                )
 
 
 def _write_static(out_dir: Path) -> None:

@@ -171,6 +171,16 @@ def team_is_participant(team_name: str, raw_event: dict[str, Any], not_this_team
     return any(_phrase_match(team_name, c) for c in candidates)
 
 
+def team_is_participant_as_any(
+    team_names: Iterable[str], raw_event: dict[str, Any], not_this_team: tuple[str, ...] = ()
+) -> bool:
+    """team_is_participant for a team known by more than one name (config
+    Team.all_names: its Ticketmaster keyword and any search names, such as
+    a previous name during a rename): True if the event names the team
+    under any of them."""
+    return any(team_is_participant(name, raw_event, not_this_team) for name in team_names)
+
+
 def _parse_price(price_ranges: list[dict[str, Any]] | None) -> PriceRange | None:
     if not price_ranges:
         return None

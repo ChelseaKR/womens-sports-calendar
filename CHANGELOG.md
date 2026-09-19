@@ -40,6 +40,14 @@ archived and private.
   `/privacy/` page (#15). A remembered "Opt out of analytics" control sits
   in every footer (#20). The calendar feeds are never tracked.
 
+- A team's URL slug, display name and search names are now separate
+  settings (#24). A team that sets none of them publishes exactly what it
+  always did (a build of the fixture site before and after is byte-identical,
+  and a test pins every published slug and feed UID). A rename can keep the
+  slug, show a new display name, and keep searching for the old name; a team
+  whose URL must change serves the same feed at its former path and a notice
+  page that points to the new one. See `docs/DECISIONS.md` 0015.
+
 ### Changed
 
 - The repository is public as of 2026-09-18, and the code is licensed under

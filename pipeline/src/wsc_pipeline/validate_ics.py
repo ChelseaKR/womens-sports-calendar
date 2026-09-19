@@ -56,6 +56,16 @@ def _expected_feeds(dist: Path) -> list[tuple[Path, Path, str]]:
                     f"/{league.slug}/{team.slug}/",
                 )
             )
+            # A feed kept at each slug the team used to have: same data,
+            # same page, and (checked in validate_dist) the same bytes.
+            for former in team.former_slugs:
+                triples.append(
+                    (
+                        dist / "ics" / league.slug / f"{former}.ics",
+                        dist / "data" / league.slug / f"{team.slug}.json",
+                        f"/{league.slug}/{team.slug}/",
+                    )
+                )
     return triples
 
 
@@ -135,7 +145,20 @@ def validate_dist(dist: Path) -> tuple[int, int]:
         feeds += 1
         if feed in league_feeds:
             league_events += n
+    _check_former_feeds_match(dist)
     return feeds, league_events
+
+
+def _check_former_feeds_match(dist: Path) -> None:
+    """A feed at a former slug is the current feed, byte for byte: the
+    subscriber holding the old URL must see exactly what the new one shows."""
+    for league in config.LEAGUES:
+        for team in league.teams:
+            current = dist / "ics" / league.slug / f"{team.slug}.ics"
+            for former in team.former_slugs:
+                old = dist / "ics" / league.slug / f"{former}.ics"
+                if old.read_bytes() != current.read_bytes():
+                    raise FeedError(f"{old}: differs from {current}; a former slug must serve the same feed")
 
 
 def main(argv: list[str] | None = None) -> int:

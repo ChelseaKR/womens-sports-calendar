@@ -12,7 +12,7 @@ from datetime import UTC, date, datetime
 from typing import Any
 
 from .config import League, Team
-from .normalize import Game, display_start, local_start, team_is_participant, unique_by_event_id
+from .normalize import Game, display_start, local_start, team_is_participant_as_any, unique_by_event_id
 from .sellers import buy_link
 
 # Ticketmaster dates.status.code values that mean the listed date is not
@@ -97,7 +97,7 @@ def team_data(
     )
     return {
         "team_slug": team.slug,
-        "team_name": team.name,
+        "team_name": team.shown_name,
         "league_slug": league.slug,
         "league_name": league.name,
         "schedule_source_used": league.schedule_source_used,
@@ -121,9 +121,9 @@ def tracked_team_is_home(team: Team, game: Game) -> bool | None:
     from the venue or the city."""
     if not game.home_away_known or not game.home_team or not game.away_team:
         return None
-    if team_is_participant(team.name, {"name": game.home_team}, team.not_this_team):
+    if team_is_participant_as_any(team.all_names, {"name": game.home_team}, team.not_this_team):
         return True
-    if team_is_participant(team.name, {"name": game.away_team}, team.not_this_team):
+    if team_is_participant_as_any(team.all_names, {"name": game.away_team}, team.not_this_team):
         return False
     return None
 
@@ -163,7 +163,7 @@ def league_data(
         "fetched": fetched,
         "possibly_incomplete_teams": sorted(possibly_incomplete_teams),
         "teams": [t.slug for t in league.teams],
-        "team_names": {t.slug: t.name for t in league.teams},
+        "team_names": {t.slug: t.shown_name for t in league.teams},
         "games": [game_to_dict(g) for g in sorted(league_games, key=_sort_key)],
     }
 

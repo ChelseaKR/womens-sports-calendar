@@ -119,12 +119,17 @@ def _base(
     noindex: bool = False,
     ga4_id: str | None = None,
     jsonld: str = "",
+    refresh_to: str | None = None,
 ) -> str:
     """jsonld is a structured_data.script_block(); it goes last in <head>
     before the GA4 loader, which must close <head> (tests/test_analytics.py)."""
     image_url = f"{base_url}/{og_image}"
     analytics_head = ga4_head_snippet(ga4_id, base_url=base_url)
     robots_meta = '<meta name="robots" content="noindex">\n' if noindex else ""
+    # An instant client-side redirect, for a page that only points elsewhere
+    # (render_moved_team): a static host cannot send a real redirect.
+    if refresh_to:
+        robots_meta += f'<meta http-equiv="refresh" content="0; url={e(refresh_to)}">\n'
     # A noindexed page (the 404) carries no canonical: pointing it at another
     # URL would declare it a duplicate of a page it is not.
     canonical_link = "" if noindex else f'<link rel="canonical" href="{e(canonical_url)}">\n'
@@ -587,6 +592,33 @@ are listed below, or start from <a href="/">the home page</a>.</p>
         body=body,
         noindex=True,
         ga4_id=ga4_id,
+    )
+
+
+def render_moved_team(
+    *, team_name: str, league_name: str, league_slug: str, team_slug: str, base_url: str, ga4_id: str | None = None
+) -> str:
+    """The page at a slug a team used to have (config.Team.former_slugs): a
+    notice that points to the current page, and sends the browser there. A
+    static host cannot redirect, so this is what a saved link to the old
+    page lands on. noindex, and kept out of the sitemap, so the old path is
+    never a second listing of the same team; the calendar feed at the old
+    path still works and is not touched."""
+    new_path = f"/{league_slug}/{team_slug}/"
+    body = f"""<h1>{e(team_name)} has a new page address</h1>
+<p class="lede">The {e(team_name)} ({e(league_name)}) schedule is now at
+<a href="{e(new_path)}">{e(base_url)}{e(new_path)}</a>.</p>
+<p>A calendar you already subscribed to keeps working at its old address.</p>
+"""
+    return _base(
+        title=f"{team_name} schedule has moved | {SITE_NAME}",
+        description=f"The {team_name} schedule now lives at {base_url}{new_path}.",
+        canonical_url=f"{base_url}{new_path}",
+        base_url=base_url,
+        body=body,
+        noindex=True,
+        ga4_id=ga4_id,
+        refresh_to=new_path,
     )
 
 

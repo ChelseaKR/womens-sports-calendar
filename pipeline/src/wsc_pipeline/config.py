@@ -46,12 +46,46 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Team:
+    """One tracked team. A team's name used to do four jobs at once: its URL
+    slug, the keyword sent to Ticketmaster, the name pages and calendars
+    show, and the text that recognizes it in an event. Each now has its own
+    field, and every optional one defaults to the old behavior, so a team
+    that sets none of them publishes exactly what it always did
+    (docs/DECISIONS.md 0015 says how to rename a team).
+
+    slug: the URL segment of the team's page, feed (`/ics/<league>/<slug>.ics`)
+    and data file. Subscribers' calendar apps hold the feed URL, and a static
+    host cannot redirect an `.ics` request, so a slug that has been published
+    never changes; a rename keeps it (or moves it to `former_slugs`).
+    name: the Ticketmaster keyword, and the default display name. Kept as the
+    keyword so a rename needs no change to the queries.
+    """
+
     slug: str
     name: str
     # Longer names of OTHER teams that contain this team's name as a phrase,
     # so the participant check would otherwise accept their games (see
     # KEYWORD_COLLISIONS below and normalize.team_is_participant).
     not_this_team: tuple[str, ...] = ()
+    # What pages, calendar names and link text show. None: `name`.
+    display_name: str | None = None
+    # Extra names to search Ticketmaster for, and to accept as this team in an
+    # event (a previous name during a rename). Each one is one more request
+    # per build, counted in the crawl budget.
+    search_names: tuple[str, ...] = ()
+    # Slugs this team used to have. The same feed is still published at each
+    # old path (so no subscriber gets a 404), and the old page is a small
+    # notice that points to the new one. Never listed in the sitemap.
+    former_slugs: tuple[str, ...] = ()
+
+    @property
+    def shown_name(self) -> str:
+        return self.display_name or self.name
+
+    @property
+    def all_names(self) -> tuple[str, ...]:
+        """Every name this team is searched for and recognized by."""
+        return (self.name, *self.search_names)
 
 
 @dataclass(frozen=True)
@@ -353,3 +387,30 @@ def league_by_slug(slug: str) -> League:
         if league.slug == slug:
             return league
     raise KeyError(slug)
+
+
+_SLUG_CHARACTERS = set("abcdefghijklmnopqrstuvwxyz0123456789-")
+
+
+def check_registry(leagues: tuple[League, ...]) -> None:
+    """Raises ValueError when the registry would publish two things at one
+    path or an unusable one: a duplicate league slug, a slug (current or
+    former) used twice within a league, or a slug that is not a plain URL
+    segment. Run at import and by the tests, so a bad edit fails before any
+    subscriber's feed is overwritten by another team's."""
+    league_slugs: set[str] = set()
+    for lg in leagues:
+        if lg.slug in league_slugs:
+            raise ValueError(f"league slug {lg.slug!r} is used twice")
+        league_slugs.add(lg.slug)
+        used: dict[str, str] = {}
+        for team in lg.teams:
+            for kind, slug in [("slug", team.slug), *[("former slug", f) for f in team.former_slugs]]:
+                if not slug or not set(slug) <= _SLUG_CHARACTERS:
+                    raise ValueError(f"{lg.slug}/{team.slug}: {kind} {slug!r} is not a plain URL segment")
+                if slug in used:
+                    raise ValueError(f"{lg.slug}: {kind} {slug!r} of {team.name!r} is already used by {used[slug]!r}")
+                used[slug] = team.name
+
+
+check_registry(LEAGUES)
