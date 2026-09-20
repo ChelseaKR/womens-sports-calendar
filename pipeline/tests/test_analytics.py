@@ -23,6 +23,7 @@ import os
 import re
 import shutil
 import subprocess
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -78,6 +79,22 @@ def _fetched_games():
     assert game is not None
     empty = {lg.slug: set() for lg in LEAGUES}
     return [game], empty, {lg.slug: set() for lg in LEAGUES}, 1, 100
+
+
+def _with_dtstamps_pinned(files: dict[str, bytes]) -> dict[str, bytes]:
+    """Every event's DTSTAMP is its build's fetch time (ics.build_calendar's
+    dtstamp), so two builds a second apart differ in exactly that line, the
+    way data/*.json differ in `fetched_at`. Assert each stamp is its own
+    build's fetch time, then blank it so the rest is compared byte for byte."""
+    fetched = datetime.fromisoformat(json.loads(files["data/site.json"])["fetched_at"])
+    stamp = b"DTSTAMP:" + fetched.strftime("%Y%m%dT%H%M%SZ").encode() + b"\r\n"
+    out = {}
+    for name, data in files.items():
+        if name.endswith(".ics"):
+            assert data.count(b"\r\nDTSTAMP:") == data.count(stamp), f"{name}: a DTSTAMP is not the fetch time"
+            data = data.replace(stamp, b"DTSTAMP:<build time>\r\n")
+        out[name] = data
+    return out
 
 
 def _assert_guarded_ga(html: str, ga4_id: str) -> None:
@@ -179,7 +196,7 @@ def test_ga_never_reaches_the_ics_feeds_or_data_and_they_are_unchanged(tmp_path:
             return parsed
         return data
 
-    a, b = payload_files(without), payload_files(with_id)
+    a, b = _with_dtstamps_pinned(payload_files(without)), _with_dtstamps_pinned(payload_files(with_id))
     ics_files = [k for k in a if k.endswith(".ics")]
     assert len(ics_files) == sum(1 + len(lg.teams) for lg in LEAGUES)
     assert a.keys() == b.keys()
@@ -188,6 +205,7 @@ def test_ga_never_reaches_the_ics_feeds_or_data_and_they_are_unchanged(tmp_path:
     # The fixture game really is in a feed, so "unchanged" compared content.
     league_feed = b[f"ics/{LEAGUES[0].slug}.ics"].decode()
     assert "tm-EVT-GA@" in league_feed
+    assert "DTSTAMP:<build time>" in league_feed  # the stamps really were the fetch time, not absent
     assert "https://www.ticketmaster.com/event/EVT-GA" in league_feed
     for name, data in b.items():
         text = data.decode()

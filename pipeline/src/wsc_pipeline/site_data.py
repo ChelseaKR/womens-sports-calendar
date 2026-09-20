@@ -12,7 +12,7 @@ from datetime import UTC, date, datetime
 from typing import Any
 
 from .config import League, Team
-from .normalize import Game, display_start, local_start, team_is_participant, unique_by_event_id
+from .normalize import Game, display_start, feed_start, local_start, team_is_participant, unique_by_event_id
 from .sellers import buy_link
 
 # Ticketmaster dates.status.code values that mean the listed date is not
@@ -54,7 +54,9 @@ def game_to_dict(game: Game) -> dict[str, Any]:
         # and the zone are all published (normalize.local_start). The only
         # start time the structured data and <time datetime> ever use.
         "start_local_datetime": start.isoformat(timespec="seconds") if start else None,
-        "in_calendar_feed": bool(game.start_utc is not None and not game.date_tbd),
+        # In the .ics feeds: timed when the start is exact, all-day when only
+        # the date is known (normalize.feed_start), left out with no date.
+        "in_calendar_feed": feed_start(game) is not None,
         # Whether home_team/away_team are known to be in that order (the
         # event name said so), rather than just the two teams involved.
         "home_away_known": game.home_away_known,
