@@ -24,6 +24,8 @@ _VS_SPLIT = re.compile(r"\s+(vs\.?|v\.?|at|@)\s+", re.IGNORECASE)
 _AWAY_FIRST_SEPARATORS = frozenset({"at", "@"})
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
 _MIN_MATCH_LEN = 4
+_SPONSOR_PREFIX = re.compile(r"^[^:]+:\s+", re.IGNORECASE)
+_PARENTHETICAL = re.compile(r"\s*\(([^)]+)\)\s*$")
 
 
 @dataclass(frozen=True)
@@ -77,9 +79,11 @@ def parse_matchup(event_name: str, attractions: list[dict[str, Any]]) -> tuple[s
     "Away @ Home" name the visitor first. When the name has no separator,
     exactly two _embedded.attractions give the pair, in an order that says
     nothing about who is at home, so home_away_known is False."""
-    match = _VS_SPLIT.search(event_name)
+    cleaned = _strip_sponsor_prefix(event_name)
+    match = _VS_SPLIT.search(cleaned)
     if match:
-        first, second = event_name[: match.start()].strip() or None, event_name[match.end() :].strip() or None
+        first = _strip_parenthetical(cleaned[: match.start()].strip()) or None
+        second = _strip_parenthetical(cleaned[match.end() :].strip()) or None
         if first and second:
             if match.group(1).lower() in _AWAY_FIRST_SEPARATORS:
                 return second, first, True
@@ -89,6 +93,28 @@ def parse_matchup(event_name: str, attractions: list[dict[str, Any]]) -> tuple[s
         if len(names) == 2:
             return names[0], names[1], False
     return None, None, False
+
+
+def _strip_sponsor_prefix(name: str) -> str:
+    """Remove a leading '<sponsor>: ' from the event name. Sponsor
+    prefixes appear before the matchup separator and must not bleed
+    into team names."""
+    return _SPONSOR_PREFIX.sub("", name, count=1)
+
+
+def _strip_parenthetical(name: str) -> str:
+    """Remove a trailing parenthetical like '(Exhibition)' from a team
+    name. The parenthetical is not part of the team name."""
+    return _PARENTHETICAL.sub("", name).strip()
+
+
+def extract_game_type(event_name: str) -> str | None:
+    """Extract a game-type label like 'Exhibition' from a trailing
+    parenthetical in the event name. Returns None if there is none."""
+    m = _PARENTHETICAL.search(event_name)
+    if m:
+        return m.group(1).strip()
+    return None
 
 
 def parse_teams(event_name: str, attractions: list[dict[str, Any]]) -> tuple[str | None, str | None]:

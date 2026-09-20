@@ -91,7 +91,7 @@ LEAGUES: tuple[League, ...] = (
     League(
         slug="wnba",
         name="WNBA",
-        country_codes=("US",),
+        country_codes=("US", "CA"),
         teams=_teams(
             "Minnesota Lynx",
             "Golden State Valkyries",

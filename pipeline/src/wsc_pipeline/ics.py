@@ -158,12 +158,49 @@ def _event(game: Game, start_utc: datetime, *, page_url: str | None) -> Event:
     zone = zone_for(game.tzid)
     dtstart = start_utc.astimezone(zone) if zone else start_utc
     event.add("dtstart", dtstart)
+
     summary = game.raw_event_name or f"{game.home_team or '?'} vs {game.away_team or '?'}"
-    event.add("summary", vText(summary))
+    status = game.status_code
+    _apply_status(event, summary, status)
+
+    event.add("summary", vText(_apply_status_prefix(summary, status)))
+
     location_parts = [p for p in (game.venue_name, game.venue_city, game.venue_state) if p]
     if location_parts:
         event.add("location", vText(", ".join(location_parts)))
+
+    description_lines = _build_description(game, status, page_url)
+    event.add("description", vText("\n".join(description_lines)))
+    _apply_ticket_url(event, game)
+    return event
+
+
+def _apply_status(event: Event, summary: str, status: str | None) -> None:
+    """Set the STATUS property on the event based on game status."""
+    if status == "cancelled":
+        event.add("status", "CANCELLED")
+    elif status in ("postponed", "rescheduled"):
+        event.add("status", "TENTATIVE")
+
+
+def _apply_status_prefix(summary: str, status: str | None) -> str:
+    """Add a visible status prefix to the summary."""
+    if status == "cancelled":
+        return f"Canceled: {summary}"
+    if status == "postponed":
+        return f"Postponed: {summary}"
+    return summary
+
+
+def _build_description(game: Game, status: str | None, page_url: str | None) -> list[str]:
+    """Build the description lines for a VEVENT."""
     description_lines = [f"League: {game.league_slug.upper()}"]
+    if status == "cancelled":
+        description_lines.append("This game has been canceled.")
+    elif status == "postponed":
+        description_lines.append("This game has been postponed. The date shown is the original one.")
+    elif status == "rescheduled":
+        description_lines.append("This game has been rescheduled.")
     if game.price:
         description_lines.append(
             f"Tickets: {game.price.currency} {game.price.min:.2f}-{game.price.max:.2f} (Ticketmaster)"
@@ -172,11 +209,15 @@ def _event(game: Game, start_utc: datetime, *, page_url: str | None) -> Event:
         description_lines.append("Tickets: price not available from Ticketmaster")
     if game.ticket_url:
         description_lines.append(f"Buy: {game.ticket_url}")
-        event.add("url", game.ticket_url)
     if page_url:
         description_lines.append(f"More games and calendars: {page_url}")
-    event.add("description", vText("\n".join(description_lines)))
-    return event
+    return description_lines
+
+
+def _apply_ticket_url(event: Event, game: Game) -> None:
+    """Add the ticket URL to the event if available."""
+    if game.ticket_url:
+        event.add("url", game.ticket_url)
 
 
 def league_calendar(
