@@ -549,6 +549,7 @@ def render_index(
 Calendar, Apple Calendar or Outlook. Every listed game shows up on its own,
 updated nightly, with a link to buy tickets from the team's seller. No
 account, no ads.</p>
+<p><a href="{SCHEDULE_PATH}">View all games today and this week</a></p>
 <h2>Leagues</h2>
 <ul class="league-strip">
 {league_links}
@@ -742,6 +743,137 @@ subscribing to a calendar or following a ticket link is fixed first.</p>
         body=body,
         ga4_id=ga4_id,
     )
+
+
+SCHEDULE_PATH = "/schedule/"
+
+
+def render_schedule(
+    *,
+    games: list[dict[str, Any]],
+    base_url: str,
+    ga4_id: str | None = None,
+    fetched: bool = True,
+) -> str:
+    """dist/schedule/index.html: a league-wide daily schedule view across
+    all tracked leagues, showing today's and this week's games."""
+    from datetime import date, timedelta
+
+    today = date.today()
+    week_start = today - timedelta(days=today.weekday())
+
+    # Group games by date
+    games_by_date: dict[str, list[dict[str, Any]]] = {}
+    for game in games:
+        if game.get("start_local_date"):
+            games_by_date.setdefault(game["start_local_date"], []).append(game)
+
+    # Today's games
+    today_key = today.isoformat()
+    today_games = games_by_date.get(today_key, [])
+
+    # This week's games grouped by day
+    week_games: list[tuple[str, list[dict[str, Any]]]] = []
+    for i in range(7):
+        day = week_start + timedelta(days=i)
+        day_key = day.isoformat()
+        day_games = games_by_date.get(day_key, [])
+        if day_games:
+            week_games.append((day_key, day_games))
+
+    # League filter chips
+    league_slugs = sorted(set(g.get("league_slug", "") for g in games))
+    league_chips = "\n".join(
+        f'<button class="league-chip" data-league="{e(slug)}">{e(slug.upper())}</button>' for slug in league_slugs
+    )
+
+    # Today's games section
+    if today_games:
+        today_rows = "\n".join(_schedule_game_row(g) for g in today_games)
+        today_section = f"""<section class="schedule-today">
+<h2>Today's games</h2>
+<div class="games-table-wrap">
+<table class="games-table" aria-label="Today's games">
+<thead><tr><th scope="col">League</th><th scope="col">Matchup</th><th scope="col">Time</th><th scope="col">Venue</th></tr></thead>
+<tbody>
+{today_rows}
+</tbody>
+</table>
+</div>
+</section>"""
+    else:
+        today_section = '<section class="schedule-today"><h2>Today\'s games</h2><p class="no-games-message">No games scheduled for today.</p></section>'
+
+    # This week's games section
+    if week_games:
+        week_sections = []
+        for day_key, day_games in week_games:
+            from datetime import datetime as _dt
+
+            day_date = _dt.strptime(day_key, "%Y-%m-%d").date()
+            day_label = day_date.strftime("%A, %B %-d")
+            day_rows = "\n".join(_schedule_game_row(g) for g in day_games)
+            week_sections.append(f"""<section class="schedule-day">
+<h3>{e(day_label)}</h3>
+<div class="games-table-wrap">
+<table class="games-table" aria-label="Games on {e(day_label)}">
+<thead><tr><th scope="col">League</th><th scope="col">Matchup</th><th scope="col">Time</th><th scope="col">Venue</th></tr></thead>
+<tbody>
+{day_rows}
+</tbody>
+</table>
+</div>
+</section>""")
+        week_section = "<h2>This week</h2>" + "\n".join(week_sections)
+    else:
+        week_section = '<h2>This week</h2><p class="no-games-message">No games scheduled for this week.</p>'
+
+    # Subscribe to all leagues
+    all_ics_urls = [f"{base_url}/ics/{slug}.ics" for slug in league_slugs]
+    subscribe_links = "\n".join(
+        f'<li><a class="subscribe-cta" href="webcal:{url}">Subscribe to {e(slug.upper())}</a></li>'
+        for slug, url in zip(league_slugs, all_ics_urls, strict=True)
+    )
+
+    body = f"""{_breadcrumb([("All leagues", "/")], "Schedule")}
+<h1>Women's sports schedule</h1>
+<p class="lede">Every game across all tracked leagues, today and this week.
+Filter by league or subscribe to all schedules at once.</p>
+<div class="league-chips" role="group" aria-label="Filter by league">
+<button class="league-chip league-chip--active" data-league="all">All leagues</button>
+{league_chips}
+</div>
+{today_section}
+{week_section}
+<section class="subscribe">
+<h2>Subscribe to all schedules</h2>
+<ul class="subscribe-buttons">
+{subscribe_links}
+</ul>
+<p class="subscribe-feed">All feeds update nightly with the latest games.</p>
+</section>
+"""
+    return _base(
+        title=f"Schedule | {SITE_NAME}",
+        description="Every women's sports game across all tracked leagues, today and this week.",
+        canonical_url=f"{base_url}{SCHEDULE_PATH}",
+        base_url=base_url,
+        body=body,
+        ga4_id=ga4_id,
+    )
+
+
+def _schedule_game_row(game: dict[str, Any]) -> str:
+    """Render a single game row for the schedule table."""
+    league = e(game.get("league_slug", "").upper())
+    home = game.get("home_team") or "TBD"
+    away = game.get("away_team") or "TBD"
+    matchup = f"{e(home)} vs {e(away)}"
+    time_str = game.get("start_display") or "TBD"
+    venue = game.get("venue_name") or ""
+    if game.get("venue_city"):
+        venue = f"{venue}, {game['venue_city']}" if venue else game["venue_city"]
+    return f"<tr><td>{league}</td><td>{matchup}</td><td>{e(time_str)}</td><td>{e(venue)}</td></tr>"
 
 
 def render_league(
@@ -1242,6 +1374,28 @@ table.games-table tbody tr:last-child td { border-bottom: 0; }
   color: var(--muted); white-space: nowrap;
 }
 .home-away--home { color: var(--ink); border-color: var(--ink); }
+
+/* ---- schedule page ---- */
+.league-chips {
+  display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0 1.5rem;
+}
+.league-chip {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 999px; padding: 0.4rem 0.9rem;
+  font-family: var(--label-font); font-weight: 600; font-size: 0.875rem;
+  color: var(--ink); cursor: pointer; transition: all 0.15s ease;
+}
+.league-chip:hover { background: var(--border); }
+.league-chip--active {
+  background: var(--navy); color: var(--on-navy-fg); border-color: var(--navy);
+}
+.league-chip--active:hover { background: #132a4d; }
+.schedule-today, .schedule-day { margin-bottom: 1.5rem; }
+.schedule-day h3 {
+  font-family: var(--display-font); font-weight: 700; font-size: 1.15rem;
+  margin: 1.25rem 0 0.5rem; padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
 
 .sr-caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 """

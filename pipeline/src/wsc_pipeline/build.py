@@ -334,6 +334,25 @@ def _write_html(
                 site.render_team(team=team_payload, base_url=base_url, ga4_id=ga4_id), encoding="utf-8"
             )
 
+    # Schedule page: all games across all leagues
+    all_games = []
+    for lg in config.LEAGUES:
+        for game in games_by_league[lg.slug]:
+            game_dict = site_data.game_to_dict(game)
+            game_dict["league_slug"] = lg.slug
+            all_games.append(game_dict)
+    schedule_dir = out_dir / "schedule"
+    schedule_dir.mkdir(exist_ok=True)
+    (schedule_dir / "index.html").write_text(
+        site.render_schedule(
+            games=all_games,
+            base_url=base_url,
+            ga4_id=ga4_id,
+            fetched=api_key_present,
+        ),
+        encoding="utf-8",
+    )
+
 
 def _write_static(out_dir: Path) -> None:
     (out_dir / "style.css").write_text(site.STYLE_CSS, encoding="utf-8")
@@ -362,6 +381,7 @@ def _write_sitemap_and_robots(out_dir: Path, base_url: str, state: dict[str, sit
         ("/", state["/"].changed_at),
         (site.PRIVACY_PATH, site.PRIVACY_UPDATED),
         (site.ACCESSIBILITY_PATH, site.ACCESSIBILITY_UPDATED),
+        (site.SCHEDULE_PATH, state.get(site.SCHEDULE_PATH, sitemap.PageState()).changed_at),
     ]
     for lg in config.LEAGUES:
         entries.append((f"/{lg.slug}/", state[f"/{lg.slug}/"].changed_at))
