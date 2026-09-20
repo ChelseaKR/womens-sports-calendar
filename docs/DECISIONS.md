@@ -177,6 +177,41 @@ women's sport besides basketball remain in `LEAGUES_EXAMINED_NOT_INCLUDED`
 -- not a licensing gap, just not yet scoped, same bucket as Unrivaled and
 LOVB.
 
+## 0011 — WPBL examined and not added: zero Ticketmaster coverage, not a licensing block (2026-09-16)
+
+WPBL (Women's Pro Baseball League) — a real, currently operating
+professional women's baseball league that began its inaugural season
+2026-08-01, with four fixed city-franchise teams (Boston Hunters, New York
+Heights, Los Angeles Queens, San Francisco Firebells) — was evaluated as a
+further tracked league and **not added**.
+
+Team-identity shape passed (fixed, season-long rosters, same as
+WNBA/NWSL/PWHL/AUSL, unlike AU's redrafted disciplines). Licensing turned
+out to be moot, same as every other league (DECISIONS 0006: no league's own
+site is ever read) — and WPBL's own site is, if anything, the *least*
+restrictive found in this whole survey: no Terms of Use page exists at all,
+its Privacy Policy has no automated-access or commercial-use clause, and
+its robots.txt is a permissive WordPress default. None of that matters,
+because the actual blocker is structural and empirical: WPBL's own tickets
+page names **TicketReturn** (ticketreturn.com), not Ticketmaster, as its
+ticketing partner, and a direct Ticketmaster search for all four 2026 teams
+plus the bare league name returned **zero results across the board** —
+100% of the league checked, not a sample, confirmed 2026-09-16. This is a
+clean, total absence (contrast the AUSL addition, DECISIONS 0008, where a
+spot-check found real per-venue inventory before it was tracked). Adding
+WPBL under the current Ticketmaster-only data model (DECISIONS 0006) would
+ship team and league pages, and `.ics` feeds, that can never contain a real
+game or price — the "absence rendered as a value" failure mode this
+portfolio treats as a real defect elsewhere, not an acceptable degraded
+state to ship on purpose.
+
+Recorded in `docs/LICENSES-AND-ATTRIBUTION.md` §1 (WPBL entry) and §5
+(summary table); `LEAGUES_EXAMINED_NOT_INCLUDED` in
+`pipeline/src/wsc_pipeline/config.py` gets a WPBL entry alongside NCAA/
+Unrivaled/LOVB. Nothing in `config.py`'s tracked `LEAGUES` tuple changes.
+Re-check if WPBL ever signs with Ticketmaster or a future season adds
+teams/venues that do.
+
 ## 0012 — Google Analytics 4 on the HTML pages; calendar feeds stay untracked (2026-09-17)
 
 Supersedes 0002. Numbered 0012, not 0011: open PR #5 (WPBL) already uses
@@ -295,3 +330,36 @@ What changes:
 Revisit if a price source passes 0003 with an all-in total price that
 allows nightly caching, indexed display, and `.ics` redistribution.
 
+## 0014 — USL W League examined, NOT added: Ticketmaster coverage fails, not licensing (2026-09-16)
+
+USL W League was evaluated as a further tracked league, same
+research-before-bytes process as every league above, and does not become a
+tracked league. Per `docs/LICENSES-AND-ATTRIBUTION.md`'s 2026-09-16 entry
+and addendum:
+
+- **Licensing was checked and is moot**, exactly as for every tracked
+  league: uslsoccer.com's Terms of Use (governing all USL Family
+  properties, USL W-League named explicitly) ban automated commercial
+  collection and limit Content to personal/non-commercial use, but this
+  was never going to matter — the pipeline never reads a league's own
+  site, only Ticketmaster by team keyword (0006).
+- **The real blocker is Ticketmaster coverage, checked empirically.** The
+  2026 season fields 96 clubs across 16 divisions — a much larger and more
+  volatile roster than any currently-tracked league (WNBA 15, NWSL 16,
+  PWHL 12, AUSL 6 teams). A 16-club spot-check spanning both
+  pro-affiliated clubs (the best case for Ticketmaster coverage) and small
+  independent clubs found **zero** clubs with a confirmed, correctly-scoped,
+  current Ticketmaster listing. The three clubs with any Ticketmaster
+  presence at all either had zero events listed or listed only their
+  affiliated men's team's games — a worse failure mode than plain absence,
+  since a naive keyword match could surface the wrong team's games under
+  this product's women's-league label.
+- **Two 2026 USL W League clubs (Racing Louisville FC, North Carolina
+  Courage U23) share or nearly share a name with an already-tracked NWSL
+  franchise**, a separate structural problem that would need its own fix
+  even if coverage were otherwise solid.
+- With 96 clubs and a uniformly negative sample, no scoped subset (the way
+  NCAA scoped to Big Ten, or AUSL scoped to six franchises) presents
+  itself. `config.py`'s `LEAGUES_EXAMINED_NOT_INCLUDED` gets a "USL W
+  League" entry; `LEAGUES` is unchanged. Revisit only if Ticketmaster's own
+  listings for these clubs change.

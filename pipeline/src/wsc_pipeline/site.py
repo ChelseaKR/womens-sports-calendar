@@ -35,7 +35,7 @@ from . import structured_data
 from .analytics import GA4_DATA_RETENTION, ga4_head_snippet, measurement_id
 from .ics import calendar_name
 from .normalize import display_date
-from .sellers import affiliate_links_active
+from .sellers import affiliate_links_active, is_affiliate_link
 
 CSS_PATH = "/style.css"
 PRIVACY_PATH = "/privacy/"
@@ -193,6 +193,11 @@ AFFILIATE_NOTE_ACTIVE = (
     "Some of these are affiliate links: if you buy through one, the seller may pay this site a commission."
 )
 AFFILIATE_NOTE_INACTIVE = "They are plain links, and this site is not paid for them."
+# The rel tokens on a ticket link that went through an affiliate template
+# (sellers.is_affiliate_link). "sponsored" is the search-engine signal for a
+# paid link; "noopener" is harmless on a link that opens in the same tab and
+# keeps the pair safe if a link is ever made to open in a new one.
+AFFILIATE_LINK_REL = ("sponsored", "noopener")
 
 
 # The footer's "Opt out of analytics" control, only on pages that carry the
@@ -296,7 +301,14 @@ def _buy_link(game: Mapping[str, Any], matchup: str, *, css_class: str = "") -> 
     if buy.get("home_team"):
         text += f", the official seller for {buy['home_team']} home games"
     class_attr = f' class="{css_class}"' if css_class else ""
-    return f'<a{class_attr} href="{e(buy["url"])}">{e(text)}</a>'
+    # An affiliate link is marked as one for search engines (Google asks that
+    # paid and affiliate links say so); the reader-facing disclosure is the
+    # footer note. Derived here from the seller, never stored in data/*.json.
+    # A plain link gets no rel attribute at all.
+    rel_attr = ""
+    if is_affiliate_link(buy["seller"]):
+        rel_attr = f' rel="{" ".join(AFFILIATE_LINK_REL)}"'
+    return f'<a{class_attr} href="{e(buy["url"])}"{rel_attr}>{e(text)}</a>'
 
 
 def _matchup_text(game: Mapping[str, Any]) -> str:

@@ -16,7 +16,7 @@ thresholds. Only this repository's values are recorded here.
 | 6 a11y | Applies, blocking: the site is human-facing HTML | `make a11y` |
 | 7 perf | Applies, blocking: a hosted frontend | `make perf` (Lighthouse). k6 N/A: static files, no route of ours runs |
 | 8 responsible | N/A: no AI, consent or no-outing guard in this product (ADR 0004). The fail-closed build and the absence discipline are tested in stage 4 | — |
-| 9 build | Applies: the site is built and validated (`make build`, `validate-html`, `validate-ics`); a wheel is built (`make wheel`). There's no release artifact (#28) | `ci.yml`, `pages.yml` |
+| 9 build | Applies: the site is built and validated (`make build`, `validate-html`, `validate-ics`); a wheel is built (`make wheel`). There's no release artifact (#7) | `ci.yml`, `pages.yml` |
 | Workflow SAST | Applies, blocking | `workflow-lint.yml` (zizmor, policy script) |
 | CI minutes | Ubuntu only; per-commit concurrency; heavy browser gates on push/PR only; schedules for history and freshness scans | `.github/workflows/` |
 
@@ -29,7 +29,7 @@ thresholds. Only this repository's values are recorded here.
 |---|---|
 | OBS-11 no secrets in logs | Applies: fetch errors redact the API key (`test_security_hardening.py`); Semgrep rule `wsc-credential-in-output` |
 | OBS-23/24/25 lab Core Web Vitals | Applies: Lighthouse LCP < 2500 ms, CLS < 0.1, TBT < 200 ms (lab proxy for INP), in `make perf` |
-| OBS-26 field Core Web Vitals (RUM) | Gap (#25). GA4 counts page views; there's no `web-vitals` beacon |
+| OBS-26 field Core Web Vitals (RUM) | Gap (#4). GA4 counts page views; there's no `web-vitals` beacon |
 | OTel traces/metrics, SLOs, `/livez` `/readyz` | N/A: no service of ours runs at request time (Tier B static hosting, Tier C batch) |
 | Pipeline logs | Tier C: human-readable build and coverage report on stdout; the coverage report goes to the `pages.yml` job summary. Structured JSON logging is N/A: one batch job, read in the Actions log |
 | Freshness | `freshness.yml` checks the live `fetched_at` daily against a 30-hour SLA (ADR 0003) |
@@ -42,7 +42,7 @@ thresholds. Only this repository's values are recorded here.
 | pa11y-ci, WCAG2AA, htmlcs + axe runners | 0 errors on every page | blocking |
 | Lighthouse accessibility | ≥ 0.90 | blocking (`make perf`) |
 | Keyboard walk, 320 px reflow, reduced motion | every page | blocking |
-| Screen-reader and keyboard walkthroughs, ACR | not done | REVIEW, open (#26) |
+| Screen-reader and keyboard walkthroughs, ACR | not done | REVIEW, open (#5) |
 | Route list | every HTML page in `dist/` plus two populated-table fixtures | `scripts/check_a11y_coverage.py` |
 | Ignore list | empty | — |
 
@@ -69,7 +69,7 @@ thresholds. Only this repository's values are recorded here.
 ## Release (RELEASE-AND-VERSIONING-STANDARD §1)
 
 Release-producing: the deployed site is the release. No release process
-exists yet (#28); `/version.json` stamps the live commit and pipeline
+exists yet (#7); `/version.json` stamps the live commit and pipeline
 version.
 
 Last verified: 2026-09-17 · Recheck cadence: quarterly, and whenever a

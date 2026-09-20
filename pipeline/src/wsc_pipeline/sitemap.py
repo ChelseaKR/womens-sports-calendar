@@ -39,8 +39,8 @@ import sys
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
+from html import escape
 from typing import Any
-from xml.sax.saxutils import escape
 
 import httpx
 
@@ -158,10 +158,10 @@ def render_sitemap(base_url: str, entries: list[tuple[str, str | date | None]]) 
     """entries: (site path, lastmod) in order; lastmod None = omitted."""
     rows = []
     for path, lastmod in entries:
-        row = f"  <url><loc>{escape(base_url + path)}</loc>"
+        row = f"  <url><loc>{escape(base_url + path, quote=False)}</loc>"
         if lastmod is not None:
             value = lastmod.isoformat() if isinstance(lastmod, date) else lastmod
-            row += f"<lastmod>{escape(value)}</lastmod>"
+            row += f"<lastmod>{escape(value, quote=False)}</lastmod>"
         rows.append(row + "</url>")
     body = "\n".join(rows)
     return (
