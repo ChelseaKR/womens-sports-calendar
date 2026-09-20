@@ -381,7 +381,10 @@ def _write_sitemap_and_robots(out_dir: Path, base_url: str, state: dict[str, sit
         ("/", state["/"].changed_at),
         (site.PRIVACY_PATH, site.PRIVACY_UPDATED),
         (site.ACCESSIBILITY_PATH, site.ACCESSIBILITY_UPDATED),
-        (site.SCHEDULE_PATH, state.get(site.SCHEDULE_PATH, sitemap.PageState()).changed_at),
+        (
+            site.SCHEDULE_PATH,
+            state.get(site.SCHEDULE_PATH, sitemap.PageState(fingerprint="", changed_at=None)).changed_at,
+        ),
     ]
     for lg in config.LEAGUES:
         entries.append((f"/{lg.slug}/", state[f"/{lg.slug}/"].changed_at))
