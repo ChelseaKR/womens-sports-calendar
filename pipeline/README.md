@@ -53,8 +53,10 @@ used (requests, bytes).
   home/away teams from the event name ("Home vs Away", or "Away at Home"),
   keeping what surrounds them out of the team names: a leading "\<title\>: "
   (a title sponsor) becomes `event_title`, a trailing "(Exhibition)" or
-  "- Game 2" (an allowlist, so a team's own parenthetical stays) becomes
-  `game_type`, and "\<event\> at \<venue\>" names no home team,
+  "- Game 2" (an allowlist of game types) becomes `game_type`, any other
+  trailing parenthetical (a promotion) and a ": \<package\>" after the
+  away team are dropped from the name, and "\<event\> at \<venue\>"
+  names no home team,
   falling back to `_embedded.attractions` for the pair only — then
   `home_away_known` is false and nothing calls either team the home side —
   and extracts venue (name, city, state, street, postcode, country), date,

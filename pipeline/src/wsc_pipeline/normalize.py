@@ -25,14 +25,19 @@ _AWAY_FIRST_SEPARATORS = frozenset({"at", "@"})
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
 _MIN_MATCH_LEN = 4
 
-# What Ticketmaster appends to the second side of a matchup name that is not
-# part of the team's name. Recognized by an allowlist, not by shape: a team
-# name can end in a parenthetical of its own ("Utah Royals (W)"), and a wrong
-# label would be worse than a label left where it was. A parenthetical that is
-# not one of these stays in the name, exactly as before.
+# What Ticketmaster appends to the second side of a matchup name that is a
+# game type, published as `game_type`. Any other trailing parenthetical
+# ("(Noche Latina Night)", "(Fan Appreciation)", a giveaway) is a promotion,
+# not part of the team's name: it is taken off the name and not published
+# (#34 did the same; the owner decided 2026-10-01 to keep that behavior).
 _GAME_LABEL = r"(?:exhibition|pre-?season|scrimmage|postseason|regular season|if necessary|(?:game|match|round)\s+\d+)"
 _TRAILING_PAREN_LABEL = re.compile(rf"\s*\(\s*({_GAME_LABEL}(?:\s*,\s*{_GAME_LABEL})*)\s*\)\s*$", re.IGNORECASE)
 _TRAILING_SERIES_LABEL = re.compile(r"\s+[-\u2013\u2014]\s+((?:game|match|round)\s+\d+)\s*$", re.IGNORECASE)
+_TRAILING_PARENTHETICAL = re.compile(r"\s*\(([^()]*)\)\s*$")
+# Parentheticals that are part of a real team's name and must stay on it.
+# No tracked team or listed opponent has one (checked 2026-10-01 against
+# config.py and every live listing); add one here if a team ever does.
+_NAME_PARENTHETICALS: frozenset[str] = frozenset()
 # A title sponsor or event name in front of the first team: "McBride Homes
 # Braggin' Rights: Illinois Fighting Illini Womens Basketball". A team name
 # never contains ": ".
@@ -99,11 +104,23 @@ class Matchup:
     game_type: str | None = None
 
 
+def _strip_parentheticals(side: str) -> str:
+    """The team name without any trailing parenthetical that is not part of a
+    real team's name (_NAME_PARENTHETICALS)."""
+    while (paren := _TRAILING_PARENTHETICAL.search(side)) and paren.group(1).strip() not in _NAME_PARENTHETICALS:
+        side = side[: paren.start()]
+    return side.strip()
+
+
 def _split_game_type(side: str) -> tuple[str, str | None]:
-    """(team, label) with a trailing game type taken off the second side of a
-    matchup: "Seattle Storm - Game 2 (If Necessary)" is ("Seattle Storm",
-    "Game 2 (If Necessary)"). Only the allowlisted labels (_GAME_LABEL) come
-    off; anything else stays part of the name."""
+    """(team, label) for the second side of a matchup. A trailing game type
+    comes off as the label: "Seattle Storm - Game 2 (If Necessary)" is
+    ("Seattle Storm", "Game 2 (If Necessary)"); only the allowlisted labels
+    (_GAME_LABEL) are labels. Any other trailing parenthetical, and anything
+    after a ": " ("Chicago Sky: Capital One Arena VIP Seating", a ticket
+    package), comes off the name and is not a label. A team name never
+    contains ": "."""
+    side = side.partition(_TITLE_SEPARATOR)[0]
     paren = _TRAILING_PAREN_LABEL.search(side)
     if paren:
         side = side[: paren.start()]
@@ -113,7 +130,7 @@ def _split_game_type(side: str) -> tuple[str, str | None]:
     parts = [m.group(1).strip() for m in (series,) if m]
     if paren:
         parts.append(f"({paren.group(1).strip()})" if series else paren.group(1).strip())
-    return side.strip(), " ".join(parts) or None
+    return _strip_parentheticals(side), " ".join(parts) or None
 
 
 def _split_title(side: str) -> tuple[str, str | None]:
@@ -130,7 +147,8 @@ def _split_leading_title(event_name: str) -> tuple[str, str | None]:
     ("District vs. Empire: Washington Spirit vs. NJ/NY Gotham FC", a live
     NWSL listing), which the per-side split in _split_title cannot see: it
     would read "District" as the home team. A colon with no matchup after it
-    ("Illinois vs Missouri: Braggin' Rights") is left alone."""
+    ("Illinois vs Missouri: Braggin' Rights") is not a leading title; the
+    second side's split (_split_game_type) takes it off the away team."""
     title, separator, rest = event_name.partition(_TITLE_SEPARATOR)
     if separator and title.strip() and _VS_SPLIT.search(rest):
         return rest, title.strip()
@@ -154,6 +172,10 @@ def parse_event_name(event_name: str, attractions: list[dict[str, Any]], venue_n
       event_title;
     - a trailing allowlisted label on the second side ("(Exhibition)",
       "- Game 2") is the game_type;
+    - any other trailing parenthetical on either side ("(Noche Latina
+      Night)"), and a ": <text>" after the second team ("Chicago Sky:
+      Capital One Arena VIP Seating"), is not part of a team name and is
+      dropped from it (the full name is still the calendar summary);
     - when the text after "at" or "@" is the event's own venue ("Big Ten
       Tournament at Target Center"), the name lists no home team, so home and
       away are not taken from it: the venue is never named as the home team.
@@ -162,6 +184,7 @@ def parse_event_name(event_name: str, attractions: list[dict[str, Any]], venue_n
     match = _VS_SPLIT.search(name)
     if match:
         first, title = _split_title(name[: match.start()])
+        first = _strip_parentheticals(first)
         title = lead_title or title
         second, game_type = _split_game_type(name[match.end() :])
         away_first = match.group(1).lower() in _AWAY_FIRST_SEPARATORS

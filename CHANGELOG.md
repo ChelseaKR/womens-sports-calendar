@@ -131,6 +131,11 @@ archived and private.
   <venue>" name no longer names the venue as the home team (#23). The sponsor
   is published as an additive `event_title` and the game type as `game_type`
   (only on games that have one) and shown beside the matchup on the team
-  page. Measured on the live listings of 2026-09-19: 8 of 142 games change
-  (6 NWSL, 2 NCAA); a team's slug, feed path and every UID are unchanged, and
-  a calendar event's summary still carries the full Ticketmaster name.
+  page. A promotion in parentheses ("(Noche Latina Night)") and a ticket
+  package after the away team ("Chicago Sky: Capital One Arena VIP
+  Seating") are dropped from the team name, as #34 began. Measured on the
+  live listings of 2026-09-20 against the previous parser: 11 of 230 games
+  change on their pages and in their data (9 titles, 1 game type, 1 VIP
+  package listing that now names its teams); a team's slug, feed path and
+  every UID are unchanged, and a calendar event's summary still carries the
+  full Ticketmaster name.

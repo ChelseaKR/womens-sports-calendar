@@ -164,26 +164,46 @@ def test_a_title_that_itself_contains_vs_is_still_the_event_title():
     assert matchup.event_title == "District vs. Empire"
 
 
-# --- what is deliberately left alone ------------------------------------------------------------------------
+# --- promotions and packages are not part of a team name --------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "name, home, away",
+    [
+        # The three live WNBA listings of 2026-09-20: a promotion in parentheses.
+        ("New York Liberty v. Atlanta Dream (Noche Latina Night)", "New York Liberty", "Atlanta Dream"),
+        ("New York Liberty v. Atlanta Dream (Fan Appreciation)", "New York Liberty", "Atlanta Dream"),
+        ("Mystics vs. Connecticut Sun (Windbreaker Giveaway - First 1,500 Fans)", "Mystics", "Connecticut Sun"),
+        # On the first side too.
+        ("Seattle Storm (Pride Night) vs Las Vegas Aces", "Seattle Storm", "Las Vegas Aces"),
+        # The live ticket-package listing: a ": <package>" after the away team.
+        ("Washington Mystics vs. Chicago Sky: Capital One Arena VIP Seating", "Washington Mystics", "Chicago Sky"),
+        ("Illinois vs Missouri: Braggin' Rights", "Illinois", "Missouri"),
+    ],
+)
+def test_a_promotion_or_package_comes_off_the_team_name_and_is_not_a_game_type(name, home, away):
+    matchup = parse_event_name(name, [])
+    assert (matchup.home, matchup.away, matchup.home_away_known) == (home, away, True)
+    assert matchup.game_type is None and matchup.event_title is None
 
 
 @pytest.mark.parametrize(
     "name, away",
     [
-        ("Las Vegas Aces vs Seattle Storm (W)", "Seattle Storm (W)"),  # a team's own parenthetical
-        ("Las Vegas Aces vs Seattle Storm (Women's)", "Seattle Storm (Women's)"),
-        ("Las Vegas Aces vs Seattle Storm (Theme Night)", "Seattle Storm (Theme Night)"),  # not on the allowlist
-        ("Las Vegas Aces vs Seattle Storm - Postponed", "Seattle Storm - Postponed"),
+        ("Las Vegas Aces vs Seattle Storm (W)", "Seattle Storm"),
+        ("Las Vegas Aces vs Seattle Storm (Theme Night) (Exhibition)", "Seattle Storm"),
     ],
 )
-def test_only_recognized_game_types_come_off_a_team_name(name, away):
-    matchup = parse_event_name(name, [])
-    assert matchup.away == away and matchup.game_type is None
+def test_no_trailing_parenthetical_stays_on_a_team_name(name, away):
+    """No tracked team or listed opponent has a parenthetical in its real name
+    (normalize._NAME_PARENTHETICALS is empty), so none survives."""
+    assert parse_event_name(name, []).away == away
 
 
-def test_a_colon_after_the_separator_is_not_a_sponsor_prefix():
-    matchup = parse_event_name("Illinois vs Missouri: Braggin' Rights", [])
-    assert (matchup.home, matchup.away, matchup.event_title) == ("Illinois", "Missouri: Braggin' Rights", None)
+def test_an_allowlisted_label_is_still_a_game_type_and_a_dash_label_is_left_alone():
+    assert parse_event_name("Las Vegas Aces vs Seattle Storm (Exhibition)", []).game_type == "Exhibition"
+    postponed = parse_event_name("Las Vegas Aces vs Seattle Storm - Postponed", [])
+    assert postponed.away == "Seattle Storm - Postponed" and postponed.game_type is None
 
 
 def test_a_name_with_no_separator_still_uses_the_attractions_or_nothing():
