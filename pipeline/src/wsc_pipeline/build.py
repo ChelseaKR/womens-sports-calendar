@@ -225,9 +225,15 @@ def _write_ics(
                 game_duration=duration,
             )
             (team_dir / f"{team.slug}.ics").write_bytes(team_cal.to_ical())
-    # Combined feed: every game from every league in one .ics file.
-    combined = ics.combined_calendar(games_by_league, fetched=fetched, base_url=base_url, dtstamp=dtstamp)
-    (out_dir / "ics" / "all.ics").write_bytes(combined.to_ical())
+    # Every league's events in one feed, each exactly as its league feed has
+    # it (same UID), so subscribing to both never duplicates a game's UID.
+    combined = ics.combined_calendar(
+        [(lg.slug, games_by_league[lg.slug], config.estimated_duration(lg)) for lg in config.LEAGUES],
+        fetched=fetched,
+        base_url=base_url,
+        dtstamp=dtstamp,
+    )
+    (out_dir / ics.COMBINED_FEED_PATH).write_bytes(combined.to_ical())
 
 
 def _write_data(

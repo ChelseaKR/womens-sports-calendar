@@ -198,7 +198,7 @@ def test_ga_never_reaches_the_ics_feeds_or_data_and_they_are_unchanged(tmp_path:
 
     a, b = _with_dtstamps_pinned(payload_files(without)), _with_dtstamps_pinned(payload_files(with_id))
     ics_files = [k for k in a if k.endswith(".ics")]
-    assert len(ics_files) == sum(1 + len(lg.teams) for lg in LEAGUES)
+    assert len(ics_files) == sum(1 + len(lg.teams) for lg in LEAGUES) + 1  # + ics/all.ics
     assert a.keys() == b.keys()
     for name in a:
         assert comparable(name, a[name]) == comparable(name, b[name]), f"{name} differs when a GA4 ID is set"

@@ -39,6 +39,12 @@ archived and private.
   Privacy Control or Do Not Track, ad features are off, and there's a
   `/privacy/` page (#15). A remembered "Opt out of analytics" control sits
   in every footer (#20). The calendar feeds are never tracked.
+- One calendar feed with every tracked league's games, at
+  `/ics/all.ics` (#36). Each game in it is the same event, under the same
+  UID, as in its league feed, so a subscriber who also has a league or team
+  feed is never given a second copy of a game under another UID. No existing
+  feed, URL or UID changes. `make validate-ics` checks the combined feed
+  against the league feeds event by event. Nothing links to it yet.
 
 ### Changed
 

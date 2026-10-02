@@ -190,20 +190,43 @@ def build_calendar(
         cal_desc = "Ticketmaster-listed games; see the site for licensing notes." if fetched else NOT_FETCHED_CALDESC
     cal = _calendar_header(cal_name=cal_name, cal_desc=cal_desc, page_url=page_url)
 
+    _add_events(cal, [_FeedEntry(game, start, page_url, game_duration) for game, start in _in_feed(games)], dtstamp)
+    return cal
+
+
+@dataclass(frozen=True)
+class _FeedEntry:
+    """One event as a feed writes it: the game, its feed start, and the page
+    and game length of the league or team calendar it belongs to."""
+
+    game: Game
+    start: datetime | date
+    page_url: str | None
+    duration: timedelta | None
+
+
+def _in_feed(games: list[Game]) -> list[tuple[Game, datetime | date]]:
+    """(game, feed start) for every game that goes in a feed, in feed order."""
+    starts = [(game, feed_start(game)) for game in games]
+    return sorted(((g, s) for g, s in starts if s is not None), key=lambda gs: _sort_key(gs[1]))
+
+
+def _add_events(cal: Calendar, entries: list[_FeedEntry], dtstamp: datetime | None) -> None:
+    """Each entry's VEVENT, after the VTIMEZONE of the first event in each
+    venue zone. Every feed writes its events here, so one game is the same
+    VEVENT, byte for byte, in every feed that carries it."""
     stamp = _as_dtstamp(dtstamp) if dtstamp is not None else None
     tzids_seen: set[str] = set()
-    starts = [(game, feed_start(game)) for game in games]
-    for game, start in sorted(((g, s) for g, s in starts if s is not None), key=lambda gs: _sort_key(gs[1])):
+    for entry in entries:
         if stamp is None:
             raise ValueError("build_calendar needs dtstamp (the build's time) to write an event")
+        game, start = entry.game, entry.start
         if isinstance(start, datetime) and game.tzid and game.tzid not in tzids_seen:
             tzids_seen.add(game.tzid)
             vtz = _vtimezone(game.tzid)
             if vtz is not None:
                 cal.add_component(vtz)
-        cal.add_component(_event(game, start, page_url=page_url, dtstamp=stamp, duration=game_duration))
-
-    return cal
+        cal.add_component(_event(game, start, page_url=entry.page_url, dtstamp=stamp, duration=entry.duration))
 
 
 def _vtimezone(tzid: str) -> Timezone | None:
@@ -381,27 +404,45 @@ def team_calendar(
     )
 
 
+COMBINED_FEED_PATH = "ics/all.ics"
+
+
 def combined_calendar(
-    all_games: dict[str, list[Game]],
+    leagues: list[tuple[str, list[Game], timedelta | None]],
     *,
     fetched: bool = True,
     base_url: str | None = None,
     dtstamp: datetime | None = None,
 ) -> Calendar:
-    """A single calendar containing every game from every league. UIDs use
-    the league prefix to avoid collisions when a subscriber also adds a
-    league-specific feed."""
-    flat = [g for games in all_games.values() for g in games]
+    """Every tracked league's games in one calendar (COMBINED_FEED_PATH).
+
+    leagues is (league slug, its games, its game length) in config order.
+    Each game is written exactly as its league feed writes it: the same UID
+    (make_uid, tm-<Ticketmaster event id>), the same start, end, status,
+    description and URL (its league's page). So the events are the league
+    and team feeds' events, not new ones, and a subscriber who also has a
+    league or team feed sees the same UID in both. A game listed under two
+    leagues is written once, under the first.
+    """
+    entries: list[_FeedEntry] = []
+    seen: set[str] = set()
+    for league_slug, games, duration in leagues:
+        league_page = f"{base_url}/{league_slug}/" if base_url else None
+        for game, start in _in_feed(unique_by_event_id(games)):
+            if game.event_id not in seen:
+                seen.add(game.event_id)
+                entries.append(_FeedEntry(game, start, league_page, duration))
+    check_no_duplicate_uids([e.game for e in entries])
+    entries.sort(key=lambda e: _sort_key(e.start))  # stable: each league's own order is kept
+
     page_url = f"{base_url}/" if base_url else None
-    return build_calendar(
-        flat,
+    cal = _calendar_header(
         cal_name=calendar_name("All leagues"),
-        fetched=fetched,
-        cal_desc=calendar_description("all tracked leagues", page_url=page_url, fetched=fetched),
+        cal_desc=calendar_description("tracked league", page_url=page_url, fetched=fetched),
         page_url=page_url,
-        dtstamp=dtstamp,
-        game_duration=None,
     )
+    _add_events(cal, entries, dtstamp)
+    return cal
 
 
 def group_by_team(games: list[Game]) -> dict[str, list[Game]]:
