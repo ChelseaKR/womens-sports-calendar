@@ -22,6 +22,13 @@ archived and private.
 - Accessibility checks with pa11y on every page in CI (#1), run in
   parallel (#11).
 - The real, fetched feeds are validated before each deploy (#13).
+- A `/schedule/` page with every tracked league's listed games for the
+  week ahead, day by day, linked from the home page (#35). Days are named
+  by date from the build's fetch time, never "today", and the page says when
+  its listings were fetched. A build that fetched nothing says so instead of
+  showing an empty week; a time-TBA game shows no time; a listing with no
+  parsed teams shows its own name. Filtering is by league page, and
+  subscribing is from each league's page.
 - Search discoverability: league and team pages titled "\<team\>
   \<season\> schedule: add to your calendar", with the season taken from
   the listed games; one-click subscribe buttons for Google Calendar, Apple

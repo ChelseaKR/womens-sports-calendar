@@ -187,7 +187,7 @@ def test_hostile_strings_cannot_close_the_json_ld_block():
 
 def test_validator_passes_the_fixture_site_and_counts_its_events(fixture_dist: Path):
     pages, events = validate_seo.validate_dist(fixture_dist)
-    assert pages == 3 + sum(1 + len(lg.teams) for lg in LEAGUES)  # home, privacy, accessibility
+    assert pages == 4 + sum(1 + len(lg.teams) for lg in LEAGUES)  # home, privacy, accessibility, schedule
     # Aces 4 + Storm 1 + Thorns 1 + Sceptres 1 on team pages; WNBA 4, NWSL 1
     # and PWHL 1 on league pages (the Aces/Storm game once).
     assert events == 13

@@ -8,8 +8,9 @@ null when there is nowhere to buy. It is never a guessed URL.
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from .config import League, Team
 from .normalize import Game, display_start, feed_start, local_start, team_is_participant, unique_by_event_id
@@ -184,6 +185,62 @@ def _sort_key(game: Game) -> tuple[bool, bool, date | None, bool, datetime | Non
         game.start_utc,
         game.event_id,
     )
+
+
+# The /schedule/ page covers this many days, starting with the build's own
+# date. The nightly build runs at 08:13 UTC, early morning of the same date in
+# every tracked venue's zone; the build's date is taken in US Eastern time so
+# a build run by hand late in a US evening still starts on that evening.
+SCHEDULE_DAYS = 7
+SCHEDULE_DAY_ZONE = ZoneInfo("America/New_York")
+
+
+def schedule_data(
+    leagues: list[League],
+    games_by_league: dict[str, list[Game]],
+    *,
+    fetched: bool,
+    fetched_at: datetime | None,
+    possibly_incomplete_leagues: set[str],
+) -> dict[str, Any]:
+    """What the /schedule/ page renders from: every tracked league's listed
+    games on each of SCHEDULE_DAYS days from the build's date, by the venue's
+    local date, soonest first.
+
+    A static page cannot know what "today" is when it is read, so the days
+    are named by date and come from the build's own fetch time, which the
+    page also states. A game with no date (date TBD) is on no day and is not
+    listed here; it is on its team and league pages. Days with no listed game
+    are left out. A build that fetched nothing has no days and says so
+    (fetched False): it never claims there are no games.
+    """
+    if not fetched or fetched_at is None:
+        return {"fetched": False, "first_day": None, "last_day": None, "days": [], "possibly_incomplete": []}
+    first = fetched_at.astimezone(SCHEDULE_DAY_ZONE).date()
+    last = first + timedelta(days=SCHEDULE_DAYS - 1)
+    by_day: dict[date, list[tuple[Game, League]]] = {}
+    for lg in leagues:
+        for game in unique_by_event_id(games_by_league[lg.slug]):
+            day = game.start_local_date
+            if game.date_tbd or day is None or not first <= day <= last:
+                continue
+            by_day.setdefault(day, []).append((game, lg))
+    days = []
+    for day in sorted(by_day):
+        rows = sorted(by_day[day], key=lambda gl: _sort_key(gl[0]))
+        days.append(
+            {
+                "date": day.isoformat(),
+                "games": [{**game_to_dict(game), "league_slug": lg.slug, "league_name": lg.name} for game, lg in rows],
+            }
+        )
+    return {
+        "fetched": True,
+        "first_day": first.isoformat(),
+        "last_day": last.isoformat(),
+        "days": days,
+        "possibly_incomplete": [lg.name for lg in leagues if lg.slug in possibly_incomplete_leagues],
+    }
 
 
 def site_summary(

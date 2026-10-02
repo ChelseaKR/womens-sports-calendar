@@ -549,6 +549,7 @@ def render_index(
 Calendar, Apple Calendar or Outlook. Every listed game shows up on its own,
 updated nightly, with a link to buy tickets from the team's seller. No
 account, no ads.</p>
+<p><a href="{SCHEDULE_PATH}">The week ahead in every league, day by day</a></p>
 <h2>Leagues</h2>
 <ul class="league-strip">
 {league_links}
@@ -738,6 +739,112 @@ subscribing to a calendar or following a ticket link is fixed first.</p>
         title=f"Accessibility | {SITE_NAME}",
         description="How Next Home Game is checked for accessibility, its known gaps, and how to report a problem.",
         canonical_url=f"{base_url}{ACCESSIBILITY_PATH}",
+        base_url=base_url,
+        body=body,
+        ga4_id=ga4_id,
+    )
+
+
+SCHEDULE_PATH = "/schedule/"
+
+
+def _names_and(names: list[str]) -> str:
+    """ "WNBA, NWSL and PWHL"."""
+    return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
+
+
+def _long_date(iso_date: str) -> str:
+    """ "Thursday, October 1" from an ISO date."""
+    d = date.fromisoformat(iso_date)
+    return f"{d:%A}, {d:%B} {d.day}"
+
+
+def _schedule_day(day: Mapping[str, Any]) -> str:
+    """One day's games: a heading naming the date, then a table."""
+    label = _long_date(day["date"])
+    rows = []
+    for g in day["games"]:
+        matchup = _matchup_text(g)
+        buy = _buy_link(g, matchup) or '<span class="ticket-unavailable">no ticket link published yet</span>'
+        rows.append(
+            "<tr>"
+            f'<td><span class="game-date">{_when_html(g)}</span></td>'
+            f'<td><a href="/{e(g["league_slug"])}/">{e(g["league_name"])}</a></td>'
+            f"<td>{e(matchup)}</td>"
+            f"<td>{e(_venue_text(g))}</td>"
+            f"<td>{buy}</td>"
+            "</tr>"
+        )
+    return f"""<section class="schedule-day" aria-labelledby="day-{e(day["date"])}">
+<h2 id="day-{e(day["date"])}">{e(label)}</h2>
+<div class="games-table-wrap">
+<table class="games-table">
+<caption class="sr-caption">Games on {e(label)}, from Ticketmaster</caption>
+<thead>
+<tr>
+<th scope="col">Date and time</th>
+<th scope="col">League</th>
+<th scope="col">Matchup</th>
+<th scope="col">Venue</th>
+<th scope="col">Tickets</th>
+</tr>
+</thead>
+<tbody>
+{"".join(rows)}
+</tbody>
+</table>
+</div>
+</section>
+"""
+
+
+def render_schedule(
+    *,
+    schedule: Mapping[str, Any],
+    leagues: list[dict[str, Any]],
+    base_url: str,
+    ga4_id: str | None = None,
+) -> str:
+    """dist/schedule/index.html: every tracked league's listed games, day by
+    day, for the days in site_data.schedule_data. The days are named by
+    date, never "today": the page is built once a night and read at any
+    time, and it states when its listings were fetched."""
+    if not schedule["fetched"]:
+        listing = f'<p class="no-games-message">{e(NOT_FETCHED_MSG)}</p>\n'
+        lede = "Every tracked league's games, day by day, for the week ahead."
+    else:
+        first, last = _long_date(schedule["first_day"]), _long_date(schedule["last_day"])
+        lede = (
+            f"Every game Ticketmaster lists for a tracked league from {first} through {last}, "
+            "by the venue's local date. Times are the venue's local time."
+        )
+        if schedule["days"]:
+            listing = "".join(_schedule_day(day) for day in schedule["days"])
+        else:
+            listing = (
+                f'<p class="no-games-message">Ticketmaster lists no games for any tracked league '
+                f"from {e(first)} through {e(last)}.</p>\n"
+            )
+        if schedule["possibly_incomplete"]:
+            listing = _possibly_incomplete_note(_names_and(schedule["possibly_incomplete"])) + "\n" + listing
+    league_links = "\n".join(
+        f'<li><a href="/{e(lg["slug"])}/">{e(lg["name"])} schedule and calendar feed</a></li>' for lg in leagues
+    )
+    body = f"""{_breadcrumb([("All leagues", "/")], "Schedule")}
+<h1>The week ahead in every league</h1>
+<p class="lede">{e(lede)}</p>
+{_freshness_note(schedule)}{listing}<section class="league-links" aria-labelledby="by-league-heading">
+<h2 id="by-league-heading">One league at a time</h2>
+<p>Each league's page lists its whole season and has its calendar feed to subscribe to.</p>
+<ul>
+{league_links}
+</ul>
+</section>
+"""
+    return _base(
+        title=f"The week ahead in every league | {SITE_NAME}",
+        description=f"Every listed {_names_and([lg['name'] for lg in leagues])} game for the week ahead, day by day.",
+        canonical_url=f"{base_url}{SCHEDULE_PATH}",
         base_url=base_url,
         body=body,
         ga4_id=ga4_id,

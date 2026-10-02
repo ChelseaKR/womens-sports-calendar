@@ -267,6 +267,9 @@ def _write_data(
         not_included=list(config.LEAGUES_EXAMINED_NOT_INCLUDED),
     )
     fingerprints["/"] = sitemap.fingerprint({"leagues": summary["leagues"]})
+    fingerprints[site.SCHEDULE_PATH] = sitemap.fingerprint(
+        _schedule_payload(games_by_league, api_key_present, truncated, fetched_at)
+    )
     summary.update(provenance)
     (data_dir / "site.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     return fingerprints
@@ -334,6 +337,37 @@ def _write_html(
                 site.render_team(team=team_payload, base_url=base_url, ga4_id=ga4_id), encoding="utf-8"
             )
 
+    schedule_dir = out_dir / "schedule"
+    schedule_dir.mkdir(exist_ok=True)
+    (schedule_dir / "index.html").write_text(
+        site.render_schedule(
+            schedule=_schedule_payload(games_by_league, api_key_present, truncated, fetched_at),
+            leagues=leagues_summary,
+            base_url=base_url,
+            ga4_id=ga4_id,
+        ),
+        encoding="utf-8",
+    )
+
+
+def _schedule_payload(
+    games_by_league: dict[str, list[Game]],
+    api_key_present: bool,
+    truncated: dict[str, set[str]],
+    fetched_at: datetime | None,
+) -> dict[str, object]:
+    """The /schedule/ page's payload with its provenance: the page, and its
+    sitemap fingerprint, both come from this."""
+    payload = site_data.schedule_data(
+        list(config.LEAGUES),
+        games_by_league,
+        fetched=api_key_present,
+        fetched_at=fetched_at,
+        possibly_incomplete_leagues={slug for slug, teams in truncated.items() if teams},
+    )
+    payload.update(site_data.provenance(fetched_at))
+    return payload
+
 
 def _write_static(out_dir: Path) -> None:
     (out_dir / "style.css").write_text(site.STYLE_CSS, encoding="utf-8")
@@ -362,6 +396,7 @@ def _write_sitemap_and_robots(out_dir: Path, base_url: str, state: dict[str, sit
         ("/", state["/"].changed_at),
         (site.PRIVACY_PATH, site.PRIVACY_UPDATED),
         (site.ACCESSIBILITY_PATH, site.ACCESSIBILITY_UPDATED),
+        (site.SCHEDULE_PATH, state[site.SCHEDULE_PATH].changed_at),
     ]
     for lg in config.LEAGUES:
         entries.append((f"/{lg.slug}/", state[f"/{lg.slug}/"].changed_at))

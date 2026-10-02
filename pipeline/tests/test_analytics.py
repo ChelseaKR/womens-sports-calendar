@@ -53,7 +53,7 @@ EEA_UK_CH = {
 
 
 def _expected_pages() -> set[str]:
-    pages = {"index.html", "404.html", "privacy/index.html", "accessibility/index.html"}
+    pages = {"index.html", "404.html", "privacy/index.html", "accessibility/index.html", "schedule/index.html"}
     for lg in LEAGUES:
         pages.add(f"{lg.slug}/index.html")
         for team in lg.teams:
