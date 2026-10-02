@@ -178,6 +178,7 @@ def build(
     )
 
     _write_ics(tmp_dir, base_url, games_by_league, api_key_present, dtstamp=fetched_at)
+    _write_combined_ics(tmp_dir, base_url, games_by_league, api_key_present, dtstamp=fetched_at)
     fingerprints = _write_data(tmp_dir, base_url, games_by_league, api_key_present, truncated, fetched_at=fetched_at)
     _write_html(tmp_dir, base_url, games_by_league, api_key_present, truncated, ga4_id, fetched_at=fetched_at)
     _write_static(tmp_dir)
@@ -225,8 +226,19 @@ def _write_ics(
                 game_duration=duration,
             )
             (team_dir / f"{team.slug}.ics").write_bytes(team_cal.to_ical())
-    # Every league's events in one feed, each exactly as its league feed has
-    # it (same UID), so subscribing to both never duplicates a game's UID.
+
+
+def _write_combined_ics(
+    out_dir: Path,
+    base_url: str,
+    games_by_league: dict[str, list[Game]],
+    fetched: bool,
+    *,
+    dtstamp: datetime | None,
+) -> None:
+    """ics/all.ics: every league's events in one feed, each exactly as its
+    league feed has it (same UID), so a subscriber of both never gets a game
+    twice under two UIDs."""
     combined = ics.combined_calendar(
         [(lg.slug, games_by_league[lg.slug], config.estimated_duration(lg)) for lg in config.LEAGUES],
         fetched=fetched,

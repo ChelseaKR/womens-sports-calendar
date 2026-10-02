@@ -258,21 +258,6 @@ def validate_feed(feed: Path, data: Path, page_path: str) -> int:
     return len(events)
 
 
-def validate_dist(dist: Path) -> tuple[int, int]:
-    """Returns (feeds checked, total VEVENTs across league feeds)."""
-    feeds = 0
-    league_events = 0
-    league_feeds = {dist / "ics" / f"{lg.slug}.ics" for lg in config.LEAGUES}
-    for feed, data, page_path in _expected_feeds(dist):
-        n = validate_feed(feed, data, page_path)
-        feeds += 1
-        if feed in league_feeds:
-            league_events += n
-    validate_combined_feed(dist)
-    feeds += 1
-    return feeds, league_events
-
-
 def validate_combined_feed(dist: Path) -> int:
     """The all-leagues feed (COMBINED_FEED_PATH) carries exactly the
     league feeds' events, each the same VEVENT, byte for byte, as in its
@@ -297,6 +282,20 @@ def validate_combined_feed(dist: Path) -> int:
         if vevent.to_ical() != league_events[uid].to_ical():
             raise FeedError(f"{feed}: {uid} differs from the same event in its league feed")
     return len(events)
+
+
+def validate_dist(dist: Path) -> tuple[int, int]:
+    """Returns (feeds checked, total VEVENTs across league feeds)."""
+    validate_combined_feed(dist)
+    feeds = 1  # ics/all.ics
+    league_events = 0
+    league_feeds = {dist / "ics" / f"{lg.slug}.ics" for lg in config.LEAGUES}
+    for feed, data, page_path in _expected_feeds(dist):
+        n = validate_feed(feed, data, page_path)
+        feeds += 1
+        if feed in league_feeds:
+            league_events += n
+    return feeds, league_events
 
 
 def main(argv: list[str] | None = None) -> int:
