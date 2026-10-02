@@ -95,7 +95,7 @@ the domain (`docs/DECISIONS.md` 0007); the repo keeps its working name,
 ## Standards Conformance
 
 This repository follows the portfolio standards, vendored at
-`docs/standards/` (v2.0.0). Each row is one of: `Applies` (conformant),
+`docs/standards/` (v3.0.1). Each row is one of: `Applies` (conformant),
 `Applies — gap tracked in #NN` (an open issue lists what is missing), or
 `N/A — reason`. CITATION.cff — N/A: a commercial consumer site with no
 scholarly or civic-reuse intent.

@@ -134,6 +134,6 @@ catches most of a miss, not all.
 ## Standards
 
 The portfolio standards are vendored, unedited, at `docs/standards/`
-(v2.0.0; `.standards-version`). Renovate proposes upgrades. Never
+(v3.0.1; `.standards-version`). Renovate proposes upgrades. Never
 hand-edit them. The README's Standards Conformance table says which
 standards apply, and links the open issue for each gap.
