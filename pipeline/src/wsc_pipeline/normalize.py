@@ -124,6 +124,19 @@ def _split_title(side: str) -> tuple[str, str | None]:
     return side.strip(), None
 
 
+def _split_leading_title(event_name: str) -> tuple[str, str | None]:
+    """(rest, title) with a leading "<title>: " taken off the whole name when
+    a matchup follows it. The title can itself contain a matchup separator
+    ("District vs. Empire: Washington Spirit vs. NJ/NY Gotham FC", a live
+    NWSL listing), which the per-side split in _split_title cannot see: it
+    would read "District" as the home team. A colon with no matchup after it
+    ("Illinois vs Missouri: Braggin' Rights") is left alone."""
+    title, separator, rest = event_name.partition(_TITLE_SEPARATOR)
+    if separator and title.strip() and _VS_SPLIT.search(rest):
+        return rest, title.strip()
+    return event_name, None
+
+
 def parse_event_name(event_name: str, attractions: list[dict[str, Any]], venue_name: str | None = None) -> Matchup:
     """Who is playing, from an event name and its attractions.
 
@@ -145,10 +158,12 @@ def parse_event_name(event_name: str, attractions: list[dict[str, Any]], venue_n
       Tournament at Target Center"), the name lists no home team, so home and
       away are not taken from it: the venue is never named as the home team.
     """
-    match = _VS_SPLIT.search(event_name)
+    name, lead_title = _split_leading_title(event_name)
+    match = _VS_SPLIT.search(name)
     if match:
-        first, title = _split_title(event_name[: match.start()])
-        second, game_type = _split_game_type(event_name[match.end() :])
+        first, title = _split_title(name[: match.start()])
+        title = lead_title or title
+        second, game_type = _split_game_type(name[match.end() :])
         away_first = match.group(1).lower() in _AWAY_FIRST_SEPARATORS
         names_the_venue = bool(away_first and venue_name and _phrase_match(second, venue_name))
         if first and second and not names_the_venue:

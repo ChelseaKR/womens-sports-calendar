@@ -155,6 +155,15 @@ def test_a_game_number_after_the_matchup_is_kept_out_of_the_team_name():
     assert both.away == "Seattle Storm" and both.game_type == "Game 3 (If Necessary)"
 
 
+def test_a_title_that_itself_contains_vs_is_still_the_event_title():
+    """A live NWSL listing (2026-09-19): the rivalry branding before the colon
+    has its own "vs.", so a per-side split read "District" as the home team
+    and the rest of the name as the away team."""
+    matchup = parse_event_name("District vs. Empire: Washington Spirit vs. NJ/NY Gotham FC", [])
+    assert (matchup.home, matchup.away, matchup.home_away_known) == ("Washington Spirit", "NJ/NY Gotham FC", True)
+    assert matchup.event_title == "District vs. Empire"
+
+
 # --- what is deliberately left alone ------------------------------------------------------------------------
 
 
