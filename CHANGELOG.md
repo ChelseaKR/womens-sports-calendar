@@ -35,6 +35,12 @@ archived and private.
 - Calendar feeds name themselves after the team or league, link back to
   their page, and ask apps to refresh daily. UIDs are unchanged, so
   subscribers get no duplicates.
+- One calendar feed with every tracked league's games, at
+  `/ics/all.ics` (#36). Each game in it is the same event, under the same
+  UID, as in its league feed, so a subscriber who also has a league or team
+  feed is never given a second copy of a game under another UID. No existing
+  feed, URL or UID changes. `make validate-ics` checks the combined feed
+  against the league feeds event by event. Nothing links to it yet.
 - Google Analytics 4 on the web pages. It is not loaded under Global
   Privacy Control or Do Not Track, ad features are off, and there's a
   `/privacy/` page (#15). A remembered "Opt out of analytics" control sits

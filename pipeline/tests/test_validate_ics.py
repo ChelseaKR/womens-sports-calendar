@@ -17,7 +17,8 @@ from .conftest import make_raw_event
 
 WNBA = LEAGUES[0]
 TEAM_A, TEAM_B = WNBA.teams[0], WNBA.teams[1]
-N_FEEDS = len(LEAGUES) + sum(len(lg.teams) for lg in LEAGUES)
+# One feed per league, one per team, and the all-leagues feed (ics/all.ics).
+N_FEEDS = len(LEAGUES) + sum(len(lg.teams) for lg in LEAGUES) + 1
 
 
 def _built(tmp_path: Path, monkeypatch, *, with_games: bool) -> Path:
