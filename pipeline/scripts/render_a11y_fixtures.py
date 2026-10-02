@@ -27,6 +27,7 @@ from pathlib import Path
 PIPELINE_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PIPELINE_ROOT))
 
+from tests.test_schedule_page import _populated, _render
 from tests.test_site_html import _pages
 
 OUT_DIR = PIPELINE_ROOT / "dist" / "_a11y-fixtures"
@@ -42,6 +43,11 @@ def main() -> None:
         out_path = OUT_DIR / f"{name}.html"
         out_path.write_text(pages[name], encoding="utf-8")
         print(f"wrote {out_path}")
+    # The schedule page with games on several days, a time-TBA game and a
+    # listing with no parsed teams (tests/test_schedule_page.py).
+    out_path = OUT_DIR / "schedule.html"
+    out_path.write_text(_render(_populated())[1], encoding="utf-8")
+    print(f"wrote {out_path}")
 
 
 if __name__ == "__main__":

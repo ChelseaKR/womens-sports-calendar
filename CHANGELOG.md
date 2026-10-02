@@ -39,6 +39,13 @@ archived and private.
   Privacy Control or Do Not Track, ad features are off, and there's a
   `/privacy/` page (#15). A remembered "Opt out of analytics" control sits
   in every footer (#20). The calendar feeds are never tracked.
+- A `/schedule/` page with every tracked league's listed games for the
+  week ahead, day by day, linked from the home page (#35). Days are named
+  by date from the build's fetch time, never "today", and the page says when
+  its listings were fetched. A build that fetched nothing says so instead of
+  showing an empty week; a time-TBA game shows no time; a listing with no
+  parsed teams shows its own name. Filtering is by league page, and
+  subscribing is from each league's page.
 
 ### Changed
 
