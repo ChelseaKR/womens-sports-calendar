@@ -67,9 +67,24 @@ archived and private.
 - Calendar-first: no prices anywhere. Each game has one ticket link to the
   home team's official seller where it's known, otherwise to the
   Ticketmaster listing (#17).
+- A ticket link that goes through an affiliate template carries
+  `rel="sponsored noopener"`, so search engines can tell it is paid. No
+  affiliate template is set, so no page changes today (#27).
 
 ### Fixed
 
+- The nightly site and calendar-feed rebuild failed every night from
+  2026-09-20, so the published feeds stopped updating. Merging #20 reverted
+  the #22 fix for an unrecognized venue time zone and left that fix's tests
+  calling the feed writer without the build time. The fix is restored and
+  the tests pass the build time; event UIDs and feed URLs are unchanged
+  (#40).
+- One event with an unrecognized venue time zone no longer stops the nightly
+  build for every league (#22). The `.ics` writer now asks the same zone
+  lookup the rest of the pipeline uses, so that game is written with its
+  real UTC start and keeps its UID, and `COVERAGE.txt` and the run log name
+  it. The venue's zone is never guessed. Games with a valid zone are
+  written exactly as before.
 - A canceled game was written to the calendar feeds as an ordinary
   confirmed event, so subscribers' calendars kept showing it. It now has
   `STATUS:CANCELLED` and "Canceled: " before its title; a postponed game has

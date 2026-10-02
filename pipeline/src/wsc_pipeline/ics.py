@@ -198,12 +198,28 @@ def build_calendar(
             raise ValueError("build_calendar needs dtstamp (the build's time) to write an event")
         if isinstance(start, datetime) and game.tzid and game.tzid not in tzids_seen:
             tzids_seen.add(game.tzid)
-            vtz = Timezone.from_tzid(game.tzid)
+            vtz = _vtimezone(game.tzid)
             if vtz is not None:
                 cal.add_component(vtz)
         cal.add_component(_event(game, start, page_url=page_url, dtstamp=stamp, duration=game_duration))
 
     return cal
+
+
+def _vtimezone(tzid: str) -> Timezone | None:
+    """The VTIMEZONE block for tzid, or None when the zone is unknown.
+
+    Timezone.from_tzid raises ValueError on a name it cannot resolve; it
+    does not return None. zone_for is the one place that decides whether a
+    venue zone is usable (an unknown name is None, and _event then writes
+    the game's UTC start), so it is asked first. One unrecognized zone on
+    one event must never stop the nightly build for every league (#22)."""
+    if zone_for(tzid) is None:
+        return None
+    try:
+        return Timezone.from_tzid(tzid)
+    except ValueError:
+        return None
 
 
 def _sort_key(start: datetime | date) -> datetime:
