@@ -22,7 +22,7 @@ from wsc_pipeline.site import render_league, render_team
 from wsc_pipeline.site_data import league_data, team_data
 from wsc_pipeline.ticketmaster import DiscoveryClient, TicketmasterFetchError
 
-from .conftest import make_raw_event
+from .conftest import BUILD_TIME, make_raw_event
 
 LEAGUE = LEAGUES[0]
 TEAM = LEAGUE.teams[0]
@@ -113,7 +113,7 @@ def test_a_javascript_ticket_url_never_becomes_a_link() -> None:
 
 
 def test_a_javascript_ticket_url_never_reaches_the_calendar_feed() -> None:
-    feed = team_calendar(TEAM.slug, TEAM.name, [_hostile_game()]).to_ical().decode()
+    feed = team_calendar(TEAM.slug, TEAM.name, [_hostile_game()], dtstamp=BUILD_TIME).to_ical().decode()
     assert "javascript:" not in feed.lower()
     assert "URL:" not in feed
 

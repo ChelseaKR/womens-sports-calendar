@@ -34,7 +34,7 @@ BASE_URL = "https://nexthomegame.com"
 # live (HTTP 200) when this list was written. A slug is a URL people have
 # saved and a feed URL calendar apps poll; it may be added to this list but
 # never changed or removed. To rename a team, keep its slug (docs/DECISIONS.md
-# 0015).
+# 0017).
 PUBLISHED_SLUGS: dict[str, tuple[str, ...]] = {
     "wnba": (
         "minnesota-lynx",
@@ -116,7 +116,9 @@ PUBLISHED_SLUGS: dict[str, tuple[str, ...]] = {
 }
 
 # The UIDs in every non-empty feed of the fixture site (tests/fixture_site.py),
-# taken from a build of the code as it was before this change. A UID is
+# taken from a build of the code as it was before this change (plus the
+# fixture's time-TBA game, FX-TIME-TBA, an all-day event in the feeds since
+# #31 put such games there under the same UID rule). A UID is
 # tm-<Ticketmaster event id>@<opaque domain> and nothing about a team's name,
 # slug or display name may reach it.
 GOLDEN_FEED_UIDS: dict[str, list[str]] = {
@@ -131,6 +133,7 @@ GOLDEN_FEED_UIDS: dict[str, list[str]] = {
         "tm-FX-CANCELLED@womens-sports-calendar.invalid",
         "tm-FX-H2H@womens-sports-calendar.invalid",
         "tm-FX-PACKAGE@womens-sports-calendar.invalid",
+        "tm-FX-TIME-TBA@womens-sports-calendar.invalid",
     ],
     "ics/wnba/seattle-storm.ics": ["tm-FX-H2H@womens-sports-calendar.invalid"],
     "ics/wnba.ics": [
@@ -140,6 +143,7 @@ GOLDEN_FEED_UIDS: dict[str, list[str]] = {
         "tm-FX-CANCELLED@womens-sports-calendar.invalid",
         "tm-FX-H2H@womens-sports-calendar.invalid",
         "tm-FX-PACKAGE@womens-sports-calendar.invalid",
+        "tm-FX-TIME-TBA@womens-sports-calendar.invalid",
     ],
 }
 

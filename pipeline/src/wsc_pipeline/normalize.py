@@ -450,6 +450,31 @@ def local_start(game: Game) -> datetime | None:
     return game.start_utc.astimezone(zone)
 
 
+def feed_start(game: Game) -> datetime | date | None:
+    """How the game goes in the calendar feeds, the one rule ics.py and the
+    page's `in_calendar_feed` both read:
+
+    - a datetime: a timed event at that exact UTC instant;
+    - a date: an all-day event on that local date, for a game whose date is
+      real but whose start time is not announced (`time_tba`, or no instant
+      and no local time), which the page shows as "(time TBA)". A
+      `time_tba` game is never a timed event, even when Ticketmaster sent a
+      placeholder `dateTime` with it; no time is ever invented for it;
+    - None: left out of the feeds. A game with no date at all (`date_tbd`)
+      has nothing a calendar entry could say, and is still listed on the
+      site.
+    """
+    if game.date_tbd:
+        return None
+    if game.time_tba:
+        return game.start_local_date
+    if game.start_utc is not None:
+        return game.start_utc
+    if game.start_local_date is not None and parse_local_time(game.start_local_time) is None:
+        return game.start_local_date
+    return None
+
+
 def zone_for(tzid: str | None) -> ZoneInfo | None:
     if not tzid:
         return None
@@ -457,6 +482,23 @@ def zone_for(tzid: str | None) -> ZoneInfo | None:
         return ZoneInfo(tzid)
     except Exception:
         return None
+
+
+def zone_problem(tzid: str | None) -> str | None:
+    """Why a venue time zone cannot be used, or None when it resolves.
+
+    Two different absences, kept apart because the fix differs: Ticketmaster
+    sent no zone at all, or sent a name this build's zone database does not
+    know ("Mars/Olympus", a typo, a retired alias). Either way the game's
+    start is still a real instant (Ticketmaster's UTC `dateTime`), so the
+    calendar carries it in UTC; what is unknown is the venue's own zone, and
+    that is never guessed from the venue's city or state.
+    """
+    if not tzid or not tzid.strip():
+        return "no venue time zone sent"
+    if zone_for(tzid) is None:
+        return f"unrecognized venue time zone {tzid!r}"
+    return None
 
 
 def safe_ticket_url(url: object) -> str | None:

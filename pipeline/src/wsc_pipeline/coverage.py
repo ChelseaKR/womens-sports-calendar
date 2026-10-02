@@ -9,9 +9,23 @@ substitution is documented here and in the printed report, not hidden.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from .config import League
-from .normalize import Game, unique_by_event_id
+from .normalize import Game, feed_start, unique_by_event_id, zone_problem
+
+# How many games a report line names before it counts the rest.
+MAX_NAMED_GAMES = 20
+
+
+@dataclass(frozen=True)
+class ZoneFallback:
+    """A game written to the calendar with a UTC start because its venue
+    time zone is missing or unrecognized."""
+
+    event_id: str
+    event_name: str
+    reason: str
 
 
 @dataclass
@@ -23,8 +37,14 @@ class LeagueCoverage:
     games_total: int
     games_with_price: int
     games_date_tbd: int
+    # Games in the .ics as all-day events because their start time is not
+    # announced (normalize.feed_start), and games left out of the .ics for
+    # any reason other than a TBD date (a date TBD is games_date_tbd).
+    games_all_day: int = 0
+    games_other_excluded: int = 0
     teams_truncated: list[str] = field(default_factory=list)
     teams_with_mismatched_events: list[str] = field(default_factory=list)
+    zone_fallbacks: list[ZoneFallback] = field(default_factory=list)
 
     @property
     def team_hit_rate(self) -> float:
@@ -73,6 +93,7 @@ def compute_league_coverage(
     # Games are counted once per event; teams_with_games above still uses
     # every per-team record, since a head-to-head game counts for both teams.
     unique_games = unique_by_event_id(games)
+    starts = [(g, feed_start(g)) for g in unique_games]
     return LeagueCoverage(
         league_slug=league.slug,
         league_name=league.name,
@@ -81,9 +102,26 @@ def compute_league_coverage(
         games_total=len(unique_games),
         games_with_price=sum(1 for g in unique_games if g.price is not None),
         games_date_tbd=sum(1 for g in unique_games if g.date_tbd),
+        games_all_day=sum(1 for _, s in starts if s is not None and not isinstance(s, datetime)),
+        games_other_excluded=sum(1 for g, s in starts if s is None and not g.date_tbd),
         teams_truncated=sorted(truncated_team_slugs),
         teams_with_mismatched_events=sorted(mismatched_team_slugs or set()),
+        zone_fallbacks=zone_fallbacks(unique_games),
     )
+
+
+def zone_fallbacks(games: list[Game]) -> list[ZoneFallback]:
+    """The games in the calendar feed whose venue time zone could not be
+    used, so they are written with a UTC start (ics.py). Only games that are
+    in the feed: a date-TBD game has no start to express in any zone."""
+    out = []
+    for g in sorted(games, key=lambda g: g.event_id):
+        if g.date_tbd or g.start_utc is None:
+            continue
+        reason = zone_problem(g.tzid)
+        if reason:
+            out.append(ZoneFallback(event_id=g.event_id, event_name=g.raw_event_name, reason=reason))
+    return out
 
 
 def render_report(coverage: BuildCoverage) -> str:
@@ -121,7 +159,8 @@ def render_report(coverage: BuildCoverage) -> str:
         lines.append(
             f"  games: {lc.games_total}; with price: {lc.games_with_price} "
             f"({lc.price_coverage:.0%}); date TBD (excluded from .ics): "
-            f"{lc.games_date_tbd}"
+            f"{lc.games_date_tbd}; time TBA (all-day in .ics): {lc.games_all_day}; "
+            f"other games excluded from .ics: {lc.games_other_excluded}"
         )
         if lc.teams_truncated:
             lines.append(
@@ -134,6 +173,14 @@ def render_report(coverage: BuildCoverage) -> str:
                 f"that did not actually name the team (a false-positive "
                 f"match, e.g. wrong sport/wrong team at the same venue or "
                 f"city) for: {', '.join(lc.teams_with_mismatched_events)}"
+            )
+        if lc.zone_fallbacks:
+            named = "; ".join(f"{z.event_id} ({z.event_name}): {z.reason}" for z in lc.zone_fallbacks[:MAX_NAMED_GAMES])
+            more = len(lc.zone_fallbacks) - MAX_NAMED_GAMES
+            lines.append(
+                f"  WARNING: {len(lc.zone_fallbacks)} game(s) are in the calendar with a UTC start because the "
+                f"venue time zone is unknown (the instant is Ticketmaster's; the venue's own zone is never "
+                f"guessed): {named}" + (f"; and {more} more" if more > 0 else "")
             )
         lines.append("")
 

@@ -42,6 +42,7 @@ listing in a 16-club spot-check -- see LEAGUES_EXAMINED_NOT_INCLUDED below.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import timedelta
 
 
 @dataclass(frozen=True)
@@ -51,7 +52,7 @@ class Team:
     show, and the text that recognizes it in an event. Each now has its own
     field, and every optional one defaults to the old behavior, so a team
     that sets none of them publishes exactly what it always did
-    (docs/DECISIONS.md 0015 says how to rename a team).
+    (docs/DECISIONS.md 0017 says how to rename a team).
 
     slug: the URL segment of the team's page, feed (`/ics/<league>/<slug>.ics`)
     and data file. Subscribers' calendar apps hold the feed URL, and a static
@@ -101,6 +102,34 @@ class League:
     # belong to (a league, or the Big Ten Conference). Empty = not stated.
     sport: str = ""
     organization_name: str = ""
+    # An override of GAME_DURATIONS for this league (a league whose games run
+    # longer or shorter than its sport's usual). None = use the sport's.
+    game_duration: timedelta | None = None
+
+
+# How long a game is assumed to last, per sport (League.sport), for the
+# estimated end time of a calendar event: Ticketmaster publishes a start and
+# never an end, so DTEND is an estimate and every event that carries one says
+# so in its description (ics.END_ESTIMATE_NOTE). The values are rounded-up
+# typical lengths, defaults the maintainer can change here or per league
+# (League.game_duration), not measurements: a game that runs long or short
+# still ends when it ends. A sport missing from this table gets no DTEND at
+# all, never a guessed one (DECISIONS 0015).
+GAME_DURATIONS: dict[str, timedelta] = {
+    "Basketball": timedelta(hours=2, minutes=30),
+    "Soccer": timedelta(hours=2),
+    "Ice hockey": timedelta(hours=2, minutes=30),
+    "Softball": timedelta(hours=2),
+}
+
+
+def estimated_duration(league: League) -> timedelta | None:
+    """The assumed length of one of this league's games: its own override,
+    else its sport's entry in GAME_DURATIONS, else None (no end time is
+    written for it)."""
+    if league.game_duration is not None:
+        return league.game_duration
+    return GAME_DURATIONS.get(league.sport)
 
 
 # Other teams whose names contain a tracked team's name, found in live
@@ -125,7 +154,7 @@ LEAGUES: tuple[League, ...] = (
     League(
         slug="wnba",
         name="WNBA",
-        country_codes=("US",),
+        country_codes=("US", "CA"),
         teams=_teams(
             "Minnesota Lynx",
             "Golden State Valkyries",

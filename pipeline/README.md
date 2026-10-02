@@ -11,7 +11,7 @@ and the static site into `dist/`.
 ## Run it
 
 ```sh
-uv sync --extra dev
+uv sync                          # runtime dependencies plus the `dev` group
 uv run pytest -q                 # the whole suite; negative controls described below
 
 # Degraded mode (no key) -- always safe, always produces a valid site:
@@ -20,6 +20,12 @@ uv run python -m wsc_pipeline.build --out dist --base-url https://nexthomegame.c
 # Real build:
 TICKETMASTER_API_KEY=... uv run python -m wsc_pipeline.build --out dist --base-url https://nexthomegame.com
 ```
+
+The tools (pytest, ruff, mypy and the rest) are a PEP 735 dependency group
+named `dev` in `pyproject.toml`, not an extra, so `uv sync` installs them
+without a flag (`uv sync --extra dev` fails). `make install`, which CI runs,
+is `uv lock --check` followed by `uv sync --frozen`: it installs exactly
+`uv.lock` and fails if `pyproject.toml` and the lockfile disagree.
 
 Every build prints a coverage report (also written to `dist/COVERAGE.txt`):
 leagues examined vs. queried, teams with at least one game found, games
@@ -33,7 +39,9 @@ used (requests, bytes).
   *not* configured (`LEAGUES_EXAMINED_NOT_INCLUDED`) with why. A team's URL
   `slug`, Ticketmaster keyword (`name`), `display_name`, `search_names` and
   `former_slugs` are separate fields, so a rename never moves a subscribed
-  feed (`../docs/DECISIONS.md` 0015 says how to rename a team).
+  feed (`../docs/DECISIONS.md` 0017 says how to rename a team). Adding a
+  team or a league also touches the seller table, the social cards, the
+  tests and the licensing notes: `../CONTRIBUTING.md` has the checklist.
 - `ticketmaster.py` — the Discovery API client. Self-limits to 1
   request/second (below both published rate numbers — the two official
   Ticketmaster pages disagree, 2 vs. 5 req/s), retries on 429/5xx, and
@@ -66,9 +74,32 @@ used (requests, bytes).
   from the Ticketmaster event id (`tm-<event_id>@womens-sports-calendar.invalid`),
   so re-subscribing or a nightly rebuild never duplicates entries.
   `check_no_duplicate_uids` raises on any collision within one calendar.
-  Games with no exact start instant (`date_tbd` or no `dateTime`) are
-  excluded from the `.ics` — RFC 5545 has no clean "TBD" representation —
-  but stay visible on the site.
+  A game with a real date and no announced start time (`time_tba`) is an
+  all-day event on its local date (`DTSTART;VALUE=DATE`) with " (time TBA)"
+  ending its summary and a note in its description; it has no `DTEND`, no
+  time is shown or implied, and a `time_tba` game that arrives with a
+  placeholder `dateTime` is still all-day. Its UID is the one the timed
+  event will have, so it becomes the same event with a start time when
+  Ticketmaster lists one (`normalize.feed_start` is the one rule; how
+  calendar apps treat that date-to-date-time change is untested). A game with
+  no date at all (`date_tbd`) has nothing a calendar entry could say, and is
+  left out of the `.ics` but stays visible on the site; the coverage report
+  counts it, the all-day games, and any other exclusion. A game Ticketmaster lists as cancelled or
+  postponed stays in the feed and says so (`FEED_STATUS`): cancelled is
+  `STATUS:CANCELLED` with "Canceled: " before the summary, postponed is
+  `STATUS:TENTATIVE` with "Postponed: " before it, and rescheduled has no
+  `STATUS` and a note in the description; each also opens the description
+  with a one-line note. `validate_ics.py` holds every feed to the status its
+  page shows. Every event's `DTSTAMP` is the build's fetch time (RFC 5545:
+  when this copy of the calendar was made), passed into `build_calendar` so
+  the module never reads the clock; `validate_ics.py` fails on one after the
+  fetch time. Ticketmaster publishes no end time, so each timed event's
+  `DTEND` is an estimate: the start plus the sport's usual game length
+  (`config.GAME_DURATIONS`, overridable per league), with "End time
+  estimated; not published by the ticket source." in its description
+  (`docs/DECISIONS.md` 0015); a sport with no entry gets no `DTEND`. No
+  `SEQUENCE` or `LAST-MODIFIED` is written: both need the previous
+  published data to compare against.
 - `coverage.py` — the printed coverage report. "Join hit-rate" from the
   original brief is reinterpreted here (see `docs/DECISIONS.md` 0006):
   since there is no second feed to join against Ticketmaster, it is the
@@ -84,7 +115,10 @@ used (requests, bytes).
   recorded per entry. Otherwise it uses the Ticketmaster event URL, labelled
   with the site it actually points to. `AFFILIATE_LINK_TEMPLATES` is the
   single place an affiliate ID would go. It is empty, and the footer
-  disclosure is rendered from it. The `.ics` feeds do not use this module.
+  disclosure is rendered from it. A link that went through a template also
+  carries `rel="sponsored noopener"` (`is_affiliate_link`, applied in
+  `site.py`); a plain link carries no `rel` at all. The `.ics` feeds do not
+  use this module.
 - `analytics.py` — Google Analytics 4 (`../docs/DECISIONS.md` 0012).
   `GA4_MEASUREMENT_ID` is the one place the measurement ID goes (committed:
   it is public); empty means no page carries any analytics. When set, every
@@ -111,8 +145,10 @@ used (requests, bytes).
   says is at home. Also `<link rel="canonical">`,
   a favicon (SVG primary + PNG/apple-touch-icon fallbacks), Open Graph and
   Twitter Card tags — including a real `og:image` per page (the site-wide
-  default on the index, a per-league card on every league and team page,
-  see `assets/` below) — semantic landmarks, table headers with `scope`,
+  default on the index and on every page without a card of its own, a
+  per-league card on the WNBA, NWSL and PWHL league and team pages; AUSL and
+  NCAA women's basketball have no card yet, see `assets/` below and
+  `CONTRIBUTING.md`) — semantic landmarks, table headers with `scope`,
   link text that names its destination ("Buy tickets for X vs Y on
   \<date\> from SeatGeek, the official seller for … home games", never bare
   "Buy" or "click here"), no price anywhere, a
@@ -170,8 +206,9 @@ missing).
 
 `tests/test_analytics.py` covers GA4 (`../docs/DECISIONS.md` 0012): a build
 with no ID emits no GA on any page; a build with an ID puts the same guarded
-loader in the `<head>` of all 75 pages (index, privacy, 404, 5 league, 67
-team); the `.ics` feeds are byte-identical with and without an ID (and
+loader in the `<head>` of every page the build writes (the index, the privacy,
+accessibility and 404 pages, one page per league and one per team); the `.ics`
+feeds are byte-identical with and without an ID (and
 `data/*.json` too, apart from `site.json`'s build timestamp); ticket links
 stay plain Ticketmaster URLs; a malformed ID fails the build before anything
 is written. The loader itself is executed in Node against stubbed
@@ -206,28 +243,31 @@ pre-sabotage `git hash-object`.
 Also run (not part of `pytest`, but part of `make verify` and so CI-gated on
 every push/PR, not a one-time manual check):
 
-- `make validate-html` — `html5validator` against every generated page (75
-  pages in the degraded, no-API-key build CI runs: the index, the privacy
-  page, the 404 page, 5 league pages, 67 team pages).
+- `make validate-html` — `html5validator` against every generated page of
+  the degraded, no-API-key build CI runs: the index, the privacy,
+  accessibility and 404 pages, one page per league and one per team, so the
+  count follows `config.py` (`find dist -name '*.html' | wc -l` prints it).
 - `make a11y` — `pa11y --standard WCAG2AA` (via `pa11y-ci`, 5 pages at a
-  time) against every generated page (the same 75) **plus** two fixture
+  time) against every generated page (the same ones) **plus** two fixture
   pages rendered with a populated games table (a priced game, an unpriced
   game, and a date-TBD game together — the exact shape
   `tests/test_site_html.py::_pages()` builds and asserts on, reused via
   `scripts/render_a11y_fixtures.py` rather than duplicated) — these two exist
   because the degraded build CI runs never has a non-empty games table to
-  check. 77 pages in all — see `pipeline/Makefile`'s `a11y` target and
-  `pipeline/pa11y-ci.config.json` for exactly what runs. The URL list is
-  rebuilt from `find dist -name '*.html'` on every run, and
+  check. That is two more pages than the build alone writes; see
+  `pipeline/Makefile`'s `a11y` target and `pipeline/pa11y-ci.config.json` for
+  exactly what runs. The URL list is rebuilt from
+  `find dist -name '*.html'` on every run, and
   `scripts/check_a11y_coverage.py` then fails the gate unless pa11y-ci's own
   JSON report names every URL it was handed, all passing, and that list
-  covers every index/privacy/404/league/team page `wsc_pipeline.config` says
-  the build must produce, so a faster sweep can't quietly check fewer pages.
+  covers every index, privacy, accessibility, 404, league and team page
+  `wsc_pipeline.config` says the build must produce, so a faster sweep can't
+  quietly check fewer pages.
   The pages carry the GA4 loader (the committed ID is set), but it returns
   before loading anything on 127.0.0.1, so the sweep never contacts Google.
   `make a11y` installs its own npm dependency (`make install-a11y`); plain
   `make install`, which the nightly deploy runs, is Python-only.
 
-No human screen-reader walkthrough has been performed (this is a brand-new
-private product, not yet public); that stays a manually-tracked open item,
-separate from the two automated, CI-enforced checks above.
+No human screen-reader walkthrough has been performed; that stays a
+manually-tracked open item (#5), separate from the two automated,
+CI-enforced checks above.
