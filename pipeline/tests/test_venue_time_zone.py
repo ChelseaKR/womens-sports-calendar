@@ -23,7 +23,7 @@ from wsc_pipeline.coverage import MAX_NAMED_GAMES, BuildCoverage, compute_league
 from wsc_pipeline.ics import build_calendar, make_uid
 from wsc_pipeline.normalize import normalize_event, zone_for, zone_problem
 
-from .conftest import make_raw_event
+from .conftest import BUILD_TIME, make_raw_event
 from .test_build import _FakeDiscoveryClient
 from .test_coverage import LEAGUE
 
@@ -44,7 +44,7 @@ def _ical_text(cal: Calendar) -> str:
 def test_unknown_zone_builds_with_a_utc_start_and_keeps_its_uid():
     """The reproduction from the issue: this raised ValueError."""
     game = _game("Z1", timezone="Mars/Olympus", date_time="2026-06-15T23:00:00Z")
-    cal = build_calendar([game], cal_name="x")
+    cal = build_calendar([game], cal_name="x", dtstamp=BUILD_TIME)
     (event,) = cal.walk("VEVENT")
     assert str(event["uid"]) == make_uid("Z1")
     text = _ical_text(cal)
@@ -56,7 +56,7 @@ def test_unknown_zone_builds_with_a_utc_start_and_keeps_its_uid():
 @pytest.mark.parametrize("tzid", [None, "", "   ", "America/New_York ", "../etc/passwd", "Not/AZone"])
 def test_missing_or_malformed_zone_builds_with_a_utc_start(tzid):
     game = _game("Z2", timezone=tzid, date_time="2026-06-15T23:00:00Z")
-    cal = build_calendar([game], cal_name="x")
+    cal = build_calendar([game], cal_name="x", dtstamp=BUILD_TIME)
     (event,) = cal.walk("VEVENT")
     assert str(event["uid"]) == make_uid("Z2")
     assert "DTSTART:20260615T230000Z" in _ical_text(cal)
@@ -68,7 +68,7 @@ def test_one_bad_zone_does_not_change_its_neighbors():
     DTSTART;TZID=... and its VTIMEZONE."""
     good = _game("GOOD", timezone="America/Indiana/Indianapolis", date_time="2026-06-15T23:00:00Z")
     bad = _game("BAD", timezone="Mars/Olympus", date_time="2026-06-16T23:00:00Z")
-    cal = build_calendar([good, bad], cal_name="x")
+    cal = build_calendar([good, bad], cal_name="x", dtstamp=BUILD_TIME)
     assert {str(e["uid"]) for e in cal.walk("VEVENT")} == {make_uid("GOOD"), make_uid("BAD")}
     text = _ical_text(cal)
     assert "DTSTART;TZID=America/Indiana/Indianapolis:20260615T190000" in text
@@ -79,7 +79,7 @@ def test_one_bad_zone_does_not_change_its_neighbors():
 def test_a_valid_zone_is_written_exactly_as_before():
     """Negative control for the fix: nothing changes for a zone that resolves."""
     game = _game("OK", timezone="America/Los_Angeles", date_time="2026-06-15T23:00:00Z")
-    text = _ical_text(build_calendar([game], cal_name="x"))
+    text = _ical_text(build_calendar([game], cal_name="x", dtstamp=BUILD_TIME))
     assert "DTSTART;TZID=America/Los_Angeles:20260615T160000" in text
     assert "BEGIN:VTIMEZONE" in text and "TZID:America/Los_Angeles" in text
 

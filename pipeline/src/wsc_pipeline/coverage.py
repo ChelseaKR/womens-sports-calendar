@@ -14,11 +14,15 @@ from datetime import datetime
 from .config import League
 from .normalize import Game, feed_start, unique_by_event_id, zone_problem
 
+# How many games a report line names before it counts the rest.
 MAX_NAMED_GAMES = 20
 
 
-@dataclass
+@dataclass(frozen=True)
 class ZoneFallback:
+    """A game written to the calendar with a UTC start because its venue
+    time zone is missing or unrecognized."""
+
     event_id: str
     event_name: str
     reason: str
@@ -173,12 +177,10 @@ def render_report(coverage: BuildCoverage) -> str:
         if lc.zone_fallbacks:
             named = "; ".join(f"{z.event_id} ({z.event_name}): {z.reason}" for z in lc.zone_fallbacks[:MAX_NAMED_GAMES])
             more = len(lc.zone_fallbacks) - MAX_NAMED_GAMES
-            suffix = f" and {more} more" if more > 0 else ""
             lines.append(
-                f"  WARNING: {len(lc.zone_fallbacks)} game(s) in this league "
-                f"were written to the calendars with a UTC start because "
-                f"their venue time zone is missing or unrecognized: "
-                f"{named}{suffix}"
+                f"  WARNING: {len(lc.zone_fallbacks)} game(s) are in the calendar with a UTC start because the "
+                f"venue time zone is unknown (the instant is Ticketmaster's; the venue's own zone is never "
+                f"guessed): {named}" + (f"; and {more} more" if more > 0 else "")
             )
         lines.append("")
 
