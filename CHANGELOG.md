@@ -44,9 +44,13 @@ archived and private.
   league would publish an empty calendar over a non-empty one, a league
   loses more than half of at least three upcoming games, or a team loses all
   of at least three, and names the team and games (#21). A season that
-  simply ended vanishes nothing. `COVERAGE.txt` lists every vanished game
-  and says when the previous publish could not be read. The thresholds and
-  a dated per-league override are in `config.py`.
+  simply ended vanishes nothing. Games with a date and no announced time,
+  which the feeds carry as all-day events, are compared by their date.
+  `COVERAGE.txt` lists every vanished game and says when the previous
+  publish could not be read, and a refused build writes the same list to
+  the job summary. The thresholds, a dated per-league override and a list
+  of accepted event removals (`REMOVED_EVENTS`, which the 24-hour removal
+  in #9 is to share) are in `config.py`.
 
 ### Changed
 

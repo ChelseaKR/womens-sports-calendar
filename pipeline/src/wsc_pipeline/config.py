@@ -404,6 +404,18 @@ class PublishGuard:
     slow to fire: one broken team keyword loses a team's whole schedule
     (the team rule), and a broken league query loses most of a league's
     (the share rule); losing a game or two is ordinary listing churn.
+
+    Why the team rule needs 3 games, not 1: a team can lose its last one or
+    two listed games for ordinary reasons. The WNBA playoffs list "if
+    necessary" games (games 4 and 5 of a best-of-five) that Ticketmaster
+    removes, without marking them cancelled, when the series ends early;
+    on 2026-10-02 the semifinal between the Liberty and the Dream listed
+    two. With a minimum of 1, every series that ends early would refuse the
+    whole nightly deploy until someone accepted the removal. A team whose
+    keyword breaks loses all of its games, and outside the last days of a
+    season that is more than two. A league whose calendar would be empty
+    is refused with no minimum (the first rule), so a small league is still
+    covered.
     """
 
     settle_hours: int = 24
@@ -444,6 +456,35 @@ class GuardOverride:
 # then re-run the pages workflow. Remove the entry once the league has games
 # again; it stops applying on its own after `until` either way.
 PUBLISH_GUARD_OVERRIDES: tuple[GuardOverride, ...] = ()
+
+
+@dataclass(frozen=True)
+class EventRemoval:
+    """One Ticketmaster event that is gone from the site on purpose."""
+
+    event_id: str
+    recorded: date  # when the removal was accepted
+    reason: str  # why, in a sentence: who asked, or what was checked
+
+
+# Ticketmaster events whose removal has been accepted, one event id at a
+# time. Today the publish guard reads it: a listed event that disappears and
+# is named here is reported as an accepted removal and not counted, so a real
+# removal of a few games (a playoff series that ended before its "if
+# necessary" games, a single withdrawn listing) does not block deploys. For a
+# league-wide withdrawal, PUBLISH_GUARD_OVERRIDES above is the tool.
+#
+# The 24-hour removal on request (Data governance, #9) is meant to read this
+# same list to keep an event out of the publish. Until that lands, an entry
+# here does not hide a game that is still listed. Leave entries in place:
+# Ticketmaster does not reuse an event id. Example:
+#
+#   EventRemoval(
+#       event_id="vvG1zZ_o30QDeE",
+#       recorded=date(2026, 10, 12),
+#       reason="Semifinal decided in four games; Ticketmaster removed game 5 (if needed).",
+#   )
+REMOVED_EVENTS: tuple[EventRemoval, ...] = ()
 
 
 def all_teams() -> list[tuple[League, Team]]:

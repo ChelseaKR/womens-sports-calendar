@@ -4,8 +4,9 @@ Exit code contract (checked by CI): 0 = a full site was written to --out.
 With an API key that site is safe to publish; without one (degraded mode,
 allowed only when --require-api-key is not given) nothing was fetched and
 every page says so, and the deploy workflow never publishes it. Non-zero =
-a fetch genuinely failed, found zero games across every tracked team, or
---require-api-key was given without a key; --out is not written and the
+a fetch genuinely failed, found zero games across every tracked team, was
+refused by the publish guard (guard.py: it would take a league's or a team's
+upcoming games out of subscribers' calendars), or --require-api-key was given without a key; --out is not written and the
 caller (GitHub Actions) must not deploy it -- Pages then keeps serving
 whatever the last successful run published, which is the "a stale build is
 never published as current" rule in practice: we never relabel an old or
@@ -469,14 +470,27 @@ def main(argv: list[str] | None = None) -> int:
         print("A failed fetch fails the build; nothing was published to --out.", file=sys.stderr)
         return 1
     except guard.PublishRefused as exc:
-        print(f"BUILD FAILED: {exc}", file=sys.stderr)
-        if os.environ.get("GITHUB_ACTIONS") == "true":
-            for violation in exc.report.violations:
-                print(f"::error title=Publish guard refused the build::{violation.message}", file=sys.stderr)
+        _report_refusal(exc)
         return 1
 
     _report_build(coverage)
     return 0
+
+
+def _report_refusal(exc: guard.PublishRefused) -> None:
+    """The run log, the error annotations and the job summary for a build the
+    publish guard refused. A refused build writes no COVERAGE.txt, which is
+    what pages.yml copies into the job summary after a good build, so the
+    refusal and every team's vanished games go into the summary here."""
+    print(f"BUILD FAILED: {exc}", file=sys.stderr)
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        for violation in exc.report.violations:
+            print(f"::error title=Publish guard refused the build::{violation.message}", file=sys.stderr)
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary_path:
+        body = "\n".join([f"BUILD FAILED: {exc}", "", *guard.render_section(exc.report)])
+        with Path(summary_path).open("a", encoding="utf-8") as fh:
+            fh.write("## Nightly build refused by the publish guard\n\n```text\n" + body + "\n```\n")
 
 
 def _report_build(coverage: BuildCoverage) -> None:

@@ -49,16 +49,20 @@ used (requests, bytes).
 - `guard.py` — the publish guard (`../docs/adr/0006-publish-guard-for-vanished-games.md`).
   Reads the live site's `data/<league>/<team>.json` back and compares each
   league and team with what this build just fetched. A game has *vanished*
-  when the last publish listed it, it starts more than 24 hours after this
-  build, it was not marked cancelled or postponed, and it is gone now; a
-  season that ended vanishes nothing. A league that would publish an empty
+  when the last publish listed it in a feed (timed, or all-day by its date
+  when no time is announced), it starts more than 24 hours after this
+  build, it was not marked cancelled or postponed, its event id is not in
+  `REMOVED_EVENTS`, and it is gone now; a season that ended vanishes
+  nothing. A league that would publish an empty
   calendar over a non-empty one, a league losing more than half of at least
   three upcoming games, or a team losing all of at least three, makes the
   build raise `PublishRefused` before anything is written, so the last good
-  deploy stays live. Every build lists what vanished in `COVERAGE.txt`. The
-  thresholds and the dated per-league override are in `config.py`
-  (`PUBLISH_GUARD`, `PUBLISH_GUARD_OVERRIDES`). An unreadable previous
-  publish never blocks but is reported.
+  deploy stays live. Every build lists what vanished in `COVERAGE.txt`, and
+  a refused build writes it to the GitHub Actions job summary. The
+  thresholds, the dated per-league override and the accepted per-event
+  removals are in `config.py` (`PUBLISH_GUARD`, `PUBLISH_GUARD_OVERRIDES`,
+  `REMOVED_EVENTS`). An unreadable previous publish never blocks but is
+  reported.
 - `normalize.py` — turns a raw Discovery API event into a `Game`. Parses
   home/away teams from the event name ("Home vs Away", or "Away at Home"),
   falling back to `_embedded.attractions` for the pair only — then

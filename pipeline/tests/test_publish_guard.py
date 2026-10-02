@@ -38,8 +38,11 @@ def _start(days: float) -> datetime:
     return NOW + timedelta(days=days)
 
 
-def _prev(event_id: str, days: float, status: str | None = None) -> PreviousGame:
-    return PreviousGame(event_id=event_id, name=f"Event {event_id}", start=_start(days), status=status)
+def _prev(event_id: str, days: float, status: str | None = None, *, date_only: bool = False) -> PreviousGame:
+    start = _start(days)
+    if date_only:
+        start = datetime.combine(start.date(), datetime.min.time(), UTC)
+    return PreviousGame(event_id=event_id, name=f"Event {event_id}", start=start, status=status, date_only=date_only)
 
 
 def _previous(**teams: list[PreviousGame]) -> PreviousPublish:
@@ -85,6 +88,7 @@ def test_the_default_thresholds_are_the_documented_ones():
     """docs/adr/0006 and config.PublishGuard's docstring quote these."""
     assert PublishGuard(settle_hours=24, min_previous_upcoming=3, max_league_vanished_share=0.5) == config.PUBLISH_GUARD
     assert config.PUBLISH_GUARD_OVERRIDES == ()
+    assert config.REMOVED_EVENTS == ()
 
 
 # --- a team loses its games -----------------------------------------------------------------------------
@@ -569,3 +573,179 @@ def test_the_data_files_this_guard_reads_carry_the_fields_it_relies_on(tmp_path:
     game = team_json["games"][0]
     for key in ("event_id", "event_name", "start_utc", "in_calendar_feed", "status"):
         assert key in game
+
+
+# --- games with a date and no announced time (all-day in the feeds) ----------------------------------------
+
+
+def _fresh_all_day(event_id: str, team: str, days: float, *, status: str | None = None) -> Game:
+    raw = make_raw_event(
+        event_id=event_id,
+        name=f"Event {event_id}",
+        date_time=None,
+        local_date=_start(days).strftime("%Y-%m-%d"),
+        local_time=None,
+        time_tba=True,
+        status=status,
+    )
+    game = normalize_event(raw, league_slug="wnba", tracked_team_slug=team, tracked_team_name=team)
+    assert game is not None
+    return game
+
+
+def test_an_all_day_game_is_read_by_its_date_and_a_placeholder_instant_is_ignored():
+    payload = {
+        "fetched": True,
+        "fetched_at": "2026-05-31T08:00:00+00:00",
+        "games": [
+            {
+                "event_id": "TBA1",
+                "in_calendar_feed": True,
+                "time_tba": True,
+                "start_utc": "2026-06-20T04:00:00+00:00",  # Ticketmaster's placeholder
+                "start_local_date": "2026-06-19",
+                "status": None,
+            },
+            {"event_id": "TBA2", "in_calendar_feed": True, "start_utc": None, "start_local_date": "2026-06-21"},
+            {"event_id": "BAD", "in_calendar_feed": True, "start_utc": None, "start_local_date": "June"},
+        ],
+    }
+    parsed = guard._parse_previous_team(payload)
+    assert parsed is not None
+    _fetched_at, games = parsed
+    assert [(g.event_id, g.start, g.date_only) for g in games] == [
+        ("TBA1", datetime(2026, 6, 19, tzinfo=UTC), True),
+        ("TBA2", datetime(2026, 6, 21, tzinfo=UTC), True),
+    ]
+
+
+def test_a_team_whose_all_day_games_all_vanish_is_refused():
+    """On 2026-10-02, 90 of 101 listed Big Ten games had no announced time.
+    They are in subscribers' feeds as all-day events, so losing them counts."""
+    previous = _previous(
+        wnba__indiana_fever=[_prev(e, d, date_only=True) for e, d in (("A", 10), ("B", 20), ("C", 30))],
+        wnba__new_york_liberty=[_prev(f"L{i}", 12 + i) for i in range(5)],
+    )
+    report = _run(previous, _feed_of(*[(f"L{i}", 12 + i) for i in range(5)], team=LIBERTY))
+    (violation,) = report.violations
+    assert violation.rule == "team-all" and violation.team_slug == FEVER
+    assert "A (Event A, 2026-06-11, time TBA)" in violation.message
+
+
+def test_an_all_day_game_counts_only_when_its_date_is_after_the_window():
+    """NOW is 2026-06-01 08:00 and the window ends 2026-06-02 08:00. A game
+    dated 2026-06-02 may start at any hour that day: not counted. One dated
+    2026-06-03 is."""
+    inside = _previous(wnba__indiana_fever=[_prev("A", 1, date_only=True)])
+    assert _run(inside, []).previous_upcoming == 0
+    outside = _previous(wnba__indiana_fever=[_prev("A", 2, date_only=True)])
+    assert _run(outside, []).previous_upcoming == 1
+
+
+def test_a_league_listing_only_all_day_games_is_not_called_empty():
+    """The empty-league rule asks whether the fresh feed has any game in it,
+    and an all-day game is in it."""
+    previous = _previous(wnba__indiana_fever=[_prev(e, d, date_only=True) for e, d in (("A", 10), ("B", 20))])
+    report = _run(previous, [_fresh_all_day("A", FEVER, 10), _fresh_all_day("B", FEVER, 20)])
+    assert not report.refused and report.vanished == []
+
+
+def test_an_all_day_game_now_cancelled_and_still_listed_is_reported():
+    previous = _previous(wnba__indiana_fever=[_prev("A", 10, date_only=True)])
+    report = _run(previous, [_fresh_all_day("A", FEVER, 10, status="cancelled")])
+    assert report.newly_cancelled == ["wnba: A (Event A)"]
+
+
+def test_two_builds_where_a_team_loses_its_all_day_games_refuses_the_second(tmp_path: Path, monkeypatch):
+    """Through the real data files: what the build writes for a time-TBA game
+    is what the guard reads back."""
+    live = tmp_path / "live"
+    tba = [_raw(f"T{i}", opponent="Chicago Sky", days=10 + i, time_tba=True) for i in range(4)]
+    _build(live, {FEVER: tba, LIBERTY: _liberty_games()}, monkeypatch, None)
+    with httpx.Client(transport=httpx.MockTransport(_serve(live))) as client:
+        previous = REAL_FETCH_PREVIOUS_PUBLISH(BASE_URL, client=client)
+    assert [g.date_only for g in previous.games[("wnba", FEVER)]] == [True] * 4
+
+    with pytest.raises(PublishRefused) as raised:
+        _build(tmp_path / "next", {FEVER: [], LIBERTY: _liberty_games()}, monkeypatch, previous)
+    assert "lost all 4 of its upcoming games" in str(raised.value) and "time TBA" in str(raised.value)
+
+
+# --- removals accepted one event at a time (config.REMOVED_EVENTS) ------------------------------------------
+
+
+def _removed(*event_ids: str) -> tuple[config.EventRemoval, ...]:
+    return tuple(config.EventRemoval(e, date(2026, 6, 1), "checked: Ticketmaster removed it") for e in event_ids)
+
+
+def test_an_accepted_removal_is_not_counted_and_is_reported():
+    """A playoff series ends early and its "if necessary" games go: once
+    their ids are accepted, the build publishes and says so."""
+    previous = _previous(
+        wnba__indiana_fever=[_prev("A", 10), _prev("IF4", 12), _prev("IF5", 14)],
+        wnba__new_york_liberty=[_prev(f"L{i}", 12 + i) for i in range(5)],
+    )
+    fresh = _feed_of(("A", 10)) + _feed_of(*[(f"L{i}", 12 + i) for i in range(5)], team=LIBERTY)
+    report = _run(previous, fresh, removed_events=_removed("IF4", "IF5"))
+    assert not report.refused and report.vanished == []
+    assert report.accepted_removals == ["wnba/indiana-fever: IF4 (Event IF4)", "wnba/indiana-fever: IF5 (Event IF5)"]
+    section = "\n".join(guard.render_section(report))
+    assert "removals accepted one event at a time (not counted): 2" in section
+
+
+def test_accepted_removals_let_a_team_lose_every_game_it_had():
+    previous = _previous(
+        wnba__indiana_fever=[_prev("A", 10), _prev("B", 20), _prev("C", 30)],
+        wnba__new_york_liberty=[_prev(f"L{i}", 12 + i) for i in range(5)],
+    )
+    fresh = _feed_of(*[(f"L{i}", 12 + i) for i in range(5)], team=LIBERTY)
+    assert _run(previous, fresh).refused
+    assert not _run(previous, fresh, removed_events=_removed("A", "B", "C")).refused
+
+
+def test_an_accepted_removal_does_not_excuse_the_games_it_does_not_name():
+    previous = _previous(
+        wnba__indiana_fever=[_prev("A", 10), _prev("B", 20), _prev("C", 30), _prev("D", 40)],
+        wnba__new_york_liberty=[_prev(f"L{i}", 12 + i) for i in range(9)],
+    )
+    fresh = _feed_of(*[(f"L{i}", 12 + i) for i in range(9)], team=LIBERTY)
+    report = _run(previous, fresh, removed_events=_removed("D"))
+    (violation,) = report.violations
+    assert violation.rule == "team-all" and "lost all 3" in violation.message
+    assert "REMOVED_EVENTS" in str(PublishRefused(report))
+
+
+def test_the_build_reads_the_accepted_removals_from_config(monkeypatch):
+    previous = _previous(wnba__indiana_fever=[_prev("A", 10)], wnba__new_york_liberty=[_prev("L0", 12)])
+    fresh = _feed_of(("L0", 12), team=LIBERTY)
+    monkeypatch.setattr(config, "REMOVED_EVENTS", _removed("A"))
+    report = evaluate(previous, fresh, {}, now=NOW, settings=SETTINGS, overrides=())
+    assert report.accepted_removals == ["wnba/indiana-fever: A (Event A)"]
+
+
+# --- the job summary ----------------------------------------------------------------------------------
+
+
+def test_a_refusal_writes_the_vanished_games_to_the_job_summary(tmp_path: Path, monkeypatch, capsys):
+    """pages.yml copies COVERAGE.txt into the job summary only after a good
+    build; a refused build writes its own."""
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    summary = tmp_path / "summary.md"
+    summary.write_text("earlier steps\n")
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+    other_league = {"angel-city": [_raw("N1", opponent="Bay FC", days=12, home="Angel City")]}
+    rc, _out = _main_with(monkeypatch, tmp_path, _real_now_previous(), other_league)
+    assert rc == 1
+    text = summary.read_text()
+    assert text.startswith("earlier steps\n")
+    assert "## Nightly build refused by the publish guard" in text
+    assert "BUILD FAILED: the publish guard refused this build" in text
+    assert "vanished, wnba/indiana-fever: R0 (Event R0" in text
+
+
+def test_no_job_summary_is_written_outside_github_actions(tmp_path: Path, monkeypatch, capsys):
+    monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+    other_league = {"angel-city": [_raw("N1", opponent="Bay FC", days=12, home="Angel City")]}
+    rc, _out = _main_with(monkeypatch, tmp_path, _real_now_previous(), other_league)
+    assert rc == 1
+    assert not list(tmp_path.glob("*.md"))

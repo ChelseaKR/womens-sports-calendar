@@ -16,14 +16,18 @@ trade-offs are docs/adr/0006.
 
 What counts as a vanished game (all must hold):
 
-- the previous publish listed it, and it was in that publish's calendar feed
-  (a real date and instant, not date-TBD);
+- the previous publish listed it, and it was in that publish's calendar feed:
+  a timed event, or an all-day event for a game with a date and no announced
+  time (never a date-TBD game, which no feed carries);
 - it was to start more than `settle_hours` after this build. A game that has
   started and left Ticketmaster's listing since last night is the normal end
   of a game, so a season that ends, or an off-season league, vanishes
-  nothing, and no season calendar is needed;
+  nothing, and no season calendar is needed. A game with only a date counts
+  when that date is after the day the window ends;
 - the previous publish had not marked it cancelled or postponed (removal of a
   listing is what those look like);
+- its event id is not in config.REMOVED_EVENTS, the removals the maintainer
+  has accepted one event at a time (reported, not counted);
 - this build no longer lists it (a game still listed but now cancelled is not
   vanished: it is reported as a change instead).
 
@@ -39,12 +43,12 @@ import sys
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 
 import httpx
 
 from . import config
-from .normalize import Game
+from .normalize import Game, feed_start
 from .site_data import NOTABLE_STATUSES
 from .ticketmaster import USER_AGENT
 
@@ -76,8 +80,15 @@ class PreviousGame:
 
     event_id: str
     name: str
-    start: datetime  # the calendar feed's instant, timezone-aware
+    # The calendar feed's instant, timezone-aware. For an all-day game (a
+    # date and no announced time) it is 00:00 UTC on that date, and
+    # `date_only` is set. That is no later than the date begins at any venue
+    # tracked (all in the Americas), so comparing it with the horizon counts
+    # the game only when its date is after the day the horizon falls on: it
+    # may start at any hour of its own date.
+    start: datetime
     status: str | None  # "Cancelled" / "Postponed" / "Rescheduled" / None
+    date_only: bool = False
 
     def counts_at(self, horizon: datetime) -> bool:
         """True when its disappearance would be a loss: it starts after the
@@ -105,9 +116,11 @@ class VanishedGame:
     event_id: str
     name: str
     start: datetime
+    date_only: bool = False
 
     def describe(self) -> str:
-        return f"{self.event_id} ({self.name}, {self.start.strftime('%Y-%m-%d %H:%MZ')})"
+        when = self.start.strftime("%Y-%m-%d, time TBA" if self.date_only else "%Y-%m-%d %H:%MZ")
+        return f"{self.event_id} ({self.name}, {when})"
 
 
 @dataclass(frozen=True)
@@ -141,6 +154,8 @@ class GuardReport:
     accepted: list[Violation] = field(default_factory=list)
     newly_cancelled: list[str] = field(default_factory=list)
     removed_after_cancel: list[str] = field(default_factory=list)
+    # Gone, but named in config.REMOVED_EVENTS: accepted, not counted.
+    accepted_removals: list[str] = field(default_factory=list)
     expired_overrides: list[str] = field(default_factory=list)
     unreadable: dict[TeamKey, str] = field(default_factory=dict)
 
@@ -156,25 +171,49 @@ def not_compared(reason: str) -> GuardReport:
 def _parse_previous_game(entry: object) -> PreviousGame | None:
     """The game, or None when it is not in the previous calendar feed (a
     date-TBD game: no subscriber has an event for it, so none can be lost).
-    Raises ValueError when the entry is not a shape this module can read."""
+    A game with a date and no announced time is in the feed as an all-day
+    event, so it is read by its local date. Raises ValueError when the entry
+    is not a shape this module can read."""
     if not isinstance(entry, dict) or not isinstance(entry.get("event_id"), str):
         raise ValueError("a game entry without an event id")
-    raw_start = entry.get("start_utc")
-    if entry.get("in_calendar_feed") is not True or not isinstance(raw_start, str):
+    if entry.get("in_calendar_feed") is not True:
         return None
-    try:
-        start = datetime.fromisoformat(raw_start)
-    except ValueError:
+    timed = _previous_instant(entry)
+    start = timed if timed is not None else _previous_date(entry)
+    if start is None:
         return None
-    if start.tzinfo is None:
-        return None  # an instant with no offset is not an instant
     name, status = entry.get("event_name"), entry.get("status")
     return PreviousGame(
         event_id=entry["event_id"],
         name=name if isinstance(name, str) and name else entry["event_id"],
         start=start,
         status=status if isinstance(status, str) else None,
+        date_only=timed is None,
     )
+
+
+def _previous_instant(entry: dict[str, object]) -> datetime | None:
+    """The exact start of a timed game; None for a time-TBA game (any
+    dateTime Ticketmaster sent with one is a placeholder, never used)."""
+    raw_start = entry.get("start_utc")
+    if entry.get("time_tba") is True or not isinstance(raw_start, str):
+        return None
+    try:
+        start = datetime.fromisoformat(raw_start)
+    except ValueError:
+        return None
+    return start if start.tzinfo is not None else None  # an instant with no offset is not an instant
+
+
+def _previous_date(entry: dict[str, object]) -> datetime | None:
+    """The start of an all-day game's local date, in UTC."""
+    raw_date = entry.get("start_local_date")
+    if not isinstance(raw_date, str):
+        return None
+    try:
+        return datetime.combine(date.fromisoformat(raw_date), time(0), UTC)
+    except ValueError:
+        return None
 
 
 def _parse_previous_team(payload: object) -> tuple[str | None, list[PreviousGame]] | None:
@@ -263,6 +302,15 @@ def _is_expected_to_leave_now(game: Game) -> bool:
     return NOTABLE_STATUSES.get(game.status_code or "") in _EXPECTED_TO_LEAVE
 
 
+def _upcoming_now(game: Game, now: datetime) -> bool:
+    """Whether a freshly fetched game in the feed is still ahead: by its
+    instant when timed, by its date when all-day."""
+    start = feed_start(game)
+    if isinstance(start, datetime):
+        return start > now
+    return start is not None and start > now.date()
+
+
 def _no_previous_note(previous: PreviousPublish, configured: int) -> str:
     if previous.unreadable:
         return (
@@ -285,7 +333,9 @@ class _Evaluation:
         now: datetime,
         settings: config.PublishGuard,
         report: GuardReport,
+        removed_event_ids: frozenset[str] = frozenset(),
     ) -> None:
+        self.removed_event_ids = removed_event_ids
         self.previous = previous
         self.truncated = truncated
         self.now = now
@@ -312,7 +362,7 @@ class _Evaluation:
         vanished = [e for e in league_previous if e not in fresh_league]
         self.report.previous_upcoming += len(league_previous)
         self.report.league_vanished += len(vanished)
-        in_feed = any(g.start_utc is not None and not g.date_tbd for g in fresh_league.values())
+        in_feed = any(feed_start(g) is not None for g in fresh_league.values())
         league_found = self._league_rule(lg, len(league_previous), len(vanished), in_feed)
         if league_found is not None:
             violations.append(league_found)
@@ -322,9 +372,10 @@ class _Evaluation:
         key = (lg.slug, team.slug)
         fresh_team = self.fresh_by_team.get(key, {})
         listed = self.previous.games[key]
-        upcoming = [pg for pg in listed if pg.counts_at(self.horizon)]
+        counted = [pg for pg in listed if pg.counts_at(self.horizon)]
+        upcoming = [pg for pg in counted if pg.event_id not in self.removed_event_ids]
         rows = [
-            VanishedGame(lg.slug, team.slug, pg.event_id, pg.name, pg.start.astimezone(UTC))
+            VanishedGame(lg.slug, team.slug, pg.event_id, pg.name, pg.start.astimezone(UTC), pg.date_only)
             for pg in upcoming
             if pg.event_id not in fresh_team
         ]
@@ -332,6 +383,11 @@ class _Evaluation:
             f"{lg.slug}/{team.slug}: {pg.event_id} ({pg.name})"
             for pg in listed
             if pg.status in _EXPECTED_TO_LEAVE and pg.start > self.horizon and pg.event_id not in fresh_team
+        )
+        self.report.accepted_removals.extend(
+            f"{lg.slug}/{team.slug}: {pg.event_id} ({pg.name})"
+            for pg in counted
+            if pg.event_id in self.removed_event_ids and pg.event_id not in fresh_team
         )
         if team.slug in self.truncated.get(lg.slug, set()):
             # This build's fetch stopped before the end of Ticketmaster's
@@ -387,8 +443,7 @@ class _Evaluation:
             for league_games in self.fresh_by_league.values()
             for g in league_games.values()
             if _is_expected_to_leave_now(g)
-            and g.start_utc is not None
-            and g.start_utc > self.now
+            and _upcoming_now(g, self.now)
             and was.get(g.event_id) not in _EXPECTED_TO_LEAVE
         ]
 
@@ -402,12 +457,14 @@ def evaluate(
     leagues: Sequence[config.League] | None = None,
     settings: config.PublishGuard | None = None,
     overrides: Sequence[config.GuardOverride] | None = None,
+    removed_events: Sequence[config.EventRemoval] | None = None,
 ) -> GuardReport:
     """Compare this build's games with the previous publish; see the module
     docstring for the rules and config.PublishGuard for the thresholds."""
     leagues = config.LEAGUES if leagues is None else leagues
     settings = config.PUBLISH_GUARD if settings is None else settings
     overrides = config.PUBLISH_GUARD_OVERRIDES if overrides is None else overrides
+    removed_events = config.REMOVED_EVENTS if removed_events is None else removed_events
     now = now.astimezone(UTC)
     active, expired = _active_overrides(overrides, now)
     configured = sum(len(lg.teams) for lg in leagues)
@@ -423,7 +480,8 @@ def evaluate(
         report.note = _no_previous_note(previous, configured)
         return report
 
-    evaluation = _Evaluation(previous, games, truncated, now, settings, report)
+    removed_ids = frozenset(r.event_id for r in removed_events)
+    evaluation = _Evaluation(previous, games, truncated, now, settings, report, removed_ids)
     for lg in leagues:
         override = active.get(lg.slug)
         for violation in evaluation.league(lg):
@@ -453,9 +511,11 @@ def render_refusal(report: GuardReport) -> str:
         "previous good night) stays live."
     )
     lines.append(
-        "If this is a real removal (Ticketmaster withdrew the listings, the league canceled the games, an "
-        "intended off-season), add a dated override for that league to PUBLISH_GUARD_OVERRIDES in "
-        "pipeline/src/wsc_pipeline/config.py with the reason, then re-run the pages workflow."
+        "If this is a real removal (Ticketmaster withdrew the listings, the league canceled the games, a "
+        "playoff series ended before its 'if necessary' games), accept it in "
+        "pipeline/src/wsc_pipeline/config.py, then re-run the pages workflow: add each event id named above "
+        "to REMOVED_EVENTS with the date and the reason, or, for a league-wide withdrawal, add a dated "
+        "override for that league to PUBLISH_GUARD_OVERRIDES."
     )
     lines.append(
         "If it is not, a Ticketmaster query for these teams has stopped matching (a rename, a keyword, a "
@@ -489,6 +549,11 @@ def _render_changes(report: GuardReport) -> list[str]:
         lines.append(
             "  removed after being marked cancelled or postponed (expected, not counted): "
             f"{len(report.removed_after_cancel)}: " + "; ".join(report.removed_after_cancel[:MAX_NAMED])
+        )
+    if report.accepted_removals:
+        lines.append(
+            f"  removals accepted one event at a time (not counted): {len(report.accepted_removals)}: "
+            + "; ".join(report.accepted_removals[:MAX_NAMED])
         )
     return lines
 
