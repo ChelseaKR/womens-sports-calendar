@@ -190,7 +190,13 @@ def test_the_fixture_site_publishes_exactly_the_uids_it_always_did(tmp_path: Pat
         uids = sorted(str(e["uid"]) for e in Calendar.from_ical(feed.read_bytes()).walk("VEVENT"))
         if uids:
             actual[feed.relative_to(out).as_posix()] = uids
-    assert actual == GOLDEN_FEED_UIDS
+    # Every pinned feed is still there with exactly its UIDs; a moved slug is a
+    # pinned path gone. Any other non-empty feed is a feed added since (the
+    # all-leagues feed, #36), and must carry only UIDs some pinned feed has.
+    assert {path: actual.get(path) for path in GOLDEN_FEED_UIDS} == GOLDEN_FEED_UIDS
+    pinned = {uid for uids in GOLDEN_FEED_UIDS.values() for uid in uids}
+    for path in set(actual) - set(GOLDEN_FEED_UIDS):
+        assert set(actual[path]) <= pinned, f"{path} carries a UID no pinned feed has"
     assert make_uid("FX-H2H") == "tm-FX-H2H@womens-sports-calendar.invalid"
 
 
@@ -325,10 +331,16 @@ def test_the_validators_accept_a_site_with_a_former_slug_and_reject_a_diverged_f
     out = tmp_path / "dist"
     _build(out, monkeypatch, _league(team), {"New Name": RENAME_EVENTS["New Name"]})
 
+    # Counted against what else the build writes, so a feed or page added by
+    # another change (the all-leagues feed, the schedule page) does not make
+    # this test about it.
+    other_feeds = int((out / "ics" / "all.ics").is_file())
+    other_pages = int((out / "schedule" / "index.html").is_file())
     feeds, _events = validate_ics.validate_dist(out)
-    assert feeds == 3  # the league feed, the team feed and the former-slug feed
+    assert feeds == 3 + other_feeds  # the league feed, the team feed and the former-slug feed
     pages, _ = validate_seo.validate_dist(out)
-    assert pages == 5  # home, league, team, privacy, accessibility: the old-slug notice is not indexable
+    # home, league, team, privacy, accessibility: the old-slug notice is not indexable
+    assert pages == 5 + other_pages
     # Negative control: a former-slug feed that differs from the current one is refused.
     (out / "ics" / "demo" / "old-name.ics").write_bytes((out / "ics" / "demo" / "new-name.ics").read_bytes() + b" ")
     with pytest.raises(validate_ics.FeedError, match=r"does not parse|differs"):
