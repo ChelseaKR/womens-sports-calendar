@@ -187,13 +187,21 @@ def _check_lastmod(path: str, lastmod: str | None, state: dict[str, sitemap.Page
 
 def _indexable_pages(dist: Path) -> set[str]:
     """Site paths of every page a search engine should index: every
-    <dir>/index.html the build wrote, minus fixture pages."""
+    <dir>/index.html the build wrote, minus fixture pages and the notice
+    pages at a team's former slugs (config.Team.former_slugs), which point at
+    the current page, are noindex, and are never listed."""
+    former = {f"/{lg.slug}/{slug}/" for lg in config.LEAGUES for team in lg.teams for slug in team.former_slugs}
     out = set()
     for page in dist.rglob("index.html"):
         rel = page.relative_to(dist).parent.as_posix()
         if rel.startswith("_"):
             continue
-        out.add("/" if rel == "." else f"/{rel}/")
+        site_path = "/" if rel == "." else f"/{rel}/"
+        if site_path in former:
+            if not _parse_page(page).noindex:
+                raise SeoError(f"{page}: the notice page at a former slug must be noindex")
+            continue
+        out.add(site_path)
     return out
 
 

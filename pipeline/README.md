@@ -36,7 +36,10 @@ used (requests, bytes).
 
 - `config.py` — the static team/league registry (data, not code) that
   drives Discovery API keyword queries, plus the leagues examined and
-  *not* configured (`LEAGUES_EXAMINED_NOT_INCLUDED`) with why. Adding a
+  *not* configured (`LEAGUES_EXAMINED_NOT_INCLUDED`) with why. A team's URL
+  `slug`, Ticketmaster keyword (`name`), `display_name`, `search_names` and
+  `former_slugs` are separate fields, so a rename never moves a subscribed
+  feed (`../docs/DECISIONS.md` 0017 says how to rename a team). Adding a
   team or a league also touches the seller table, the social cards, the
   tests and the licensing notes: `../CONTRIBUTING.md` has the checklist.
 - `ticketmaster.py` — the Discovery API client. Self-limits to 1
@@ -48,6 +51,12 @@ used (requests, bytes).
   silently-thinned result.
 - `normalize.py` — turns a raw Discovery API event into a `Game`. Parses
   home/away teams from the event name ("Home vs Away", or "Away at Home"),
+  keeping what surrounds them out of the team names: a leading "\<title\>: "
+  (a title sponsor) becomes `event_title`, a trailing "(Exhibition)" or
+  "- Game 2" (an allowlist of game types) becomes `game_type`, any other
+  trailing parenthetical (a promotion) and a ": \<package\>" after the
+  away team are dropped from the name, and "\<event\> at \<venue\>"
+  names no home team,
   falling back to `_embedded.attractions` for the pair only — then
   `home_away_known` is false and nothing calls either team the home side —
   and extracts venue (name, city, state, street, postcode, country), date,

@@ -119,12 +119,17 @@ def _base(
     noindex: bool = False,
     ga4_id: str | None = None,
     jsonld: str = "",
+    refresh_to: str | None = None,
 ) -> str:
     """jsonld is a structured_data.script_block(); it goes last in <head>
     before the GA4 loader, which must close <head> (tests/test_analytics.py)."""
     image_url = f"{base_url}/{og_image}"
     analytics_head = ga4_head_snippet(ga4_id, base_url=base_url)
     robots_meta = '<meta name="robots" content="noindex">\n' if noindex else ""
+    # An instant client-side redirect, for a page that only points elsewhere
+    # (render_moved_team): a static host cannot send a real redirect.
+    if refresh_to:
+        robots_meta += f'<meta http-equiv="refresh" content="0; url={e(refresh_to)}">\n'
     # A noindexed page (the 404) carries no canonical: pointing it at another
     # URL would declare it a duplicate of a page it is not.
     canonical_link = "" if noindex else f'<link rel="canonical" href="{e(canonical_url)}">\n'
@@ -322,6 +327,25 @@ def _matchup_text(game: Mapping[str, Any]) -> str:
     return game.get("event_name") or "Event name not published by Ticketmaster"
 
 
+def _hero_game_type(game: Mapping[str, Any]) -> str:
+    """The game type as plain text after the matchup in the next-game
+    hero ("Exhibition" is worth knowing before buying); empty when none."""
+    return f" ({game['game_type']})" if game.get("game_type") else ""
+
+
+def _game_labels_html(game: Mapping[str, Any]) -> str:
+    """What the event name said around the matchup, beside it and never
+    inside a team's name: the game type ("Exhibition") as a small label, and
+    the event's own title (a title sponsor's "Braggin' Rights") on a line
+    under it. Empty for a game whose name had neither."""
+    html = ""
+    if game.get("game_type"):
+        html += f' <span class="home-away game-type">{e(game["game_type"])}</span>'
+    if game.get("event_title"):
+        html += f'<br><span class="event-title">{e(game["event_title"])}</span>'
+    return html
+
+
 def _month_day(iso_date: str | None) -> tuple[str, str] | None:
     """('JUN', '15') from a "start_local_date" ISO string -- parses the
     real date.date, never the human "start_display" string, so a tzid or
@@ -436,7 +460,7 @@ your calendar automatically &mdash; nothing to check back for.</p>
 <h2 id="next-game-heading" class="next-game-label">{label}</h2>
 {note}{date_chip}
 <div class="next-game-details">
-<p class="next-game-matchup">{e(matchup)}</p>
+<p class="next-game-matchup">{e(matchup)}{e(_hero_game_type(g))}</p>
 <p class="next-game-when">{when}</p>
 <p class="next-game-venue">{e(_venue_text(g))}</p>
 {cta}
@@ -461,7 +485,7 @@ def _games_table(
         rows.append(
             "<tr>"
             f'<td><span class="game-date">{_when_html(g)}</span>{date_note}</td>'
-            f"<td>{e(matchup)}{tag}</td>"
+            f"<td>{e(matchup)}{tag}{_game_labels_html(g)}</td>"
             f"<td>{e(_venue_text(g))}</td>"
             f"<td>{buy}</td>"
             "</tr>"
@@ -601,6 +625,33 @@ are listed below, or start from <a href="/">the home page</a>.</p>
         body=body,
         noindex=True,
         ga4_id=ga4_id,
+    )
+
+
+def render_moved_team(
+    *, team_name: str, league_name: str, league_slug: str, team_slug: str, base_url: str, ga4_id: str | None = None
+) -> str:
+    """The page at a slug a team used to have (config.Team.former_slugs): a
+    notice that points to the current page, and sends the browser there. A
+    static host cannot redirect, so this is what a saved link to the old
+    page lands on. noindex, and kept out of the sitemap, so the old path is
+    never a second listing of the same team; the calendar feed at the old
+    path still works and is not touched."""
+    new_path = f"/{league_slug}/{team_slug}/"
+    body = f"""<h1>{e(team_name)} has a new page address</h1>
+<p class="lede">The {e(team_name)} ({e(league_name)}) schedule is now at
+<a href="{e(new_path)}">{e(base_url)}{e(new_path)}</a>.</p>
+<p>A calendar you already subscribed to keeps working at its old address.</p>
+"""
+    return _base(
+        title=f"{team_name} schedule has moved | {SITE_NAME}",
+        description=f"The {team_name} schedule now lives at {base_url}{new_path}.",
+        canonical_url=f"{base_url}{new_path}",
+        base_url=base_url,
+        body=body,
+        noindex=True,
+        ga4_id=ga4_id,
+        refresh_to=new_path,
     )
 
 
