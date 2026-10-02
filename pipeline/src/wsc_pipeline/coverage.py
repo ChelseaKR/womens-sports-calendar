@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from . import guard
 from .config import League
 from .normalize import Game, feed_start, unique_by_event_id, zone_problem
 
@@ -65,6 +66,9 @@ class BuildCoverage:
     requests_made: int
     bytes_received: int
     api_key_present: bool
+    # What the publish guard found comparing this build with the previous
+    # publish (guard.py); None when nothing was fetched to compare.
+    publish_guard: guard.GuardReport | None = None
 
     @property
     def leagues_examined(self) -> int:
@@ -148,6 +152,8 @@ def render_report(coverage: BuildCoverage) -> str:
     )
     lines.append(f"Crawl budget used: {coverage.requests_made} requests, {coverage.bytes_received} bytes received.")
     lines.append("")
+    if coverage.publish_guard is not None:
+        lines.extend(guard.render_section(coverage.publish_guard))
 
     for lc in coverage.leagues:
         lines.append(f"-- {lc.league_name} ({lc.league_slug}) --")
