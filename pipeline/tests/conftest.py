@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from wsc_pipeline import sitemap
+from wsc_pipeline import guard, sitemap
 
 # A build's fetch time, pinned: what tests hand the calendar builders as
 # `dtstamp` (ics.build_calendar never reads the clock). Before the games in
@@ -23,6 +23,7 @@ BUILD_TIME = datetime(2026, 6, 1, 8, 30, 0, tzinfo=UTC)
 # autouse fixture below replaces it, for the tests that exercise it against
 # a mock transport.
 REAL_FETCH_PREVIOUS_STATE = sitemap.fetch_previous_state
+REAL_FETCH_PREVIOUS_PUBLISH = guard.fetch_previous_publish
 
 
 @pytest.fixture(autouse=True)
@@ -31,6 +32,7 @@ def _no_live_site_reads(monkeypatch):
     previous lastmod manifest whenever an API key is set, and several tests
     set a fake one."""
     monkeypatch.setattr(sitemap, "fetch_previous_state", lambda base_url, **kwargs: None)
+    monkeypatch.setattr(guard, "fetch_previous_publish", lambda base_url, **kwargs: guard.PreviousPublish())
 
 
 def make_raw_event(

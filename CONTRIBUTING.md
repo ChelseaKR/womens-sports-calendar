@@ -56,8 +56,9 @@ environment.
 - Fill in the PR template's Definition of Done checklist
   (`DEFINITION_OF_DONE.md`).
 - A change to a guardrail needs an ADR in `docs/adr/`. The guardrails are:
-  a failed or empty fetch never publishes; absence is never shown as a
-  value; a `permissions:` block; a coverage, accessibility or performance
+  a failed or empty fetch never publishes, and neither does a build that
+  would take a league's or team's upcoming games away (the publish guard,
+  `docs/adr/0006`); absence is never shown as a value; a `permissions:` block; a coverage, accessibility or performance
   threshold. Declaring a standard N/A needs one too.
 - Add a line to `CHANGELOG.md` under Unreleased for any user-visible change.
 - New data sources follow "licence before bytes" (`docs/DECISIONS.md` 0003):
