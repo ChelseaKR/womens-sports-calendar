@@ -7,5 +7,8 @@
     "axe-core": "4.11.4",
     "pa11y-ci": "4.1.1",
     "puppeteer": "24.43.1"
+  },
+  "overrides": {
+    "basic-ftp": "6.2.1"
   }
 }
