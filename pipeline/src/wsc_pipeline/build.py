@@ -4,8 +4,9 @@ Exit code contract (checked by CI): 0 = a full site was written to --out.
 With an API key that site is safe to publish; without one (degraded mode,
 allowed only when --require-api-key is not given) nothing was fetched and
 every page says so, and the deploy workflow never publishes it. Non-zero =
-a fetch genuinely failed, found zero games across every tracked team, or
---require-api-key was given without a key; --out is not written and the
+a fetch genuinely failed, found zero games across every tracked team, was
+refused by the publish guard (guard.py: it would take a league's or a team's
+upcoming games out of subscribers' calendars), or --require-api-key was given without a key; --out is not written and the
 caller (GitHub Actions) must not deploy it -- Pages then keeps serving
 whatever the last successful run published, which is the "a stale build is
 never published as current" rule in practice: we never relabel an old or
@@ -22,10 +23,11 @@ import sys
 from datetime import UTC, date, datetime
 from importlib.metadata import version as package_version
 from pathlib import Path
+from typing import Any
 
-from . import analytics, config, ics, site, site_data, sitemap
+from . import analytics, config, guard, ics, site, site_data, sitemap
 from .coverage import BuildCoverage, compute_league_coverage, render_report
-from .normalize import Game, normalize_event, team_is_participant, unique_by_event_id
+from .normalize import Game, normalize_event, team_is_participant_as_any, unique_by_event_id
 from .ticketmaster import DiscoveryClient, TicketmasterFetchError
 
 DEFAULT_BASE_URL = "https://nexthomegame.com"
@@ -60,6 +62,26 @@ STATIC_FONT_FILES = (
 )
 
 
+def _search_team(
+    client: DiscoveryClient, league: config.League, team: config.Team
+) -> tuple[list[dict[str, Any]], bool]:
+    """Every raw event for a team: the search under its Ticketmaster keyword
+    (`name`), then one more search per `search_names` entry, each counted in
+    the crawl budget. An event several searches return is kept once."""
+    events: list[dict[str, Any]] = []
+    seen: set[object] = set()
+    truncated = False
+    for name in team.all_names:
+        found, cut_short = client.search_team_events(team.slug, name, league.country_codes)
+        truncated = truncated or cut_short
+        for raw in found:
+            if raw.get("id") in seen:
+                continue
+            seen.add(raw.get("id"))
+            events.append(raw)
+    return events, truncated
+
+
 def fetch_all_games(api_key: str) -> tuple[list[Game], dict[str, set[str]], dict[str, set[str]], int, int]:
     """Returns (games, truncated_team_slugs_by_league,
     mismatched_team_slugs_by_league, requests_made, bytes_received).
@@ -82,11 +104,11 @@ def fetch_all_games(api_key: str) -> tuple[list[Game], dict[str, set[str]], dict
     mismatched: dict[str, set[str]] = {lg.slug: set() for lg in config.LEAGUES}
     with DiscoveryClient(api_key) as client:
         for league, team in config.all_teams():
-            raw_events, team_truncated = client.search_team_events(team.slug, team.name, league.country_codes)
+            raw_events, team_truncated = _search_team(client, league, team)
             if team_truncated:
                 truncated[league.slug].add(team.slug)
             for raw in raw_events:
-                if not team_is_participant(team.name, raw, team.not_this_team):
+                if not team_is_participant_as_any(team.all_names, raw, team.not_this_team):
                     mismatched[league.slug].add(team.slug)
                     continue
                 game = normalize_event(
@@ -120,6 +142,8 @@ def build(
     affiliate_id: str | None,
     ga4_id: str | None = None,
     previous_state: dict[str, sitemap.PageState] | None = None,
+    previous_publish: guard.PreviousPublish | None = None,
+    now: datetime | None = None,
 ) -> BuildCoverage:
     """Fetches and writes to a temp directory first, then atomically
     replaces --out only on full success. A fetch failure raises before the
@@ -150,7 +174,15 @@ def build(
     # allows at most three fractional digits (the 2026-09-18 nightly deploy
     # failed on six, #37), and it is also every changed page's sitemap
     # <lastmod>, which validate_seo holds to whole seconds.
-    fetched_at = datetime.now(UTC).replace(microsecond=0) if api_key_present else None
+    fetched_at = (now or datetime.now(UTC)).replace(microsecond=0) if api_key_present else None
+    guard_report: guard.GuardReport | None = None
+    if fetched_at is not None:
+        if previous_publish is None:
+            guard_report = guard.not_compared("the previous publish was not read")
+        else:
+            guard_report = guard.evaluate(previous_publish, games, truncated, now=fetched_at)
+            if guard_report.refused:
+                raise guard.PublishRefused(guard_report)
 
     tmp_dir = out_dir.with_name(out_dir.name + ".tmp")
     if tmp_dir.exists():
@@ -175,6 +207,7 @@ def build(
         requests_made=requests_made,
         bytes_received=bytes_received,
         api_key_present=api_key_present,
+        publish_guard=guard_report,
     )
 
     _write_ics(tmp_dir, base_url, games_by_league, api_key_present, dtstamp=fetched_at)
@@ -217,7 +250,7 @@ def _write_ics(
         for team in lg.teams:
             team_cal = ics.team_calendar(
                 team.slug,
-                team.name,
+                team.shown_name,
                 games,
                 fetched=fetched,
                 base_url=base_url,
@@ -225,7 +258,14 @@ def _write_ics(
                 dtstamp=dtstamp,
                 game_duration=duration,
             )
-            (team_dir / f"{team.slug}.ics").write_bytes(team_cal.to_ical())
+            feed = team_cal.to_ical()
+            (team_dir / f"{team.slug}.ics").write_bytes(feed)
+            # The same feed at every path this team used to have: a static
+            # host cannot redirect an .ics request, and a subscriber's app
+            # holds the old URL. Same bytes, so same UIDs and the same
+            # `URL` (the current page).
+            for former in team.former_slugs:
+                (team_dir / f"{former}.ics").write_bytes(feed)
 
 
 def _write_combined_ics(
@@ -354,6 +394,20 @@ def _write_html(
             (team_dir / "index.html").write_text(
                 site.render_team(team=team_payload, base_url=base_url, ga4_id=ga4_id), encoding="utf-8"
             )
+            for former in team.former_slugs:
+                former_dir = league_dir / former
+                former_dir.mkdir(exist_ok=True)
+                (former_dir / "index.html").write_text(
+                    site.render_moved_team(
+                        team_name=team.shown_name,
+                        league_name=lg.name,
+                        league_slug=lg.slug,
+                        team_slug=team.slug,
+                        base_url=base_url,
+                        ga4_id=ga4_id,
+                    ),
+                    encoding="utf-8",
+                )
 
 
 def _write_static(out_dir: Path) -> None:
@@ -461,6 +515,8 @@ def main(argv: list[str] | None = None) -> int:
     # Read only for a build that will fetch listings: a degraded build
     # records no dates, so it has nothing to compare.
     previous_state = sitemap.fetch_previous_state(args.base_url) if api_key else None
+    # And, for the publish guard, what each team's page data said last night.
+    previous_publish = guard.fetch_previous_publish(args.base_url) if api_key else None
 
     try:
         coverage = build(
@@ -470,12 +526,42 @@ def main(argv: list[str] | None = None) -> int:
             affiliate_id=affiliate_id,
             ga4_id=ga4_id,
             previous_state=previous_state,
+            previous_publish=previous_publish,
         )
     except TicketmasterFetchError as exc:
         print(f"BUILD FAILED: {exc}", file=sys.stderr)
         print("A failed fetch fails the build; nothing was published to --out.", file=sys.stderr)
         return 1
+    except guard.PublishRefused as exc:
+        _report_refusal(exc)
+        return 1
 
+    _report_build(coverage)
+    return 0
+
+
+def _report_refusal(exc: guard.PublishRefused) -> None:
+    """The run log, the error annotations and the job summary for a build the
+    publish guard refused. A refused build writes no COVERAGE.txt, which is
+    what pages.yml copies into the job summary after a good build, so the
+    refusal and every team's vanished games go into the summary here."""
+    print(f"BUILD FAILED: {exc}", file=sys.stderr)
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        for violation in exc.report.violations:
+            print(f"::error title=Publish guard refused the build::{violation.message}", file=sys.stderr)
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary_path:
+        body = "\n".join([f"BUILD FAILED: {exc}", "", *guard.render_section(exc.report)])
+        with Path(summary_path).open("a", encoding="utf-8") as fh:
+            fh.write("## Nightly build refused by the publish guard\n\n```text\n" + body + "\n```\n")
+
+
+def _report_build(coverage: BuildCoverage) -> None:
+    """The run log after a successful build: the publish guard's warnings,
+    the coverage report, and any venue time zone fallbacks."""
+    github_actions = os.environ.get("GITHUB_ACTIONS") == "true"
+    if coverage.publish_guard is not None:
+        guard.announce(coverage.publish_guard, github_actions=github_actions)
     print(render_report(coverage))
     fallback_count = sum(len(lc.zone_fallbacks) for lc in coverage.leagues)
     if fallback_count:
@@ -486,9 +572,8 @@ def main(argv: list[str] | None = None) -> int:
             "time zone is missing or unrecognized; see COVERAGE.txt for which"
         )
         print(f"WARNING: {message}", file=sys.stderr)
-        if os.environ.get("GITHUB_ACTIONS") == "true":
+        if github_actions:
             print(f"::warning title=Unknown venue time zone::{message}", file=sys.stderr)
-    return 0
 
 
 if __name__ == "__main__":
