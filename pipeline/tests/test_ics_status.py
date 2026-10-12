@@ -259,8 +259,8 @@ def test_uids_across_the_fixture_site_are_the_ones_published_before_this_change_
             if raw.startswith(b"UID:"):
                 lines.append(f"{feed.relative_to(dist).as_posix()}\t{raw.decode()}")
     golden = (Path(__file__).parent / "golden" / "fixture_site_ics_uids.txt").read_text(encoding="utf-8").splitlines()
-    assert len(golden) == 17  # a capture of nothing would be a vacuous pin
+    assert len(golden) == 25  # original 17 + 8 combined feed UIDs
     assert not (Counter(golden) - Counter(lines)), "a UID line published before this change is gone or changed"
     added = sorted((Counter(lines) - Counter(golden)).elements())
     uid = "UID:tm-FX-TIME-TBA@womens-sports-calendar.invalid"
-    assert added == [f"ics/wnba.ics\t{uid}", f"ics/wnba/las-vegas-aces.ics\t{uid}"]
+    assert added == [f"ics/all.ics\t{uid}", f"ics/wnba.ics\t{uid}", f"ics/wnba/las-vegas-aces.ics\t{uid}"]

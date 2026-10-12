@@ -40,6 +40,10 @@ publish a broken or inconsistent feed:
    Ticketmaster publishes no end time, so a DTEND without that line would
    present an estimate as data, and the line without a DTEND would be
    false.
+9. The all-leagues feed (ics/all.ics) exists, links to the home page, and
+   carries exactly the league feeds' events, each the same VEVENT byte for
+   byte: same UID, so a subscriber who also has a league or team feed never
+   gets one game twice under two UIDs.
 
 Usage: python -m wsc_pipeline.validate_ics <dist-dir>
 """
@@ -55,7 +59,7 @@ from typing import Any
 from icalendar import Calendar, Component
 
 from . import config
-from .ics import END_ESTIMATE_NOTE, FEED_STATUS, TIME_TBA_NOTE, TIME_TBA_SUFFIX, make_uid
+from .ics import COMBINED_FEED_PATH, END_ESTIMATE_NOTE, FEED_STATUS, TIME_TBA_NOTE, TIME_TBA_SUFFIX, make_uid
 
 REQUIRED_VEVENT_PROPS = ("uid", "dtstamp", "dtstart", "summary")
 
@@ -78,6 +82,16 @@ def _expected_feeds(dist: Path) -> list[tuple[Path, Path, str]]:
                     f"/{league.slug}/{team.slug}/",
                 )
             )
+            # A feed kept at each slug the team used to have: same data,
+            # same page, and (checked in validate_dist) the same bytes.
+            for former in team.former_slugs:
+                triples.append(
+                    (
+                        dist / "ics" / league.slug / f"{former}.ics",
+                        dist / "data" / league.slug / f"{team.slug}.json",
+                        f"/{league.slug}/{team.slug}/",
+                    )
+                )
     return triples
 
 
@@ -254,9 +268,36 @@ def validate_feed(feed: Path, data: Path, page_path: str) -> int:
     return len(events)
 
 
+def validate_combined_feed(dist: Path) -> int:
+    """The all-leagues feed (COMBINED_FEED_PATH) carries exactly the
+    league feeds' events, each the same VEVENT, byte for byte, as in its
+    league feed: same UID, so a subscriber of both never gets a second copy
+    of a game under a new UID. Returns its VEVENT count; raises FeedError."""
+    feed = dist / COMBINED_FEED_PATH
+    cal = _parse_calendar(feed)
+    _check_links_back(feed, cal, "/")
+    events = _events(feed, cal)
+    league_events: dict[str, Component] = {}
+    for league in config.LEAGUES:
+        league_feed = dist / "ics" / f"{league.slug}.ics"
+        for uid, vevent in _events(league_feed, _parse_calendar(league_feed)).items():
+            league_events.setdefault(uid, vevent)
+    missing, extra = sorted(set(league_events) - set(events)), sorted(set(events) - set(league_events))
+    if missing or extra:
+        raise FeedError(
+            f"{feed}: does not carry exactly the league feeds' events "
+            f"(missing {missing[:5]}, not in any league feed {extra[:5]})"
+        )
+    for uid, vevent in events.items():
+        if vevent.to_ical() != league_events[uid].to_ical():
+            raise FeedError(f"{feed}: {uid} differs from the same event in its league feed")
+    return len(events)
+
+
 def validate_dist(dist: Path) -> tuple[int, int]:
     """Returns (feeds checked, total VEVENTs across league feeds)."""
-    feeds = 0
+    validate_combined_feed(dist)
+    feeds = 1  # ics/all.ics
     league_events = 0
     league_feeds = {dist / "ics" / f"{lg.slug}.ics" for lg in config.LEAGUES}
     for feed, data, page_path in _expected_feeds(dist):
@@ -264,7 +305,20 @@ def validate_dist(dist: Path) -> tuple[int, int]:
         feeds += 1
         if feed in league_feeds:
             league_events += n
+    _check_former_feeds_match(dist)
     return feeds, league_events
+
+
+def _check_former_feeds_match(dist: Path) -> None:
+    """A feed at a former slug is the current feed, byte for byte: the
+    subscriber holding the old URL must see exactly what the new one shows."""
+    for league in config.LEAGUES:
+        for team in league.teams:
+            current = dist / "ics" / league.slug / f"{team.slug}.ics"
+            for former in team.former_slugs:
+                old = dist / "ics" / league.slug / f"{former}.ics"
+                if old.read_bytes() != current.read_bytes():
+                    raise FeedError(f"{old}: differs from {current}; a former slug must serve the same feed")
 
 
 def main(argv: list[str] | None = None) -> int:

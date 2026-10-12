@@ -15,3 +15,11 @@ ics/wnba.ics	UID:tm-FX-H2H@womens-sports-calendar.invalid
 ics/wnba.ics	UID:tm-FX-AT@womens-sports-calendar.invalid
 ics/wnba.ics	UID:tm-FX-PACKAGE@womens-sports-calendar.invalid
 ics/wnba.ics	UID:tm-FX-ATTRACTIONS@womens-sports-calendar.invalid
+ics/all.ics	UID:tm-FX-THORNS@womens-sports-calendar.invalid
+ics/all.ics	UID:tm-FX-SCEPTRES@womens-sports-calendar.invalid
+ics/all.ics	UID:tm-FX-AWAY@womens-sports-calendar.invalid
+ics/all.ics	UID:tm-FX-CANCELLED@womens-sports-calendar.invalid
+ics/all.ics	UID:tm-FX-H2H@womens-sports-calendar.invalid
+ics/all.ics	UID:tm-FX-AT@womens-sports-calendar.invalid
+ics/all.ics	UID:tm-FX-PACKAGE@womens-sports-calendar.invalid
+ics/all.ics	UID:tm-FX-ATTRACTIONS@womens-sports-calendar.invalid

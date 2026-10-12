@@ -153,7 +153,7 @@ def test_a_build_stamps_every_event_of_every_feed_with_its_own_fetch_time(tmp_pa
     for feed in sorted((dist / "ics").rglob("*.ics")):
         cal = rfc5545.parse(feed.read_bytes())
         stamps += [v.first("DTSTAMP").value for v in cal.walk("VEVENT")]
-    assert len(stamps) == 4  # two games, in the league feed and in the team feed
+    assert len(stamps) == 6  # two games, in the league feed, team feed, and combined feed
     assert set(stamps) == {expected}
     assert validate_ics.main([str(dist)]) == 0
 
@@ -170,7 +170,7 @@ def test_the_fixture_site_has_no_dtstamp_after_its_fetch_time(tmp_path: Path):
             stamp = datetime.strptime(vevent.first("DTSTAMP").value, "%Y%m%dT%H%M%SZ").replace(tzinfo=UTC)
             assert stamp == fetched, f"{feed}: {stamp} is not the build's fetch time"
             seen += 1
-    assert seen == 19  # every event the fixture writes: 17 timed, 2 all-day (FX-TIME-TBA)
+    assert seen == 28  # every event the fixture writes: 17 timed, 2 all-day (FX-TIME-TBA), plus 9 in combined feed
 
 
 def _sabotage_first_dtstamp(dist: Path, fetched: datetime, replacement: bytes) -> None:
