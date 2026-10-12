@@ -12,7 +12,7 @@ from datetime import UTC, date, datetime
 from typing import Any
 
 from .config import League, Team
-from .normalize import Game, display_start, feed_start, local_start, team_is_participant, unique_by_event_id
+from .normalize import Game, display_start, feed_start, local_start, team_is_participant_as_any, unique_by_event_id
 from .sellers import buy_link
 
 # Ticketmaster dates.status.code values that mean the listed date is not
@@ -29,7 +29,7 @@ NOTABLE_STATUSES = {
 
 def game_to_dict(game: Game) -> dict[str, Any]:
     start = local_start(game)
-    return {
+    data = {
         "event_id": game.event_id,
         # Ticketmaster's own event name -- what the page shows when home/away
         # could not be split out of it, instead of "TBD vs TBD".
@@ -73,6 +73,16 @@ def game_to_dict(game: Game) -> dict[str, Any]:
         # seller where known, else the event URL (see sellers.py).
         "buy": buy_link(game),
     }
+    # Additive keys, present only when the event name carried them, so every
+    # game without one is published byte for byte as before. Neither is part
+    # of a team name: the title is what sat in front of the first team ("McBride
+    # Homes Braggin' Rights"), the game type what followed the matchup
+    # ("Exhibition", "Game 2").
+    if game.event_title:
+        data["event_title"] = game.event_title
+    if game.game_type:
+        data["game_type"] = game.game_type
+    return data
 
 
 def team_data(
@@ -99,7 +109,7 @@ def team_data(
     )
     return {
         "team_slug": team.slug,
-        "team_name": team.name,
+        "team_name": team.shown_name,
         "league_slug": league.slug,
         "league_name": league.name,
         "schedule_source_used": league.schedule_source_used,
@@ -123,9 +133,9 @@ def tracked_team_is_home(team: Team, game: Game) -> bool | None:
     from the venue or the city."""
     if not game.home_away_known or not game.home_team or not game.away_team:
         return None
-    if team_is_participant(team.name, {"name": game.home_team}, team.not_this_team):
+    if team_is_participant_as_any(team.all_names, {"name": game.home_team}, team.not_this_team):
         return True
-    if team_is_participant(team.name, {"name": game.away_team}, team.not_this_team):
+    if team_is_participant_as_any(team.all_names, {"name": game.away_team}, team.not_this_team):
         return False
     return None
 
@@ -165,7 +175,7 @@ def league_data(
         "fetched": fetched,
         "possibly_incomplete_teams": sorted(possibly_incomplete_teams),
         "teams": [t.slug for t in league.teams],
-        "team_names": {t.slug: t.name for t in league.teams},
+        "team_names": {t.slug: t.shown_name for t in league.teams},
         "games": [game_to_dict(g) for g in sorted(league_games, key=_sort_key)],
     }
 
