@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from wsc_pipeline import guard, sitemap
+from wsc_pipeline import guard, sellers, site, sitemap
 
 # A build's fetch time, pinned: what tests hand the calendar builders as
 # `dtstamp` (ics.build_calendar never reads the clock). Before the games in
@@ -24,6 +24,37 @@ BUILD_TIME = datetime(2026, 6, 1, 8, 30, 0, tzinfo=UTC)
 # a mock transport.
 REAL_FETCH_PREVIOUS_STATE = sitemap.fetch_previous_state
 REAL_FETCH_PREVIOUS_PUBLISH = guard.fetch_previous_publish
+
+
+# The affiliate settings as committed (sellers.py, DECISIONS 0018), kept
+# before the autouse fixture below clears them, for the tests that check the
+# committed values themselves.
+COMMITTED_SEATGEEK_IMPACT_LINK = sellers.SEATGEEK_IMPACT_LINK
+COMMITTED_FANATICS_IMPACT_LINK = sellers.FANATICS_IMPACT_LINK
+COMMITTED_AFFILIATE_LINK_TEMPLATES = dict(sellers.AFFILIATE_LINK_TEMPLATES)
+COMMITTED_FANATICS_TEMPLATE = sellers.FANATICS_TEMPLATE
+
+
+def set_affiliate_links(monkeypatch: pytest.MonkeyPatch, *, seatgeek: str = "", fanatics: str = "") -> None:
+    """Set sellers.SEATGEEK_IMPACT_LINK and FANATICS_IMPACT_LINK as the owner
+    would, and rebuild what sellers.py derives from them at import."""
+    monkeypatch.setattr(sellers, "SEATGEEK_IMPACT_LINK", seatgeek)
+    monkeypatch.setattr(sellers, "FANATICS_IMPACT_LINK", fanatics)
+    templates = sellers._affiliate_templates()
+    monkeypatch.setattr(sellers, "AFFILIATE_LINK_TEMPLATES", templates)
+    # site.py imported the dict object itself, so it is swapped there too.
+    monkeypatch.setattr(site, "AFFILIATE_LINK_TEMPLATES", templates)
+    monkeypatch.setattr(
+        sellers, "FANATICS_TEMPLATE", sellers.impact_template(fanatics, setting="sellers.FANATICS_IMPACT_LINK")
+    )
+
+
+@pytest.fixture(autouse=True)
+def _no_affiliate_links(monkeypatch):
+    """Every test starts with no affiliate link configured, whatever is
+    committed, so the suite means the same before and after the owner sets
+    one; a test that needs one sets it with set_affiliate_links."""
+    set_affiliate_links(monkeypatch)
 
 
 @pytest.fixture(autouse=True)

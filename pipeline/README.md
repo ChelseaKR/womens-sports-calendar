@@ -132,12 +132,19 @@ used (requests, bytes).
   team whose primary seller is known (and is not Ticketmaster, e.g. AXS or
   SeatGeek), it links to that team's page at the seller, with the evidence
   recorded per entry. Otherwise it uses the Ticketmaster event URL, labelled
-  with the site it actually points to. `AFFILIATE_LINK_TEMPLATES` is the
-  single place an affiliate ID would go. It is empty, and the footer
-  disclosure is rendered from it. A link that went through a template also
-  carries `rel="sponsored noopener"` (`is_affiliate_link`, applied in
-  `site.py`); a plain link carries no `rel` at all. The `.ics` feeds do not
-  use this module.
+  with the site it actually points to. `SEATGEEK_IMPACT_LINK` and
+  `FANATICS_IMPACT_LINK` hold the owner's Impact tracking links
+  (`../docs/DECISIONS.md` 0018); both are empty, and while they are, no link
+  changes. `AFFILIATE_LINK_TEMPLATES` is built from the SeatGeek one and can
+  only rewrite links whose seller is SeatGeek. A link that went through a
+  template carries `rel="sponsored noopener"` and a visible "Paid link"
+  label (`is_affiliate_link`, applied in `site.py`); a plain link carries
+  neither. The footer and privacy disclosure follow
+  `affiliate_links_active()`. The `.ics` feeds do not use this module.
+- `team_shops.py` — the "Team shop" link on team pages: each team's store at
+  Fanatics, as listed in Fanatics' own sitemap, sent through
+  `FANATICS_IMPACT_LINK`. With that setting empty there is no shop link at
+  all.
 - `analytics.py` — Google Analytics 4 (`../docs/DECISIONS.md` 0012).
   `GA4_MEASUREMENT_ID` is the one place the measurement ID goes (committed:
   it is public); empty means no page carries any analytics. When set, every

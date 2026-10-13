@@ -323,6 +323,10 @@ What changes:
   once [moved to private strategy notes]. The footer's disclosure is rendered from that same table,
   so it says "affiliate" exactly when a link is one. Today it says the
   links are plain and the site is not paid for them.
+
+  *Amended 2026-10-13 by 0018:* SeatGeek links may carry the owner's Impact
+  affiliate link once she sets it, with a "Paid link" label on each one.
+  Every other part of this bullet still holds while that setting is empty.
 - **The `.ics` feeds do not change.** They still carry the Ticketmaster
   event URL and the existing description line. A build from the same data
   on `main` and on this change produced byte-identical feeds.
@@ -464,3 +468,69 @@ Nothing was renamed by this change, and no current slug, feed path or UID
 moved: a build of the fixture site before and after is byte-identical (237
 files). Whether the four PWHL working names ("PWHL Detroit", "PWHL Hamilton",
 "PWHL Las Vegas", "PWHL San Jose") have real names yet has not been checked.
+
+## 0018 — Affiliate links allowed: plain links only, a label on each, ids held by the owner (2026-10-13)
+
+**Decision (owner, 2026-10-13):** the site may carry affiliate links from two
+programs on Impact: SeatGeek, and Fanatics. Both are off until she has been
+approved and sets her own tracking link. This amends 0013's "Links are plain,
+with no affiliate IDs" bullet and keeps the rest of 0013, including where each
+game's "Buy tickets" link goes.
+
+What it allows, and what it does not:
+
+- **Plain links only.** An affiliate link is a static URL: her Impact
+  tracking link with the destination in Impact's `u` parameter. No script,
+  no pixel, no cookie on this site, no redirect through this site, and
+  nothing in the link that varies by reader (no sub-ids, no click ids).
+  0002's sentence still describes the links themselves: "Affiliate revenue
+  is plain URLs with an affiliate id, which needs no script and no cookie on
+  our side."
+- **The ids are hers.** `sellers.SEATGEEK_IMPACT_LINK` and
+  `sellers.FANATICS_IMPACT_LINK` are the only two settings, committed and
+  empty. They are public (every rewritten link shows one), so they are
+  committed like `analytics.GA4_MEASUREMENT_ID`, and a change goes through a
+  reviewed pull request and the full test suite. Anything that is not the
+  bare `https://<host>/c/<n>/<n>/<n>` shape fails at import. Nobody but
+  her applies to a program, creates an account, or contacts anyone.
+- **SeatGeek: only links that already go to SeatGeek.** The setting
+  rewrites only the buy links whose seller is SeatGeek in
+  `sellers.PRIMARY_SELLERS` (Portland Thorns, Utah Royals and Minnesota
+  Frost home games, where SeatGeek is the team's official seller). Which
+  seller a game links to never changes, no seller is added, and no
+  resale marketplace is ever linked. The link text still names SeatGeek,
+  not the tracking host.
+- **Fanatics: a "Team shop" link on team pages only**, for the 25 WNBA and
+  NWSL teams whose store page Fanatics lists in its own sitemap
+  (`team_shops.py`, read 2026-10-12; no Fanatics page was fetched). With no
+  Fanatics id there is no shop link at all, rather than an unpaid one: the
+  site is a calendar, the link exists only to carry the id, and a plain
+  link that later became paid would change meaning without changing how it
+  looks. PWHL, AUSL, six WNBA and NWSL teams without a listed store, and
+  NCAA (Fanatics sells whole-school stores, not women's basketball ones)
+  get no shop link.
+- **A label on every affiliate link.** Each one carries
+  `rel="sponsored noopener"` and, right after it, a visible "Paid link"
+  label. The FTC's "Endorsement Guides: What People Are Asking" says
+  "Paid link" next to an affiliate link "should be an adequate
+  disclosure" and that "the closer the disclosure is to your
+  recommendation, the better"; a footer note alone would not be. The
+  footer and `/privacy/` also say so, and the privacy page gains a "Paid
+  links" section, all only while some link is actually paid.
+- **No id, no change.** With both settings empty, every page, feed, data
+  file and `style.css` is byte-for-byte what it was before this change: a
+  build of the fixture site on `main` and on this change differed only in
+  its fetch timestamps (239 files).
+- **The feeds never carry an affiliate link.** The `.ics` feeds do not use
+  `sellers.py` and stay byte-identical with the ids set
+  (`tests/test_affiliate_links.py`).
+
+Known gap: the GA4 `ticket_click` event matches a link by its host
+(analytics.py), so it counts a rewritten SeatGeek link only if her
+tracking host starts with `seatgeek.`. GA4's own outbound-click event
+still records it.
+
+The PR that first sets an id also moves `site.PRIVACY_UPDATED`, because
+`/privacy/` changes with it; a test enforces this. The commission rate,
+cookie window and any program restrictions are whatever her approved
+contract says; they are recorded here when she has them.

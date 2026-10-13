@@ -21,10 +21,19 @@ Adding a seller here needs evidence, not a guess: each entry records who
 says the seller is the team's primary or official one, and when that was
 checked. Only plain links are used, which need no licence (DECISIONS 0003
 covers reusing data; nothing is read from these sellers).
+
+Affiliate links (DECISIONS 0018): SEATGEEK_IMPACT_LINK and
+FANATICS_IMPACT_LINK below hold the owner's Impact tracking links, and both
+are empty. While they are empty no link anywhere on the site changes. Once
+SEATGEEK_IMPACT_LINK is set, only the links that already go to SeatGeek
+(the teams whose official seller it is) are sent through it; which seller a
+game links to never changes. FANATICS_IMPACT_LINK drives the team-page shop
+link in team_shops.py.
 """
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from urllib.parse import quote, urlparse
 
@@ -87,18 +96,62 @@ PRIMARY_SELLERS: dict[tuple[str, str], Seller] = {
     ),
 }
 
-# The single config point for affiliate links: seller name -> a URL template
-# with "{url}" where the (percent-encoded) destination goes, e.g. an Impact
-# tracking link. Empty on purpose: no affiliate programme is active, so every
-# link is the seller's plain URL and the footer says this site is not paid
-# for them. Adding an entry here is the whole change needed once an
-# application is approved. These follow from it automatically: the buy link's
-# URL (with_affiliate), the commission disclosure in the footer and on the
-# privacy page (site.AFFILIATE_NOTE_ACTIVE), and rel="sponsored noopener" on
-# exactly the links that went through a template (is_affiliate_link, used by
-# site._buy_link). The ticket_click event does not: analytics.py matches a
-# link by its host, so an affiliate host needs its own entry there.
-AFFILIATE_LINK_TEMPLATES: dict[str, str] = {}
+# The owner's Impact tracking links (DECISIONS 0018), one per programme,
+# exactly as Impact's "Create a link" screen gives them with no landing page
+# filled in: "https://<tracking host>/c/<partner id>/<ad id>/<program id>".
+# Empty = that programme is off, and the site renders exactly as it did
+# before this setting existed. They are public (every rewritten link carries
+# one), so they are committed here like analytics.GA4_MEASUREMENT_ID: a
+# change goes through review and the whole test suite before it is live.
+# Never add anything that varies per reader (no sub-ids, no click ids).
+SEATGEEK_IMPACT_LINK = ""
+FANATICS_IMPACT_LINK = ""
+
+# Only the fixed shape above is accepted; anything else fails at import, so a
+# typo can never reach a page. No query string, no fragment, no braces.
+IMPACT_LINK_RE = re.compile(r"https://(?:[a-z0-9-]+\.)+[a-z]{2,}/c/[0-9]+/[0-9]+/[0-9]+")
+
+# The seller whose links SEATGEEK_IMPACT_LINK may rewrite, and the one host
+# its destinations must be on. A template is never applied to any other
+# seller, so a resale marketplace or Ticketmaster link can never become an
+# affiliate link through this setting.
+SEATGEEK = "SeatGeek"
+SEATGEEK_HOST = "seatgeek.com"
+
+
+def impact_template(link: str, *, setting: str) -> str | None:
+    """The URL template for one Impact tracking link: the link plus Impact's
+    deep-link parameter `u`, with "{url}" where the percent-encoded
+    destination goes. None when the setting is empty. ValueError when it is
+    not the bare tracking-link shape."""
+    if not link:
+        return None
+    if not IMPACT_LINK_RE.fullmatch(link):
+        raise ValueError(
+            f"{setting} must be an Impact tracking link of the form "
+            f"https://<host>/c/<digits>/<digits>/<digits> with nothing after it; got {link!r}"
+        )
+    return link + "?u={url}"
+
+
+def _affiliate_templates() -> dict[str, str]:
+    template = impact_template(SEATGEEK_IMPACT_LINK, setting="sellers.SEATGEEK_IMPACT_LINK")
+    return {SEATGEEK: template} if template else {}
+
+
+# The single config point for buy-link affiliates: seller name -> a URL
+# template with "{url}" where the (percent-encoded) destination goes. Built
+# from SEATGEEK_IMPACT_LINK, so it is empty while that is, and then every link
+# is the seller's plain URL and the footer says this site is not paid for
+# them. These follow from it automatically: the buy link's URL
+# (with_affiliate), the visible "Paid link" label and rel="sponsored
+# noopener" on exactly the links that went through a template
+# (is_affiliate_link, used by site._buy_link), and the disclosure in the
+# footer and on the privacy page (site.affiliate_note). The ticket_click
+# event does not: analytics.py matches a link by its host, so it counts a
+# rewritten SeatGeek link only if the tracking host starts with "seatgeek.".
+AFFILIATE_LINK_TEMPLATES: dict[str, str] = _affiliate_templates()
+FANATICS_TEMPLATE: str | None = impact_template(FANATICS_IMPACT_LINK, setting="sellers.FANATICS_IMPACT_LINK")
 
 # Labels for the hosts Ticketmaster Discovery event URLs point at.
 _HOST_LABELS = {
@@ -121,7 +174,10 @@ def ticket_host_names() -> tuple[str, ...]:
 
 
 def affiliate_links_active() -> bool:
-    return bool(AFFILIATE_LINK_TEMPLATES)
+    """True when any link on the site can be an affiliate link: a buy-link
+    template or the Fanatics shop link. The footer and privacy disclosure
+    follow this."""
+    return any(AFFILIATE_LINK_TEMPLATES.values()) or bool(FANATICS_TEMPLATE)
 
 
 def is_affiliate_link(seller: str) -> bool:

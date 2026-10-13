@@ -445,7 +445,7 @@ def _schedule_payload(
 
 
 def _write_static(out_dir: Path) -> None:
-    (out_dir / "style.css").write_text(site.STYLE_CSS, encoding="utf-8")
+    (out_dir / "style.css").write_text(site.style_css(), encoding="utf-8")
     for name in STATIC_ASSET_FILES:
         src = ASSETS_DIR / name
         if not src.is_file():

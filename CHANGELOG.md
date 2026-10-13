@@ -12,6 +12,13 @@ archived and private.
 
 ### Added
 
+- Affiliate links, off until the owner sets her ids (`docs/DECISIONS.md`
+  0018). With her Impact tracking link set, "Buy tickets" links that already
+  go to SeatGeek go through it, and team pages for 25 WNBA and NWSL teams
+  get a "Team shop" link to the team's Fanatics store. Every such link is
+  marked `rel="sponsored noopener"` with a visible "Paid link" label next to
+  it, and the footer and privacy page say so. With no id set, the site is
+  byte-for-byte unchanged; the calendar feeds never change.
 - A team's URL slug, display name and search names are now separate
   settings (#24). A team that sets none of them publishes exactly what it
   always did (a build of the fixture site before and after is byte-identical,
