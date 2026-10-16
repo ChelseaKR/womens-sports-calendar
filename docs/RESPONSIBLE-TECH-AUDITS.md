@@ -33,8 +33,9 @@ were fetched; a freshness alarm opens an incident if they go stale (ADR
 0003); a game whose date is TBD is kept out of the calendar feed.
 
 **Worst plausible misuse:** presenting a commercial link as neutral advice.
-Every ticket link names where it goes and, where an affiliate programme
-applies, the footer says so (DECISIONS 0013).
+Every ticket link names where it goes. An affiliate link carries a visible
+"Paid link" label right next to it, and the footer says so too (DECISIONS
+0013, 0018).
 
 **Non-goals:** selling tickets; showing or guessing prices; accounts; any
 personal data; scraping league sites (licence before bytes, DECISIONS 0003).

@@ -35,7 +35,8 @@ from . import structured_data
 from .analytics import GA4_DATA_RETENTION, ga4_head_snippet, measurement_id
 from .ics import calendar_name
 from .normalize import display_date
-from .sellers import affiliate_links_active, is_affiliate_link
+from .sellers import AFFILIATE_LINK_TEMPLATES, affiliate_links_active, is_affiliate_link
+from .team_shops import team_shop_url
 
 CSS_PATH = "/style.css"
 PRIVACY_PATH = "/privacy/"
@@ -192,17 +193,39 @@ sets no cookies, and the calendar feeds are never tracked. A &ldquo;Buy
 tickets&rdquo; link goes to the ticket seller's own site and tells them we
 sent you."""
 
-# Rendered from sellers.AFFILIATE_LINK_TEMPLATES, so the disclosure is true
-# by construction: it says "affiliate" exactly when a link is one.
+# Rendered from sellers.affiliate_links_active() (the buy-link templates and
+# the Fanatics shop link), so the disclosure is true by construction: it says
+# "affiliate" exactly when some link is one (DECISIONS 0013, 0018).
 AFFILIATE_NOTE_ACTIVE = (
-    "Some of these are affiliate links: if you buy through one, the seller may pay this site a commission."
+    "Links marked &ldquo;Paid link&rdquo; are affiliate links: if you buy through one, "
+    "this site earns a commission. Every other link is plain, and this site is not paid for it."
 )
 AFFILIATE_NOTE_INACTIVE = "They are plain links, and this site is not paid for them."
-# The rel tokens on a ticket link that went through an affiliate template
-# (sellers.is_affiliate_link). "sponsored" is the search-engine signal for a
-# paid link; "noopener" is harmless on a link that opens in the same tab and
-# keeps the pair safe if a link is ever made to open in a new one.
+# The rel tokens on a link that went through an affiliate template
+# (sellers.is_affiliate_link, team_shops.team_shop_url). "sponsored" is the
+# search-engine signal for a paid link; "noopener" is harmless on a link that
+# opens in the same tab and keeps the pair safe if a link is ever made to
+# open in a new one.
 AFFILIATE_LINK_REL = ("sponsored", "noopener")
+# The visible label right after every affiliate link, and only after one.
+# The FTC's endorsement-guides FAQ says "Paid link" next to an affiliate link
+# should be an adequate disclosure, and that the closer the disclosure is to
+# the link, the better; the footer note alone would not be (DECISIONS 0018).
+PAID_LINK_TEXT = "Paid link"
+PAID_LINK_LABEL = f'<span class="paid-link">{PAID_LINK_TEXT}</span>'
+
+
+def _paid_link(href: str, text_html: str, *, css_class: str = "") -> str:
+    """An affiliate link: rel="sponsored noopener", then the visible label."""
+    class_attr = f' class="{css_class}"' if css_class else ""
+    rel = " ".join(AFFILIATE_LINK_REL)
+    return f'<a{class_attr} href="{e(href)}" rel="{rel}">{text_html}</a> {PAID_LINK_LABEL}'
+
+
+def _buy_links_paid() -> bool:
+    """True when some "Buy tickets" link can be an affiliate link (not just
+    the team-shop link): the privacy page's ticket-link paragraph turns on it."""
+    return any(AFFILIATE_LINK_TEMPLATES.values())
 
 
 # The footer's "Opt out of analytics" control, only on pages that carry the
@@ -305,15 +328,16 @@ def _buy_link(game: Mapping[str, Any], matchup: str, *, css_class: str = "") -> 
     text = f"Buy tickets for {matchup} on {game['start_display']} from {buy['seller']}"
     if buy.get("home_team"):
         text += f", the official seller for {buy['home_team']} home games"
-    class_attr = f' class="{css_class}"' if css_class else ""
     # An affiliate link is marked as one for search engines (Google asks that
-    # paid and affiliate links say so); the reader-facing disclosure is the
-    # footer note. Derived here from the seller, never stored in data/*.json.
-    # A plain link gets no rel attribute at all.
-    rel_attr = ""
+    # paid and affiliate links say so) and for the reader, with the visible
+    # "Paid link" label right after it (the footer note is not enough on its
+    # own). Derived here from the seller, never stored in data/*.json. The
+    # link text still names the seller, not the tracking host it goes
+    # through. A plain link gets no rel attribute and no label at all.
     if is_affiliate_link(buy["seller"]):
-        rel_attr = f' rel="{" ".join(AFFILIATE_LINK_REL)}"'
-    return f'<a{class_attr} href="{e(buy["url"])}"{rel_attr}>{e(text)}</a>'
+        return _paid_link(buy["url"], e(text), css_class=css_class)
+    class_attr = f' class="{css_class}"' if css_class else ""
+    return f'<a{class_attr} href="{e(buy["url"])}">{e(text)}</a>'
 
 
 def _matchup_text(game: Mapping[str, Any]) -> str:
@@ -710,6 +734,34 @@ turn on Global Privacy Control or Do Not Track in your browser, or install <a hr
 scripts at all, and no cookies.</p>
 """
         ticket_measured = ""
+    if _buy_links_paid():
+        ticket_links = """<p>Every &ldquo;Buy tickets&rdquo; link goes to the home team's
+own ticket seller's page for that team where we know it (for example AXS or
+SeatGeek), otherwise to the address Ticketmaster publishes for that event. A
+link marked &ldquo;Paid link&rdquo; first passes through the seller's
+affiliate network, Impact, which records that this site sent you and then
+forwards you to the seller. Every other link is used as-is. No link is routed
+through this site or through Google."""
+    else:
+        ticket_links = """<p>Every &ldquo;Buy tickets&rdquo; link is a plain address: the home team's
+own ticket seller's page for that team where we know it (for example AXS or
+SeatGeek), otherwise the address Ticketmaster publishes for that event. It is
+used as-is: never rewritten, and never routed through this site or through
+Google."""
+    paid_links_section = ""
+    ads_exception = ""
+    if affiliate_links_active():
+        paid_links_section = """<h2>Paid links</h2>
+<p>Some links are affiliate links, and each one has the label &ldquo;Paid
+link&rdquo; right next to it. If you buy something after following one, the
+seller pays this site a commission. A paid link passes through the affiliate
+network Impact on its way to the seller. It carries one fixed ID that
+identifies this site, never anything about you, and this site adds no script
+and no cookie for it. Impact and the seller may set their own cookies once you
+reach them, under their own privacy policies. A paid link never changes which
+seller a game's &ldquo;Buy tickets&rdquo; link goes to.</p>
+"""
+        ads_exception = " other than the paid links marked above"
     body = f"""<nav aria-label="breadcrumb"><a href="/">All leagues</a></nav>
 <h1>Privacy</h1>
 <p class="lede">What this site measures, what it never measures, and how to
@@ -720,15 +772,11 @@ no tracking pixel, no analytics, no redirecting links. A calendar app that
 subscribes to a feed and re-fetches it is not measured by this site. Ticket
 links inside a feed are the plain Ticketmaster addresses for each game.</p>
 <h2>Ticket links</h2>
-<p>Every &ldquo;Buy tickets&rdquo; link is a plain address: the home team's
-own ticket seller's page for that team where we know it (for example AXS or
-SeatGeek), otherwise the address Ticketmaster publishes for that event. It is
-used as-is: never rewritten, and never routed through this site or through
-Google.{ticket_measured} Following one takes you to that seller, which then
+{ticket_links}{ticket_measured} Following one takes you to that seller, which then
 knows this site sent you. {affiliate_note} What happens there is covered by
 the seller's own privacy policy.</p>
-<h2>No accounts, no ads, no forms</h2>
-<p>There is nothing to sign up for, no advertising, and no form that collects
+{paid_links_section}<h2>No accounts, no ads, no forms</h2>
+<p>There is nothing to sign up for, no advertising{ads_exception}, and no form that collects
 anything.</p>
 <h2>Hosting</h2>
 <p>Pages and calendar feeds are served by GitHub Pages. Like any web host,
@@ -975,6 +1023,21 @@ def _team_description(team: Mapping[str, Any], heading: str) -> str:
     return text
 
 
+def _team_shop_block(league_slug: str, team_slug: str, team_name: str) -> str:
+    """The "Team shop" link to the team's Fanatics store (team_shops.py), on
+    team pages only. Empty -- not an unpaid link -- unless the Fanatics
+    affiliate link is configured and the team has a confirmed store page."""
+    url = team_shop_url(league_slug, team_slug)
+    if url is None:
+        return ""
+    link = _paid_link(url, f"Shop {e(team_name)} gear at Fanatics")
+    return f"""<section class="team-shop" aria-labelledby="team-shop-heading">
+<h2 id="team-shop-heading">Team shop</h2>
+<p>{link}</p>
+</section>
+"""
+
+
 def render_team(
     *,
     team: dict[str, Any],
@@ -998,7 +1061,7 @@ lists, home and away, with its date, time and venue.</p>
 {_next_game_hero(team)}
 <h2>Upcoming games</h2>
 {incomplete_note}{_freshness_note(team)}{_games_table(team["games"], buy_link_subject=team_name, fetched=fetched, home_away=True)}
-{_other_apps_block(ics_https_url=ics_https)}{_about_schedule(team["schedule_source_note"])}"""
+{_other_apps_block(ics_https_url=ics_https)}{_team_shop_block(league_slug, team_slug, team_name)}{_about_schedule(team["schedule_source_note"])}"""
     og_image, og_image_alt = LEAGUE_OG_IMAGES.get(league_slug, (DEFAULT_OG_IMAGE, DEFAULT_OG_IMAGE_ALT))
     nodes = [
         structured_data.breadcrumbs(
@@ -1403,3 +1466,26 @@ table.games-table tbody tr:last-child td { border-bottom: 0; }
 
 .sr-caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 """
+
+# The "Paid link" label (PAID_LINK_LABEL). Appended to style.css only when
+# some link can be an affiliate link (style_css), so with no affiliate link
+# configured, style.css is byte-for-byte what it was before (DECISIONS 0018).
+# --muted on --bg is 6.36:1 and on --surface (alternate table rows) 5.7:1 in
+# light mode, and 9.03:1 and 8.32:1 in dark mode. The hero is navy chrome,
+# so there the label takes the on-navy muted color the hero's own date and
+# venue lines use (#c9d6ea on #0b1f3a: 11.24:1).
+PAID_LINK_CSS = """
+.paid-link {
+  display: inline-block; margin-left: 0.35rem; padding: 0 0.45rem;
+  border: 1px solid currentColor; border-radius: 0.25rem;
+  font-family: var(--label-font); font-weight: 700; font-size: 0.8125rem;
+  color: var(--muted); white-space: nowrap;
+}
+.next-game .paid-link { color: var(--on-navy-muted); margin-top: 0.75rem; }
+"""
+
+
+def style_css() -> str:
+    """dist/style.css: STYLE_CSS, plus the paid-link label's rules when some
+    link can be an affiliate link."""
+    return STYLE_CSS + PAID_LINK_CSS if affiliate_links_active() else STYLE_CSS
