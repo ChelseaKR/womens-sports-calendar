@@ -65,7 +65,10 @@ used (requests, bytes).
   thresholds, the dated per-league override and the accepted per-event
   removals are in `config.py` (`PUBLISH_GUARD`, `PUBLISH_GUARD_OVERRIDES`,
   `REMOVED_EVENTS`). An unreadable previous publish never blocks but is
-  reported.
+  reported. An event in `REMOVED_EVENTS` is also withheld from every page,
+  feed and data file while Ticketmaster still lists it
+  (`build.without_removed_events`): that is how a Ticketmaster request to
+  remove an event within 24 hours is honoured.
 - `normalize.py` — turns a raw Discovery API event into a `Game`. Parses
   home/away teams from the event name ("Home vs Away", or "Away at Home"),
   keeping what surrounds them out of the team names: a leading "\<title\>: "
@@ -118,7 +121,14 @@ used (requests, bytes).
   estimated; not published by the ticket source." in its description
   (`docs/DECISIONS.md` 0015); a sport with no entry gets no `DTEND`. No
   `SEQUENCE` or `LAST-MODIFIED` is written: both need the previous
-  published data to compare against.
+  published data to compare against. A ticket URL that Ticketmaster has
+  wrapped in Impact affiliate tracking is never written to a feed: the
+  event carries the decoded destination, or no ticket link when there is
+  none (`normalize.feed_ticket_url`, `impact.py`), and `validate_ics.py`
+  fails on any feed with a tracking link (`../docs/DECISIONS.md` 0018).
+- `impact.py` — recognises an Impact affiliate tracking link (the
+  `/c/<n>/<n>/<n>` path on any host, or a host on an Impact shared domain)
+  and reads its destination from the `u` parameter.
 - `coverage.py` — the printed coverage report. "Join hit-rate" from the
   original brief is reinterpreted here (see `docs/DECISIONS.md` 0006):
   since there is no second feed to join against Ticketmaster, it is the
@@ -138,9 +148,12 @@ used (requests, bytes).
   changes. `AFFILIATE_LINK_TEMPLATES` is built from the SeatGeek one and can
   only rewrite links whose seller is SeatGeek. A link that went through a
   template carries `rel="sponsored noopener"` and a visible "Paid link"
-  label (`is_affiliate_link`, applied in `site.py`); a plain link carries
-  neither. The footer and privacy disclosure follow
-  `affiliate_links_active()`. The `.ics` feeds do not use this module.
+  label (`is_affiliate_link`, applied in `site.py`); so does a Ticketmaster
+  event URL that arrives already wrapped in Impact tracking, named by its
+  destination. A plain link carries neither. The footer and privacy
+  disclosure and the label's CSS follow `affiliate_links_active()` or, for
+  the wrapped URLs, what the build found in its own games
+  (`any_paid_buy_link`). The `.ics` feeds do not use this module.
 - `team_shops.py` — the "Team shop" link on team pages: each team's store at
   Fanatics, as listed in Fanatics' own sitemap, sent through
   `FANATICS_IMPACT_LINK`. With that setting empty there is no shop link at
@@ -157,7 +170,10 @@ used (requests, bytes).
   defaults (ad storage / ad user data / ad personalisation denied everywhere,
   analytics storage denied in the EEA, UK and Switzerland); configures gtag
   with Google signals and ad personalisation off; and records
-  `ticket_click` / `calendar_subscribe` events without touching the links.
+  `ticket_click` / `calendar_subscribe` events (and `shop_click` while the
+  team-shop link exists) without touching the links. An affiliate link is
+  reported by its destination, decoded from its `u` parameter, with
+  `affiliate: true`.
   The `.ics` feeds and `data/*.json` never see the ID.
 - `site.py` — the static HTML generator. No executable `<script>` on any
   page except that GA4 loader (checked by `tests/test_site_html.py` and
@@ -246,8 +262,9 @@ is written. The loader itself is executed in Node against stubbed
 of the three Do Not Track spellings, or an off-site hostname it creates no
 `dataLayer`, requests nothing and adds no listener; otherwise it sets both
 Consent Mode defaults before `config`, loads gtag.js, and records
-`ticket_click`/`calendar_subscribe` without cancelling or rewriting the
-link. (Node is set up in CI; locally the Node tests skip if it is missing,
+`ticket_click`/`calendar_subscribe` (and `shop_click` while the team-shop
+link exists) without cancelling or rewriting the link, reporting an affiliate
+link by its decoded destination whatever its tracking host. (Node is set up in CI; locally the Node tests skip if it is missing,
 and in CI they fail instead.) Its negative controls run in the suite on
 every build: each breaks a page or the loader (drops the GPC or DNT guard,
 turns Google signals on, adds a static `<script src>`, removes the tag),

@@ -501,17 +501,22 @@ class EventRemoval:
     reason: str  # why, in a sentence: who asked, or what was checked
 
 
-# Ticketmaster events whose removal has been accepted, one event id at a
-# time. Today the publish guard reads it: a listed event that disappears and
-# is named here is reported as an accepted removal and not counted, so a real
-# removal of a few games (a playoff series that ended before its "if
-# necessary" games, a single withdrawn listing) does not block deploys. For a
-# league-wide withdrawal, PUBLISH_GUARD_OVERRIDES above is the tool.
+# Ticketmaster events that are gone from the site on purpose, one event id
+# at a time (ADR 0006). Two things read it:
 #
-# The 24-hour removal on request (Data governance, #9) is meant to read this
-# same list to keep an event out of the publish. Until that lands, an entry
-# here does not hide a game that is still listed. Leave entries in place:
-# Ticketmaster does not reuse an event id. Example:
+# - The build withholds every event named here from every page, feed and
+#   data file, even while Ticketmaster still lists it
+#   (build.without_removed_events). This is how a Ticketmaster removal
+#   request is honoured within the 24 hours its terms allow
+#   (docs/LICENSES-AND-ATTRIBUTION.md §2): add an entry, merge, and re-run
+#   the pages workflow.
+# - The publish guard: an event named here that leaves the publish is
+#   reported as an accepted removal and not counted, so a real removal of a
+#   few games (a playoff series that ended before its "if necessary" games,
+#   a single withdrawn listing) does not block deploys. For a league-wide
+#   withdrawal, PUBLISH_GUARD_OVERRIDES above is the tool.
+#
+# Leave entries in place: Ticketmaster does not reuse an event id. Example:
 #
 #   EventRemoval(
 #       event_id="vvG1zZ_o30QDeE",

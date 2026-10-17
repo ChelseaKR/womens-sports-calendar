@@ -12,6 +12,12 @@ archived and private.
 
 ### Added
 
+- A per-event removal switch: an event id listed in `REMOVED_EVENTS`
+  (`pipeline/src/wsc_pipeline/config.py`) is left out of every page,
+  calendar feed and data file even while Ticketmaster still lists it, so a
+  Ticketmaster request to remove an event within 24 hours can be honoured
+  with one entry and a re-run of the pages workflow. The publish guard
+  reports the removal instead of refusing the build (`docs/adr/0006`).
 - Affiliate links, off until the owner sets her ids (`docs/DECISIONS.md`
   0018). With her Impact tracking link set, "Buy tickets" links that already
   go to SeatGeek go through it, and team pages for 25 WNBA and NWSL teams
@@ -111,6 +117,20 @@ archived and private.
   affiliate template is set, so no page changes today (#27).
 
 ### Fixed
+
+- Once Ticketmaster wraps its event URLs in Impact affiliate tracking (it
+  does that itself when a publisher id is on the developer account), no
+  calendar feed carries one: each feed carries the address the link forwards
+  to, byte for byte what it carries today, or no ticket link when there is
+  none, and `make validate-ics` refuses a feed with a tracking link. On the
+  pages such a link is marked "Paid link" with `rel="sponsored noopener"`,
+  named by where it goes, and the footer and privacy page say so
+  (`docs/DECISIONS.md` 0018, addendum).
+- The `ticket_click` analytics event counts an affiliate link by where it
+  goes, read from the link itself, whatever its tracking host, and reports
+  that destination with `affiliate: true` instead of the tracking host. The
+  "Team shop" link sends a `shop_click` event while it exists. Feeds stay
+  untracked.
 
 - The nightly site and calendar-feed rebuild failed every night from
   2026-09-20, so the published feeds stopped updating. Merging #20 reverted

@@ -44,6 +44,12 @@ publish a broken or inconsistent feed:
    carries exactly the league feeds' events, each the same VEVENT byte for
    byte: same UID, so a subscriber who also has a league or team feed never
    gets one game twice under two UIDs.
+10. No event carries an affiliate tracking link (DECISIONS 0018), in its URL
+   or anywhere in its description: no address that impact.is_impact_link
+   recognises. Ticketmaster can wrap its event URLs in Impact tracking
+   (docs/LICENSES-AND-ATTRIBUTION.md §3), and the feeds carry the unwrapped
+   address instead (normalize.feed_ticket_url); this refuses a build where
+   that ever slips.
 
 Usage: python -m wsc_pipeline.validate_ics <dist-dir>
 """
@@ -51,6 +57,7 @@ Usage: python -m wsc_pipeline.validate_ics <dist-dir>
 from __future__ import annotations
 
 import json
+import re
 import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -60,8 +67,11 @@ from icalendar import Calendar, Component
 
 from . import config
 from .ics import COMBINED_FEED_PATH, END_ESTIMATE_NOTE, FEED_STATUS, TIME_TBA_NOTE, TIME_TBA_SUFFIX, make_uid
+from .impact import is_impact_link
 
 REQUIRED_VEVENT_PROPS = ("uid", "dtstamp", "dtstart", "summary")
+# Any absolute URL in a property's text, up to whitespace.
+_URL_IN_TEXT = re.compile(r"[a-z][a-z0-9+.-]*://\S+", re.IGNORECASE)
 
 
 class FeedError(ValueError):
@@ -253,6 +263,16 @@ def _check_end_times(feed: Path, events: dict[str, Component]) -> None:
             raise FeedError(f"{feed}: {uid} DTEND is not after DTSTART")
 
 
+def _check_no_affiliate_links(feed: Path, events: dict[str, Component]) -> None:
+    """No event's URL, or any address in its description, is an Impact
+    tracking link; raises FeedError otherwise."""
+    for uid, vevent in events.items():
+        text = f"{vevent.get('url', '')}\n{vevent.get('description', '')}"
+        for url in _URL_IN_TEXT.findall(text):
+            if is_impact_link(url):
+                raise FeedError(f"{feed}: {uid} carries an affiliate tracking link ({url}); feeds never do")
+
+
 def validate_feed(feed: Path, data: Path, page_path: str) -> int:
     """Returns the number of VEVENTs; raises FeedError on any problem."""
     cal = _parse_calendar(feed)
@@ -265,6 +285,7 @@ def validate_feed(feed: Path, data: Path, page_path: str) -> int:
     _check_start_kinds(feed, games, events)
     _check_dtstamps(feed, events, page.get("fetched_at"))
     _check_end_times(feed, events)
+    _check_no_affiliate_links(feed, events)
     return len(events)
 
 

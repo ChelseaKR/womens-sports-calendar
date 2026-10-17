@@ -116,7 +116,7 @@ scholarly or civic-reuse intent.
 | Quality & Metrics | Applies — gap tracked in #11 (`DEFINITION_OF_DONE.md` and a PR template; DORA review and cross-browser smoke open) |
 | AI Development Measurement | Applies (delivery and quality-debt metrics come from this repository's PR history in the standards repository's rollup; never used as a gate) |
 | Incident Response | Applies (`incident` and `sev1`–`sev4` labels; the postmortem template in `docs/incidents/` and the stale-data alarm in `freshness.yml`; no incidents to date) |
-| Data Governance | Applies — gap tracked in #9 (L1 public listings; a data card, fetch timestamps and a 30-hour freshness alarm; ingest schema and 24-hour removal open) |
+| Data Governance | Applies — gap tracked in #9 (L1 public listings; a data card, fetch timestamps and a 30-hour freshness alarm; a per-event removal switch; ingest schema and a contact channel for 24-hour removal requests open) |
 | Discovery & Adoption | Applies (advisory; the repository is public, and the site carries Open Graph cards on every page) |
 
 Release cadence: none yet (see #7). The site's data refreshes nightly.

@@ -641,11 +641,14 @@ re-reading the league's terms.
     periods... to provide the service."
   - Obligation: *"Remove from your application within 24 hours any Event
     Content or other information or tickets that the owner asks you to
-    remove."* We have no standing process for this yet beyond the nightly
-    rebuild naturally dropping anything Ticketmaster itself stops returning —
-    **flagged as an open item**: Chelsea needs a reachable contact channel
-    (e.g. an email in the site footer) so such a request has somewhere to
-    land; see §6.
+    remove."* Besides the nightly rebuild dropping anything Ticketmaster
+    itself stops returning, there is a per-event switch since 2026-10-17:
+    an event id added to `REMOVED_EVENTS` in
+    `pipeline/src/wsc_pipeline/config.py` is left out of every page, feed
+    and data file even while Ticketmaster still lists it, and a manual
+    re-run of the pages workflow publishes the removal (ADR 0006). **Still
+    an open item**: Chelsea needs a reachable contact channel (e.g. an email
+    in the site footer) so such a request has somewhere to land; see §6.
   - Rate limiting: *"we reserve the right to rate limit or block
     applications that make a large number of calls to the API that are not
     primarily in response to direct user actions."* Our nightly batch fetch
@@ -691,6 +694,16 @@ re-reading the league's terms.
   script and sets no cookie on our side (DECISIONS 0002). The pages' Google
   Analytics (DECISIONS 0012) only observes a click on it, never wraps or
   rewrites it. This is the entire monetisation mechanism.
+- **How the site treats a wrapped URL (DECISIONS 0018, addendum
+  2026-10-17):** the build recognises an Impact tracking link by its
+  `/c/<n>/<n>/<n>` path on any host, or by a host on one of Impact's shared
+  domains, and reads the destination from its `u` parameter. On the pages,
+  such a link gets `rel="sponsored noopener"` and a visible "Paid link"
+  label, and the footer and `/privacy/` disclose it (the page's link is
+  also `buy.url` in `data/*.json`, which the page is rendered from). The
+  `.ics` feeds never carry it: they carry the decoded destination, or no
+  ticket link when there is none, as does `ticket_url` in `data/*.json`,
+  and `make validate-ics` refuses a feed with a tracking link.
 - **Revenue rule:** *"Our program rewards partners based on actual sales
   generated, not just traffic referrals."* *"Ticketmaster does not provide
   commission for primary ticket sales during presales or within the initial
@@ -748,9 +761,11 @@ confirmed, correctly scoped coverage (§1 addendum, dated 2026-09-16).
   without an approved account.
 - Whether Impact/Ticketmaster affiliate approval will be granted to a new,
   no-traffic site — the FAQ says approval is discretionary.
-- The exact process for honouring a Ticketmaster 24-hour content-removal
-  request — no contact channel exists yet; needs an owner decision (§ below,
-  and `docs/DECISIONS.md`).
+- How a Ticketmaster 24-hour content-removal request reaches us — no
+  contact channel exists yet; needs an owner decision (§2). Once a request
+  is in, the event id goes into `REMOVED_EVENTS` in
+  `pipeline/src/wsc_pipeline/config.py` and the pages workflow is re-run
+  (ADR 0006).
 - Whether NWSL's terms, if ever machine-readable, would permit schedule
   reuse — currently unknowable, re-check if the page changes.
 - SeatGeek and other secondary ticket sources were not evaluated; out of

@@ -18,6 +18,8 @@ from datetime import date, datetime, time
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from .impact import plain_url
+
 # "Home vs Away" (Ticketmaster's convention) or "Away at Home" / "Away @
 # Home" (the sports convention for "at": the first team is the visitor).
 _VS_SPLIT = re.compile(r"\s+(vs\.?|v\.?|at|@)\s+", re.IGNORECASE)
@@ -556,3 +558,12 @@ def safe_ticket_url(url: object) -> str | None:
     if separator and scheme.lower() in ("http", "https") and rest and not rest.startswith("/"):
         return url
     return None
+
+
+def feed_ticket_url(game: Game) -> str | None:
+    """The ticket URL a calendar feed (and data/*.json's `ticket_url`) may
+    carry: the game's own URL, or, when Ticketmaster has wrapped it in Impact
+    affiliate tracking, the plain address it forwards to (impact.plain_url).
+    None when there is no URL, or no plain address to give: never a
+    tracking link, and never a guess (DECISIONS 0018)."""
+    return plain_url(game.ticket_url) if game.ticket_url else None

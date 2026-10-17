@@ -218,7 +218,7 @@ def test_negative_control_the_rel_check_fails_when_the_marking_is_removed(monkey
     marked, assert the sabotage landed (the anchors still point at the
     affiliate host), and assert the check rejects the page."""
     monkeypatch.setitem(sellers.AFFILIATE_LINK_TEMPLATES, "AXS", AFFILIATE_TEMPLATE)
-    monkeypatch.setattr(site, "is_affiliate_link", lambda seller: False)
+    monkeypatch.setattr(site, "is_affiliate_link", lambda seller, url="": False)
     html = _aces_page_with_a_home_and_an_away_game()
     anchors = _ticket_anchors(html)
     assert sum((a["href"] or "").startswith("https://aff.example/") for a in anchors) == 2

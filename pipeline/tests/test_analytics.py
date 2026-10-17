@@ -25,6 +25,7 @@ import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import quote, urlparse
 
 import pytest
 
@@ -34,7 +35,7 @@ from wsc_pipeline.analytics import ANALYTICS_DENIED_REGIONS, ga4_head_snippet
 from wsc_pipeline.config import LEAGUES
 from wsc_pipeline.normalize import normalize_event
 
-from .conftest import STANDARD_PRICE, make_raw_event
+from .conftest import STANDARD_PRICE, make_raw_event, set_affiliate_links
 
 TEST_ID = "G-TEST123456"
 BASE_URL = "https://nexthomegame.com"
@@ -286,6 +287,7 @@ const out = scenarios.map((sc) => {
       addEventListener: (type, fn) => { listeners[type] = fn; },
     },
     Date,
+    URL,
   };
   Object.assign(ctx, sc.window || {});
   ctx.window = ctx;
@@ -478,6 +480,78 @@ def test_ticket_click_counts_every_seller_the_buy_links_can_point_at(tmp_path: P
     assert sg["pushed"] == [["event", "ticket_click", {"link_url": seatgeek["href"], "link_domain": "seatgeek.com"}]]
     assert ax["pushed"] == [["event", "ticket_click", {"link_url": axs["href"], "link_domain": "www.axs.com"}]]
     assert other["pushed"] == []
+
+
+def _link(href: str, *, in_main: bool = True) -> dict:
+    """An anchor as the harness hands it to the listener, with the parts a
+    browser derives from its href."""
+    parsed = urlparse(href)
+    return {
+        "href": href,
+        "hostname": parsed.hostname,
+        "protocol": parsed.scheme + ":",
+        "pathname": parsed.path,
+        "inMain": in_main,
+    }
+
+
+THORNS_SEATGEEK = "https://seatgeek.com/portland-thorns-fc-tickets"
+TM_EVENT = "https://www.ticketmaster.com/event/EVT1"
+THORNS_SHOP = "https://www.fanatics.com/nwsl/portland-thorns-fc/o-21791387+t-43471536+z-938-940142781"
+FANATICS_LINK = "https://fanatics.93n6tx.net/c/1234567/612734/9663"
+
+
+def _tracked(destination: str, tracking: str) -> str:
+    return f"{tracking}?u={quote(destination, safe='')}"
+
+
+def test_ticket_click_reports_an_affiliate_links_destination_whatever_its_tracking_host(tmp_path: Path):
+    """An Impact tracking link is matched and reported by the destination in
+    its `u` parameter, with affiliate: true, so a custom tracking host that
+    does not start with the seller's name is still a ticket click, and the
+    event names the seller, never the tracking host."""
+    custom = _link(_tracked(THORNS_SEATGEEK, "https://goto.brandclicks.example/c/1234567/890123/45678"))
+    shared = _link(_tracked(TM_EVENT, "https://imp.pxf.io/c/1234567/264167/4272"))
+    short = _link("https://seatgeek.pxf.io/AbC12")  # no destination to read: the tracking host is all there is
+    elsewhere = _link(_tracked("https://example.org/", "https://seatgeek.pxf.io/c/1/2/3"))
+    plain = _link(TM_EVENT)
+    clicks = [custom, shared, short, elsewhere, plain]
+    results = _run_snippet(tmp_path, ga4_head_snippet(TEST_ID, base_url=BASE_URL), _scenarios(_LOADED[:1], clicks))
+    got = [c["pushed"] for c in results["no-signal"]["clicks"]]
+    affiliate = {"affiliate": True}
+    assert got == [
+        [["event", "ticket_click", {"link_url": THORNS_SEATGEEK, "link_domain": "seatgeek.com", **affiliate}]],
+        [["event", "ticket_click", {"link_url": TM_EVENT, "link_domain": "www.ticketmaster.com", **affiliate}]],
+        [["event", "ticket_click", {"link_url": short["href"], "link_domain": "seatgeek.pxf.io", **affiliate}]],
+        [],  # a tracking host named after a seller does not make a non-seller destination a ticket click
+        [["event", "ticket_click", {"link_url": TM_EVENT, "link_domain": "www.ticketmaster.com"}]],
+    ]
+    for click, link in zip(results["no-signal"]["clicks"], clicks, strict=True):
+        assert click["prevented"] is False and click["hrefAfter"] == link["href"]
+
+
+def test_shop_click_counts_the_team_shop_link_only_while_it_exists(tmp_path: Path, monkeypatch):
+    shop = _link(_tracked(THORNS_SHOP, FANATICS_LINK))
+    footer_shop = _link(_tracked(THORNS_SHOP, FANATICS_LINK), in_main=False)
+    off = ga4_head_snippet(TEST_ID, base_url=BASE_URL)
+    assert "shop_click" not in off and "fanatics" not in off
+    set_affiliate_links(monkeypatch, fanatics=FANATICS_LINK)
+    on = ga4_head_snippet(TEST_ID, base_url=BASE_URL)
+    assert "shop_click" in on
+
+    results = _run_snippet(tmp_path, on, _scenarios(_LOADED[:1], [shop, footer_shop, _link(TM_EVENT)]))
+    shop_click, outside_main, ticket = results["no-signal"]["clicks"]
+    expected = {"link_url": THORNS_SHOP, "link_domain": "www.fanatics.com", "affiliate": True}
+    assert shop_click["pushed"] == [["event", "shop_click", expected]]
+    assert outside_main["pushed"] == []
+    assert ticket["pushed"][0][1] == "ticket_click"
+    # With the shop off, the same link sends nothing.
+    off_results = _run_snippet(tmp_path, off, _scenarios(_LOADED[:1], [shop]))
+    assert off_results["no-signal"]["clicks"][0]["pushed"] == []
+    # And GPC, DNT and the off-site checks still load nothing at all.
+    for result in _run_snippet(tmp_path, on, _scenarios(_NOT_LOADED, [shop])).values():
+        _assert_nothing_loaded(result)
+        assert result["clicks"][0]["pushed"] == []
 
 
 # ---------------------------------------------------------------------------
