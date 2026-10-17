@@ -13,7 +13,15 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from .config import League, Team
-from .normalize import Game, display_start, feed_start, local_start, team_is_participant_as_any, unique_by_event_id
+from .normalize import (
+    Game,
+    display_start,
+    feed_start,
+    feed_ticket_url,
+    local_start,
+    team_is_participant_as_any,
+    unique_by_event_id,
+)
 from .sellers import buy_link
 
 # Ticketmaster dates.status.code values that mean the listed date is not
@@ -68,8 +76,9 @@ def game_to_dict(game: Game) -> dict[str, Any]:
         # "Cancelled" / "Postponed" / "Rescheduled" when Ticketmaster says
         # so, else None (see NOTABLE_STATUSES).
         "status": NOTABLE_STATUSES.get(game.status_code or ""),
-        # The Ticketmaster event URL, the same one the .ics feeds carry.
-        "ticket_url": game.ticket_url,
+        # The Ticketmaster event URL, the same one the .ics feeds carry: never
+        # an affiliate tracking link (normalize.feed_ticket_url).
+        "ticket_url": feed_ticket_url(game),
         # Where the page's "Buy tickets" link goes: the home team's primary
         # seller where known, else the event URL (see sellers.py).
         "buy": buy_link(game),

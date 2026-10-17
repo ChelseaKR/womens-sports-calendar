@@ -12,6 +12,13 @@ subscriber's calendar app will treat the next build's games as new
 duplicates instead of updates. Games have been live under it at
 nexthomegame.com since 2026-09-14, so it keeps the old working name on
 purpose; it is an opaque id, not a link.
+
+A feed never carries an affiliate link (DECISIONS 0018). The ticket URL is
+the one Ticketmaster publishes, and once an Impact publisher id is on the
+Ticketmaster developer account, Ticketmaster wraps it in Impact tracking
+itself (docs/LICENSES-AND-ATTRIBUTION.md §3). normalize.feed_ticket_url
+unwraps it to the destination, or leaves the link out when there is no
+plain destination; validate_ics refuses a feed that carries one anyway.
 """
 
 from __future__ import annotations
@@ -22,7 +29,7 @@ from datetime import UTC, date, datetime, time, timedelta
 
 from icalendar import Calendar, Event, Timezone, vText
 
-from .normalize import Game, feed_start, unique_by_event_id, zone_for
+from .normalize import Game, feed_start, feed_ticket_url, unique_by_event_id, zone_for
 from .site_data import NOTABLE_STATUSES
 
 UID_DOMAIN = "womens-sports-calendar.invalid"
@@ -319,8 +326,9 @@ def _event(
     location_parts = [p for p in (game.venue_name, game.venue_city, game.venue_state) if p]
     if location_parts:
         event.add("location", vText(", ".join(location_parts)))
-    if game.ticket_url:
-        event.add("url", game.ticket_url)
+    ticket_url = feed_ticket_url(game)
+    if ticket_url:
+        event.add("url", ticket_url)
     lines = _description_lines(game, status, all_day=all_day, estimated_end=duration is not None and not all_day)
     if page_url:
         lines.append(f"More games and calendars: {page_url}")
@@ -353,8 +361,9 @@ def _description_lines(game: Game, status: FeedStatus | None, *, all_day: bool, 
         lines.append(f"Tickets: {game.price.currency} {game.price.min:.2f}-{game.price.max:.2f} (Ticketmaster)")
     else:
         lines.append("Tickets: price not available from Ticketmaster")
-    if game.ticket_url:
-        lines.append(f"Buy: {game.ticket_url}")
+    ticket_url = feed_ticket_url(game)
+    if ticket_url:
+        lines.append(f"Buy: {ticket_url}")
     return lines
 
 

@@ -36,7 +36,7 @@ from .analytics import GA4_DATA_RETENTION, ga4_head_snippet, measurement_id
 from .ics import calendar_name
 from .normalize import display_date
 from .sellers import AFFILIATE_LINK_TEMPLATES, affiliate_links_active, is_affiliate_link
-from .team_shops import team_shop_url
+from .team_shops import shop_links_on, team_shop_url
 
 CSS_PATH = "/style.css"
 PRIVACY_PATH = "/privacy/"
@@ -119,6 +119,7 @@ def _base(
     og_image_alt: str = DEFAULT_OG_IMAGE_ALT,
     noindex: bool = False,
     ga4_id: str | None = None,
+    paid_links: bool = False,
     jsonld: str = "",
     refresh_to: str | None = None,
 ) -> str:
@@ -173,7 +174,7 @@ def _base(
 <main id="main">
 {body}
 </main>
-{_footer(analytics_on=bool(analytics_head))}
+{_footer(analytics_on=bool(analytics_head), paid_links=paid_links)}
 </body>
 </html>
 """
@@ -193,9 +194,10 @@ sets no cookies, and the calendar feeds are never tracked. A &ldquo;Buy
 tickets&rdquo; link goes to the ticket seller's own site and tells them we
 sent you."""
 
-# Rendered from sellers.affiliate_links_active() (the buy-link templates and
-# the Fanatics shop link), so the disclosure is true by construction: it says
-# "affiliate" exactly when some link is one (DECISIONS 0013, 0018).
+# Rendered from _any_paid() (the buy-link templates, the Fanatics shop link,
+# and any Ticketmaster link the build found already wrapped in Impact
+# tracking), so the disclosure is true by construction: it says "affiliate"
+# exactly when some link is one (DECISIONS 0013, 0018).
 AFFILIATE_NOTE_ACTIVE = (
     "Links marked &ldquo;Paid link&rdquo; are affiliate links: if you buy through one, "
     "this site earns a commission. Every other link is plain, and this site is not paid for it."
@@ -222,10 +224,21 @@ def _paid_link(href: str, text_html: str, *, css_class: str = "") -> str:
     return f'<a{class_attr} href="{e(href)}" rel="{rel}">{text_html}</a> {PAID_LINK_LABEL}'
 
 
-def _buy_links_paid() -> bool:
+def _buy_links_paid(paid_links: bool = False) -> bool:
     """True when some "Buy tickets" link can be an affiliate link (not just
-    the team-shop link): the privacy page's ticket-link paragraph turns on it."""
-    return any(AFFILIATE_LINK_TEMPLATES.values())
+    the team-shop link): the privacy page's ticket-link paragraph turns on it.
+    `paid_links` is the build's own finding (sellers.any_paid_buy_link): a
+    Ticketmaster event URL that arrived already wrapped in Impact tracking."""
+    return paid_links or any(AFFILIATE_LINK_TEMPLATES.values())
+
+
+def _any_paid(paid_links: bool = False) -> bool:
+    """True when some link on the site can be an affiliate link: one a
+    setting makes paid (sellers.affiliate_links_active) or one the build
+    found already paid (`paid_links`). The footer and privacy disclosure and
+    the label's CSS follow this, so they say "affiliate" exactly when a link
+    can be one. Every page renderer takes `paid_links` from the build."""
+    return paid_links or affiliate_links_active()
 
 
 # The footer's "Opt out of analytics" control, only on pages that carry the
@@ -240,10 +253,10 @@ ANALYTICS_CHOICE = (
 )
 
 
-def _footer(*, analytics_on: bool) -> str:
+def _footer(*, analytics_on: bool, paid_links: bool = False) -> str:
     note = PRIVACY_NOTE_ANALYTICS if analytics_on else PRIVACY_NOTE_NO_ANALYTICS
     choice = f"\n{ANALYTICS_CHOICE}" if analytics_on else ""
-    affiliate_note = AFFILIATE_NOTE_ACTIVE if affiliate_links_active() else AFFILIATE_NOTE_INACTIVE
+    affiliate_note = AFFILIATE_NOTE_ACTIVE if _any_paid(paid_links) else AFFILIATE_NOTE_INACTIVE
     return f"""<footer class="site-footer">
 <h2>Sources and terms</h2>
 <p>Game data, venues, and dates are read from the
@@ -331,10 +344,12 @@ def _buy_link(game: Mapping[str, Any], matchup: str, *, css_class: str = "") -> 
     # An affiliate link is marked as one for search engines (Google asks that
     # paid and affiliate links say so) and for the reader, with the visible
     # "Paid link" label right after it (the footer note is not enough on its
-    # own). Derived here from the seller, never stored in data/*.json. The
-    # link text still names the seller, not the tracking host it goes
-    # through. A plain link gets no rel attribute and no label at all.
-    if is_affiliate_link(buy["seller"]):
+    # own). Derived here from the seller and the URL (a Ticketmaster URL
+    # can arrive already wrapped in Impact tracking), never stored in
+    # data/*.json. The link text still names the seller, not the tracking
+    # host it goes through. A plain link gets no rel attribute and no label
+    # at all.
+    if is_affiliate_link(buy["seller"], buy["url"]):
         return _paid_link(buy["url"], e(text), css_class=css_class)
     class_attr = f' class="{css_class}"' if css_class else ""
     return f'<a{class_attr} href="{e(buy["url"])}">{e(text)}</a>'
@@ -570,6 +585,7 @@ def render_index(
     not_included: list[dict[str, str]],
     base_url: str,
     ga4_id: str | None = None,
+    paid_links: bool = False,
 ) -> str:
     league_rows = []
     for lg in leagues:
@@ -624,11 +640,14 @@ them):</p>
         base_url=base_url,
         body=body,
         ga4_id=ga4_id,
+        paid_links=paid_links,
         jsonld=structured_data.script_block([structured_data.website(name=SITE_NAME, base_url=base_url)]),
     )
 
 
-def render_not_found(*, leagues: list[dict[str, Any]], base_url: str, ga4_id: str | None = None) -> str:
+def render_not_found(
+    *, leagues: list[dict[str, Any]], base_url: str, ga4_id: str | None = None, paid_links: bool = False
+) -> str:
     """dist/404.html, which GitHub Pages serves for any missing path --
     without it, a stale or mistyped link lands on GitHub's own "Page not
     found · GitHub Pages" page, with no way back to this site. noindex, and
@@ -650,11 +669,19 @@ are listed below, or start from <a href="/">the home page</a>.</p>
         body=body,
         noindex=True,
         ga4_id=ga4_id,
+        paid_links=paid_links,
     )
 
 
 def render_moved_team(
-    *, team_name: str, league_name: str, league_slug: str, team_slug: str, base_url: str, ga4_id: str | None = None
+    *,
+    team_name: str,
+    league_name: str,
+    league_slug: str,
+    team_slug: str,
+    base_url: str,
+    ga4_id: str | None = None,
+    paid_links: bool = False,
 ) -> str:
     """The page at a slug a team used to have (config.Team.former_slugs): a
     notice that points to the current page, and sends the browser there. A
@@ -676,20 +703,29 @@ def render_moved_team(
         body=body,
         noindex=True,
         ga4_id=ga4_id,
+        paid_links=paid_links,
         refresh_to=new_path,
     )
 
 
-def render_privacy(*, base_url: str, ga4_id: str | None = None) -> str:
+def render_privacy(*, base_url: str, ga4_id: str | None = None, paid_links: bool = False) -> str:
     """dist/privacy/index.html, linked from every page's footer. Rendered
     from the same GA4 ID as the pages' <head>, so it describes exactly what
     this build does: Google Analytics with its safeguards when an ID is
     set, "no analytics" when none is."""
-    affiliate_note = AFFILIATE_NOTE_ACTIVE if affiliate_links_active() else AFFILIATE_NOTE_INACTIVE
-    if measurement_id(ga4_id) is not None:
+    affiliate_note = AFFILIATE_NOTE_ACTIVE if _any_paid(paid_links) else AFFILIATE_NOTE_INACTIVE
+    analytics_on = measurement_id(ga4_id) is not None
+    if analytics_on:
+        # The team-shop link exists only with the Fanatics link set
+        # (team_shops.py), and its clicks are counted only then (analytics.py).
+        counted_links = (
+            "&ldquo;Buy tickets&rdquo;, &ldquo;Team shop&rdquo; and calendar-subscribe links"
+            if shop_links_on()
+            else "&ldquo;Buy tickets&rdquo; and calendar-subscribe links"
+        )
         pages_section = f"""<h2>Web pages: Google Analytics</h2>
 <p>This site's pages use Google Analytics 4, a Google service, to count page
-views and clicks on &ldquo;Buy tickets&rdquo; and calendar-subscribe links, so
+views and clicks on {counted_links}, so
 we can see which leagues and teams people use.</p>
 <ul>
 <li><strong>Not loaded if you ask not to be tracked.</strong> If your browser
@@ -734,7 +770,7 @@ turn on Global Privacy Control or Do Not Track in your browser, or install <a hr
 scripts at all, and no cookies.</p>
 """
         ticket_measured = ""
-    if _buy_links_paid():
+    if _buy_links_paid(paid_links):
         ticket_links = """<p>Every &ldquo;Buy tickets&rdquo; link goes to the home team's
 own ticket seller's page for that team where we know it (for example AXS or
 SeatGeek), otherwise to the address Ticketmaster publishes for that event. A
@@ -750,7 +786,7 @@ used as-is: never rewritten, and never routed through this site or through
 Google."""
     paid_links_section = ""
     ads_exception = ""
-    if affiliate_links_active():
+    if _any_paid(paid_links):
         paid_links_section = """<h2>Paid links</h2>
 <p>Some links are affiliate links, and each one has the label &ldquo;Paid
 link&rdquo; right next to it. If you buy something after following one, the
@@ -760,6 +796,10 @@ identifies this site, never anything about you, and this site adds no script
 and no cookie for it. Impact and the seller may set their own cookies once you
 reach them, under their own privacy policies. A paid link never changes which
 seller a game's &ldquo;Buy tickets&rdquo; link goes to.</p>
+"""
+        if analytics_on:
+            paid_links_section += """<p>Google Analytics records a click on a paid link by the seller's
+address it leads to, and notes that it was a paid link.</p>
 """
         ads_exception = " other than the paid links marked above"
     body = f"""<nav aria-label="breadcrumb"><a href="/">All leagues</a></nav>
@@ -791,10 +831,11 @@ no access to those logs.</p>
         base_url=base_url,
         body=body,
         ga4_id=ga4_id,
+        paid_links=paid_links,
     )
 
 
-def render_accessibility(*, base_url: str, ga4_id: str | None = None) -> str:
+def render_accessibility(*, base_url: str, ga4_id: str | None = None, paid_links: bool = False) -> str:
     """dist/accessibility/index.html, linked from every page's footer: the
     published form of docs/a11y/STATEMENT.md (ACCESSIBILITY-STANDARD A11Y-16).
     It states a target and what is checked, never a conformance claim, and
@@ -841,6 +882,7 @@ subscribing to a calendar or following a ticket link is fixed first.</p>
         base_url=base_url,
         body=body,
         ga4_id=ga4_id,
+        paid_links=paid_links,
     )
 
 
@@ -903,6 +945,7 @@ def render_schedule(
     leagues: list[dict[str, Any]],
     base_url: str,
     ga4_id: str | None = None,
+    paid_links: bool = False,
 ) -> str:
     """dist/schedule/index.html: every tracked league's listed games, day by
     day, for the days in site_data.schedule_data. The days are named by
@@ -947,6 +990,7 @@ def render_schedule(
         base_url=base_url,
         body=body,
         ga4_id=ga4_id,
+        paid_links=paid_links,
     )
 
 
@@ -955,6 +999,7 @@ def render_league(
     league: dict[str, Any],
     base_url: str,
     ga4_id: str | None = None,
+    paid_links: bool = False,
 ) -> str:
     slug = league["league_slug"]
     name = league["league_name"]
@@ -1006,6 +1051,7 @@ just its games.</p>
         og_image=og_image,
         og_image_alt=og_image_alt,
         ga4_id=ga4_id,
+        paid_links=paid_links,
         jsonld=structured_data.script_block(nodes),
     )
 
@@ -1043,6 +1089,7 @@ def render_team(
     team: dict[str, Any],
     base_url: str,
     ga4_id: str | None = None,
+    paid_links: bool = False,
 ) -> str:
     league_slug = team["league_slug"]
     team_slug = team["team_slug"]
@@ -1084,6 +1131,7 @@ lists, home and away, with its date, time and venue.</p>
         og_image=og_image,
         og_image_alt=og_image_alt,
         ga4_id=ga4_id,
+        paid_links=paid_links,
         jsonld=structured_data.script_block(nodes),
     )
 
@@ -1485,7 +1533,7 @@ PAID_LINK_CSS = """
 """
 
 
-def style_css() -> str:
+def style_css(*, paid_links: bool = False) -> str:
     """dist/style.css: STYLE_CSS, plus the paid-link label's rules when some
-    link can be an affiliate link."""
-    return STYLE_CSS + PAID_LINK_CSS if affiliate_links_active() else STYLE_CSS
+    link can be an affiliate link (_any_paid)."""
+    return STYLE_CSS + PAID_LINK_CSS if _any_paid(paid_links) else STYLE_CSS

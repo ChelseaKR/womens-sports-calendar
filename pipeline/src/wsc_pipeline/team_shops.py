@@ -115,6 +115,12 @@ def check_team_shops() -> None:
 check_team_shops()
 
 
+def shop_links_on() -> bool:
+    """True when team pages can carry a shop link: the Fanatics link is set.
+    The privacy page and the shop_click event (analytics.py) follow this."""
+    return bool(sellers.FANATICS_TEMPLATE)
+
+
 def team_shop_url(league_slug: str, team_slug: str) -> str | None:
     """The affiliate link to this team's Fanatics store, or None: always None
     while sellers.FANATICS_IMPACT_LINK is empty, and None for a team with no

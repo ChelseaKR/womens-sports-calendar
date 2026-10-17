@@ -32,14 +32,21 @@ What ga4_head_snippet() emits when an ID is set, on every HTML page:
 - gtag config with allow_google_signals and allow_ad_personalization_signals
   both false.
 - A click listener that sends a gtag event for a "Buy tickets" link (any
-  link inside <main> whose host starts with, or contains after a dot, one
-  of the ticket-seller names from sellers.ticket_host_names(), e.g.
-  "ticketmaster.", "seatgeek.", "axs.": ticket_click) or a calendar-subscribe link (webcal:, or
-  a path ending .ics: calendar_subscribe). It keys on the link's own URL,
-  not on template markup, and it only observes the click: the link stays a
-  plain URL, is never rewritten, and never routed through a Google
-  redirect. (GA4's own enhanced-measurement outbound-click event, if the
-  web stream has it on, also records ticket clicks under the name "click".)
+  link inside <main> whose destination host starts with, or contains after
+  a dot, one of the ticket-seller names from sellers.ticket_host_names(),
+  e.g. "ticketmaster.", "seatgeek.", "axs.": ticket_click), for the
+  "Team shop" link while it exists (a link inside <main> to the Fanatics
+  store: shop_click), or for a calendar-subscribe link (webcal:, or a path
+  ending .ics: calendar_subscribe). It keys on the link's own URL, not on
+  template markup. An affiliate link (an Impact tracking link, impact.py:
+  the /c/<n>/<n>/<n> path, or a host on an Impact shared domain) is matched
+  and reported by its destination, decoded from its `u` parameter, so
+  link_url and link_domain name the seller, not the tracking host, whatever
+  that host is; its event also carries `affiliate: true`. The listener only
+  observes the click: the link is never rewritten, and never routed
+  through a Google redirect. (GA4's own enhanced-measurement outbound-click
+  event, if the web stream has it on, also records these clicks under the
+  name "click".)
 
 The .ics feeds and data/*.json never pass through this module: build.py
 writes them before and independently of any HTML, and
@@ -53,7 +60,9 @@ import json
 import re
 from urllib.parse import urlparse
 
+from .impact import IMPACT_SHARED_DOMAINS
 from .sellers import ticket_host_names
+from .team_shops import FANATICS_HOST, shop_links_on
 
 # The one place the measurement ID goes. Empty ("") = no GA anywhere.
 # G-YKGPZ76LVE is the nexthomegame.com web stream of GA4 property 554878764
@@ -152,12 +161,23 @@ _SNIPPET_TEMPLATE = r"""<script>
   s.async = true;
   s.src = __GTAG_SRC__;
   d.head.appendChild(s);
+  function landing(href) {
+    try {
+      var u = new URL(href).searchParams.get("u");
+      var to = u ? new URL(u) : null;
+      return to && (to.protocol === "https:" || to.protocol === "http:") ? to : null;
+    } catch (e) { return null; }
+  }
   d.addEventListener("click", function (ev) {
     var a = ev.target && ev.target.closest ? ev.target.closest("a[href]") : null;
     if (!a) return;
-    if (a.closest("main") && __TICKET_HOST_RE__.test(a.hostname)) {
-      gtag("event", "ticket_click", { link_url: a.href, link_domain: a.hostname });
-    } else if (a.protocol === "webcal:" || /\.ics$/.test(a.pathname)) {
+    var paid = __IMPACT_PATH_RE__.test(a.pathname) || __IMPACT_HOST_RE__.test(a.hostname);
+    var to = (paid && landing(a.href)) || a;
+    var params = { link_url: to.href, link_domain: to.hostname };
+    if (paid) params.affiliate = true;
+    if (a.closest("main") && __TICKET_HOST_RE__.test(to.hostname)) {
+      gtag("event", "ticket_click", params);
+    }__SHOP_BRANCH__ else if (a.protocol === "webcal:" || /\.ics$/.test(a.pathname)) {
       gtag("event", "calendar_subscribe", { link_url: a.href });
     }
   });
@@ -190,6 +210,33 @@ def _ticket_host_regex_literal() -> str:
     return r"/(^|\.)(" + "|".join(names) + r")\./i"
 
 
+def _impact_regex_literals() -> tuple[str, str]:
+    """JS regex literals for an Impact tracking link (impact.py): its
+    /c/<n>/<n>/<n> path, and a host on one of Impact's shared domains."""
+    for domain in IMPACT_SHARED_DOMAINS:
+        if not re.fullmatch(r"[a-z0-9-]+(\.[a-z0-9-]+)+", domain):
+            raise ValueError(f"unexpected Impact domain: {domain!r}")
+    hosts = "|".join(domain.replace(".", r"\.") for domain in IMPACT_SHARED_DOMAINS)
+    return r"/^\/c\/\d+\/\d+\/\d+\/?$/", r"/(^|\.)(" + hosts + r")$/i"
+
+
+def _shop_branch() -> str:
+    """The shop_click branch of the click listener, only while the team-shop
+    link exists (team_shops.shop_links_on): a link in <main> whose
+    destination is the Fanatics store. Without it the listener has no shop
+    branch at all, so a page with no shop link carries no trace of one."""
+    if not shop_links_on():
+        return ""
+    name = FANATICS_HOST.removeprefix("www.").split(".")[0]
+    if not re.fullmatch(r"[a-z0-9-]+", name):
+        raise ValueError(f"unexpected shop host name: {name!r}")
+    return (
+        f' else if (a.closest("main") && /(^|\\.)({name})\\./i.test(to.hostname)) {{\n'
+        '      gtag("event", "shop_click", params);\n'
+        "    }"
+    )
+
+
 def ga4_head_snippet(ga4_id: str | None, *, base_url: str) -> str:
     """The <head> markup for one page: "" when no ID is set, otherwise the
     guarded inline loader described in the module docstring."""
@@ -199,12 +246,16 @@ def ga4_head_snippet(ga4_id: str | None, *, base_url: str) -> str:
     host = urlparse(base_url).hostname
     if not host:
         raise ValueError(f"cannot load GA4 without a hostname in the base URL: {base_url!r}")
+    impact_path_re, impact_host_re = _impact_regex_literals()
     replacements = {
         "__HOST__": json.dumps(host),
         "__DENIED_REGIONS__": json.dumps(list(ANALYTICS_DENIED_REGIONS)),
         "__ID__": json.dumps(mid),
         "__GTAG_SRC__": json.dumps(f"{GTAG_JS_URL}?id={mid}"),
         "__TICKET_HOST_RE__": _ticket_host_regex_literal(),
+        "__IMPACT_PATH_RE__": impact_path_re,
+        "__IMPACT_HOST_RE__": impact_host_re,
+        "__SHOP_BRANCH__": _shop_branch(),
         "__OPT_OUT_KEY__": json.dumps(OPT_OUT_STORAGE_KEY),
         "__GA_DISABLE__": json.dumps(f"ga-disable-{mid}"),
         **{token: json.dumps(message) for token, message in OPT_OUT_MESSAGES.items()},

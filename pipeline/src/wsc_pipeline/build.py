@@ -25,7 +25,7 @@ from importlib.metadata import version as package_version
 from pathlib import Path
 from typing import Any
 
-from . import analytics, config, guard, ics, site, site_data, sitemap
+from . import analytics, config, guard, ics, sellers, site, site_data, sitemap
 from .coverage import BuildCoverage, compute_league_coverage, render_report
 from .normalize import Game, normalize_event, team_is_participant_as_any, unique_by_event_id
 from .ticketmaster import DiscoveryClient, TicketmasterFetchError
@@ -168,6 +168,11 @@ def build(
         games, truncated, mismatched, requests_made, bytes_received = fetch_all_games(api_key)  # may raise
     else:
         games, truncated, mismatched, requests_made, bytes_received = [], {}, {}, 0, 0
+    # An event named in config.REMOVED_EVENTS is withheld from every page,
+    # feed and data file, even while Ticketmaster still lists it: the
+    # Ticketmaster terms' removal within 24 hours on request (ADR 0006). The
+    # publish guard below then reports it as an accepted removal.
+    games = without_removed_events(games)
     # When the listings were read (DATA-GOVERNANCE-STANDARD DG-02). None when
     # nothing was fetched: a degraded build states no fetch time at all.
     # Whole seconds, everywhere it is published: the page's <time datetime>
@@ -213,8 +218,22 @@ def build(
     _write_ics(tmp_dir, base_url, games_by_league, api_key_present, dtstamp=fetched_at)
     _write_combined_ics(tmp_dir, base_url, games_by_league, api_key_present, dtstamp=fetched_at)
     fingerprints = _write_data(tmp_dir, base_url, games_by_league, api_key_present, truncated, fetched_at=fetched_at)
-    _write_html(tmp_dir, base_url, games_by_league, api_key_present, truncated, ga4_id, fetched_at=fetched_at)
-    _write_static(tmp_dir)
+    # A Ticketmaster event URL can arrive already wrapped in Impact affiliate
+    # tracking (docs/LICENSES-AND-ATTRIBUTION.md §3): the pages then label it
+    # as a paid link and turn the disclosure on (DECISIONS 0018). The feeds
+    # and data/*.json's `ticket_url` carry the unwrapped address either way.
+    paid_links = sellers.any_paid_buy_link(games)
+    _write_html(
+        tmp_dir,
+        base_url,
+        games_by_league,
+        api_key_present,
+        truncated,
+        ga4_id,
+        fetched_at=fetched_at,
+        paid_links=paid_links,
+    )
+    _write_static(tmp_dir, paid_links=paid_links)
     state = sitemap.next_state(fingerprints, previous_state, fetched_at)
     _write_sitemap_and_robots(tmp_dir, base_url, state)
     _write_version(tmp_dir, fetched_at)
@@ -225,6 +244,13 @@ def build(
         shutil.rmtree(out_dir)
     tmp_dir.rename(out_dir)
     return coverage
+
+
+def without_removed_events(games: list[Game], removals: tuple[config.EventRemoval, ...] | None = None) -> list[Game]:
+    """`games` without any event config.REMOVED_EVENTS names (or `removals`,
+    for a test). An event id is matched exactly; nothing else is dropped."""
+    removed = {r.event_id for r in (config.REMOVED_EVENTS if removals is None else removals)}
+    return [g for g in games if g.event_id not in removed]
 
 
 def _write_ics(
@@ -345,6 +371,7 @@ def _write_html(
     ga4_id: str | None,
     *,
     fetched_at: datetime | None = None,
+    paid_links: bool = False,
 ) -> None:
     leagues_summary = [
         {
@@ -362,19 +389,23 @@ def _write_html(
             not_included=list(config.LEAGUES_EXAMINED_NOT_INCLUDED),
             base_url=base_url,
             ga4_id=ga4_id,
+            paid_links=paid_links,
         ),
         encoding="utf-8",
     )
     (out_dir / "404.html").write_text(
-        site.render_not_found(leagues=leagues_summary, base_url=base_url, ga4_id=ga4_id), encoding="utf-8"
+        site.render_not_found(leagues=leagues_summary, base_url=base_url, ga4_id=ga4_id, paid_links=paid_links),
+        encoding="utf-8",
     )
     privacy_dir = out_dir / "privacy"
     privacy_dir.mkdir(exist_ok=True)
-    (privacy_dir / "index.html").write_text(site.render_privacy(base_url=base_url, ga4_id=ga4_id), encoding="utf-8")
+    (privacy_dir / "index.html").write_text(
+        site.render_privacy(base_url=base_url, ga4_id=ga4_id, paid_links=paid_links), encoding="utf-8"
+    )
     accessibility_dir = out_dir / "accessibility"
     accessibility_dir.mkdir(exist_ok=True)
     (accessibility_dir / "index.html").write_text(
-        site.render_accessibility(base_url=base_url, ga4_id=ga4_id), encoding="utf-8"
+        site.render_accessibility(base_url=base_url, ga4_id=ga4_id, paid_links=paid_links), encoding="utf-8"
     )
 
     for lg in config.LEAGUES:
@@ -385,7 +416,8 @@ def _write_html(
         league_dir = out_dir / lg.slug
         league_dir.mkdir(exist_ok=True)
         (league_dir / "index.html").write_text(
-            site.render_league(league=league_payload, base_url=base_url, ga4_id=ga4_id), encoding="utf-8"
+            site.render_league(league=league_payload, base_url=base_url, ga4_id=ga4_id, paid_links=paid_links),
+            encoding="utf-8",
         )
         for team in lg.teams:
             team_payload = site_data.team_data(
@@ -395,7 +427,8 @@ def _write_html(
             team_dir = league_dir / team.slug
             team_dir.mkdir(exist_ok=True)
             (team_dir / "index.html").write_text(
-                site.render_team(team=team_payload, base_url=base_url, ga4_id=ga4_id), encoding="utf-8"
+                site.render_team(team=team_payload, base_url=base_url, ga4_id=ga4_id, paid_links=paid_links),
+                encoding="utf-8",
             )
             for former in team.former_slugs:
                 former_dir = league_dir / former
@@ -408,6 +441,7 @@ def _write_html(
                         team_slug=team.slug,
                         base_url=base_url,
                         ga4_id=ga4_id,
+                        paid_links=paid_links,
                     ),
                     encoding="utf-8",
                 )
@@ -420,6 +454,7 @@ def _write_html(
             leagues=leagues_summary,
             base_url=base_url,
             ga4_id=ga4_id,
+            paid_links=paid_links,
         ),
         encoding="utf-8",
     )
@@ -444,8 +479,8 @@ def _schedule_payload(
     return payload
 
 
-def _write_static(out_dir: Path) -> None:
-    (out_dir / "style.css").write_text(site.style_css(), encoding="utf-8")
+def _write_static(out_dir: Path, *, paid_links: bool = False) -> None:
+    (out_dir / "style.css").write_text(site.style_css(paid_links=paid_links), encoding="utf-8")
     for name in STATIC_ASSET_FILES:
         src = ASSETS_DIR / name
         if not src.is_file():

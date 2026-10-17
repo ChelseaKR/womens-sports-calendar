@@ -255,6 +255,16 @@ What ships (`pipeline/src/wsc_pipeline/analytics.py`):
   `calendar_subscribe` (a `webcal:` link or a path ending `.ics`). Ticket
   links stay the plain URLs Ticketmaster publishes, never wrapped in a GA
   or other redirect.
+
+  *Amended 2026-10-17 (with 0018's addendum):* `ticket_click` matches a
+  link in `<main>` whose destination is any seller a "Buy tickets" link
+  can go to (`sellers.ticket_host_names()`, since 0013: Ticketmaster, Live
+  Nation, FEVO, AXS, SeatGeek), not only `ticketmaster.*`. For an
+  affiliate link (an Impact tracking link) the destination is read from its
+  `u` parameter, `link_url` and `link_domain` name that destination rather
+  than the tracking host, and the event carries `affiliate: true`. While the
+  Fanatics team-shop link exists (0018), a click on it sends `shop_click`
+  with the same parameters. GA never wraps or rewrites a link.
 - **Feeds untracked.** The `.ics` feeds and `data/*.json` are written
   without the ID and are byte-identical with or without it
   (`tests/test_analytics.py`); no tracking of any kind is added to a feed.
@@ -525,12 +535,49 @@ What it allows, and what it does not:
   `sellers.py` and stay byte-identical with the ids set
   (`tests/test_affiliate_links.py`).
 
-Known gap: the GA4 `ticket_click` event matches a link by its host
-(analytics.py), so it counts a rewritten SeatGeek link only if her
-tracking host starts with `seatgeek.`. GA4's own outbound-click event
-still records it.
+Known gap (closed 2026-10-17, see the addendum below): the GA4
+`ticket_click` event matched a link by its host (analytics.py), so it
+counted a rewritten SeatGeek link only if her tracking host started with
+`seatgeek.`, and the team-shop link sent no event.
 
 The PR that first sets an id also moves `site.PRIVACY_UPDATED`, because
 `/privacy/` changes with it; a test enforces this. The commission rate,
 cookie window and any program restrictions are whatever her approved
 contract says; they are recorded here when she has them.
+
+*Addendum 2026-10-17: links Ticketmaster has already made paid, and the
+click events.*
+
+- **Ticketmaster can make a link paid without any setting here.** Per
+  `docs/LICENSES-AND-ATTRIBUTION.md` §3, once an Impact publisher id is on
+  the Ticketmaster developer account, Ticketmaster wraps every Discovery
+  `event.url` in Impact tracking itself. Those URLs reached the feeds
+  unchanged and would have been shown on the pages unlabelled. Now
+  `impact.py` recognises an Impact tracking link by its
+  `/c/<n>/<n>/<n>` path on any host (Impact's shared domains such as
+  `pxf.io`, `sjv.io` and `evyy.net`, or a brand's own domain), or by a host
+  on one of those shared domains (short links), and reads the destination
+  from its `u` parameter.
+- **Feeds:** a feed carries the decoded destination instead, byte for byte
+  what it carries for the plain URL, or no ticket link at all when a
+  tracking link names no plain destination (`normalize.feed_ticket_url`;
+  never a guessed URL). `data/*.json`'s `ticket_url` is that same plain
+  address. `make validate-ics` now refuses any feed that carries a tracking
+  link, so the nightly deploy cannot publish one.
+- **Pages:** a wrapped Ticketmaster link is a paid link like a SeatGeek
+  one: `rel="sponsored noopener"`, the "Paid link" label, and link text that
+  names Ticketmaster, not the tracking host. The build checks its own games
+  (`sellers.any_paid_buy_link`) and turns on the footer note, the privacy
+  page's "Paid links" section and the label's CSS whenever a link is paid,
+  not only when an id is set here. Which seller a game links to is
+  unchanged.
+- **Clicks (0012, amended):** `ticket_click` matches and reports the
+  destination of a tracking link, whatever its host, with `affiliate:
+  true`, and the team-shop link sends `shop_click` while it exists. GPC, Do
+  Not Track, the footer opt-out and the production-host check apply as
+  before; the feeds stay untracked.
+- **Residual:** `/privacy/`'s "Updated" date (`site.PRIVACY_UPDATED`) is
+  committed, so when Ticketmaster starts wrapping links and the privacy
+  page gains its "Paid links" section, the date does not move by itself.
+  The owner moves it in the pull request that follows the account change,
+  as for her own ids.

@@ -15,7 +15,8 @@ wherever its tickets are sold:
   not ticketmaster.com).
 
 The .ics feeds do not use this module. They keep the Ticketmaster event URL,
-so no feed changes.
+so no feed changes. (When Ticketmaster has already wrapped that URL in Impact
+tracking, the feeds carry its decoded destination instead: impact.py.)
 
 Adding a seller here needs evidence, not a guess: each entry records who
 says the seller is the team's primary or official one, and when that was
@@ -28,16 +29,21 @@ are empty. While they are empty no link anywhere on the site changes. Once
 SEATGEEK_IMPACT_LINK is set, only the links that already go to SeatGeek
 (the teams whose official seller it is) are sent through it; which seller a
 game links to never changes. FANATICS_IMPACT_LINK drives the team-page shop
-link in team_shops.py.
+link in team_shops.py. A Ticketmaster event URL can also arrive already
+wrapped in Impact tracking (Ticketmaster does that server-side once an
+Impact publisher id is on the developer account): it is labelled by where it
+goes and marked as paid like the others (is_affiliate_link), with no setting
+here.
 """
 
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from urllib.parse import quote, urlparse
 
-from . import config
+from . import config, impact
 from .normalize import Game, team_is_participant
 
 
@@ -148,8 +154,8 @@ def _affiliate_templates() -> dict[str, str]:
 # noopener" on exactly the links that went through a template
 # (is_affiliate_link, used by site._buy_link), and the disclosure in the
 # footer and on the privacy page (site.affiliate_note). The ticket_click
-# event does not: analytics.py matches a link by its host, so it counts a
-# rewritten SeatGeek link only if the tracking host starts with "seatgeek.".
+# event reads the destination out of a tracking link's `u` parameter, so it
+# counts a rewritten link whatever the tracking host is (analytics.py).
 AFFILIATE_LINK_TEMPLATES: dict[str, str] = _affiliate_templates()
 FANATICS_TEMPLATE: str | None = impact_template(FANATICS_IMPACT_LINK, setting="sellers.FANATICS_IMPACT_LINK")
 
@@ -180,23 +186,39 @@ def affiliate_links_active() -> bool:
     return any(AFFILIATE_LINK_TEMPLATES.values()) or bool(FANATICS_TEMPLATE)
 
 
-def is_affiliate_link(seller: str) -> bool:
-    """True when a buy link for this seller went through with_affiliate, that
-    is, when AFFILIATE_LINK_TEMPLATES has a non-empty template for it. Keyed
-    on the same seller name buy_link passes to with_affiliate (the "seller"
-    of a `buy` dict), so the render step can mark exactly the links that were
-    rewritten without a new field in the published data."""
-    return bool(AFFILIATE_LINK_TEMPLATES.get(seller))
+def is_affiliate_link(seller: str, url: str = "") -> bool:
+    """True when a buy link is paid: it went through with_affiliate (that is,
+    AFFILIATE_LINK_TEMPLATES has a non-empty template for its seller), or its
+    URL is an Impact tracking link, which is how a Ticketmaster event URL
+    arrives once Ticketmaster wraps it (impact.py). Keyed on the same seller
+    name buy_link passes to with_affiliate (the "seller" of a `buy` dict) and
+    on the link itself, so the render step can mark exactly the paid links
+    without a new field in the published data."""
+    return bool(AFFILIATE_LINK_TEMPLATES.get(seller)) or impact.is_impact_link(url)
+
+
+def any_paid_buy_link(games: Iterable[Game]) -> bool:
+    """True when some game's "Buy tickets" link is paid. With no template
+    set that can only be a Ticketmaster URL that arrived already wrapped, so
+    the build asks this of its games and turns the pages' disclosure on
+    (site.py's `paid_links`) for what the data holds, not only for what is
+    configured."""
+    return any(b is not None and is_affiliate_link(b["seller"], b["url"]) for b in map(buy_link, games))
 
 
 def with_affiliate(url: str, seller: str) -> str:
-    if not is_affiliate_link(seller):
+    """The seller's template applied to `url`; `url` unchanged when the
+    seller has none, or when `url` is already a tracking link (never wrapped
+    twice)."""
+    if not AFFILIATE_LINK_TEMPLATES.get(seller) or impact.is_impact_link(url):
         return url
     return AFFILIATE_LINK_TEMPLATES[seller].format(url=quote(url, safe=""))
 
 
 def seller_label_for_url(url: str) -> str:
-    host = (urlparse(url).hostname or "").lower()
+    """The name of the site a link goes to. A tracking link is named by its
+    destination (Ticketmaster), never by the tracking host."""
+    host = (urlparse(impact.plain_url(url) or url).hostname or "").lower()
     for domain, label in _HOST_LABELS.items():
         if host == domain or host.endswith("." + domain):
             return label

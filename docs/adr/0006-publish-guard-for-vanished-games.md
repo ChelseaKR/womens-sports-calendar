@@ -2,7 +2,9 @@
 
 Status: Proposed
 Date: 2026-09-19 (revised 2026-10-02: all-day games, accepted event removals,
-the job summary, and why the team rule needs three games)
+the job summary, and why the team rule needs three games; revised 2026-10-17:
+an entry in `REMOVED_EVENTS` also withholds an event that is still listed,
+which is how a Ticketmaster removal request is honoured)
 Deciders: Chelsea Kelly-Reif
 
 ## Context
@@ -100,10 +102,16 @@ Two tools in `config.py`, both empty today.
 listed game named there that disappears is reported as an accepted removal
 and is not counted toward any rule; the games it does not name still are.
 This is the tool for a playoff series that ended early or a single withdrawn
-listing. It is the per-event list the data-governance work in #9 needs for
-removal within 24 hours of a request: that work is to read the same list to
-keep an event out of the publish. Until then, an entry does not hide a game
-that is still listed. Entries stay: Ticketmaster does not reuse an event id.
+listing.
+
+Since 2026-10-17 the build also reads the same list to keep an event out of
+the publish: an event named there is left out of every page, feed and data
+file even while Ticketmaster still lists it (`build.without_removed_events`).
+This is how a request under the Ticketmaster terms to remove Event Content
+within 24 hours is honoured (`docs/LICENSES-AND-ATTRIBUTION.md` §2): add the
+entry, merge, and re-run the pages workflow. The night it leaves the publish,
+the guard reports it as an accepted removal, as above. Entries stay:
+Ticketmaster does not reuse an event id.
 
 `PUBLISH_GUARD_OVERRIDES` is for a whole league. To accept a league-wide
 shrink you have checked is real, add a `GuardOverride(league_slug, reason,
@@ -157,6 +165,9 @@ and in `COVERAGE.txt`, never skipped silently.
   games (an entry in `REMOVED_EVENTS` per game, needed only when the team
   had three or more upcoming games or the league would go empty);
   Ticketmaster withdrawing a league's listings (a league override).
+- An entry in `REMOVED_EVENTS` is not only an acceptance: it withholds that
+  event from the site and the feeds for good, even if Ticketmaster lists it
+  again. Removing the entry is what brings it back.
 - The build makes up to 67 small requests to its own site before fetching from
   Ticketmaster (fewer if the site does not answer: it gives up after five
   consecutive failures). It sends no secret.
