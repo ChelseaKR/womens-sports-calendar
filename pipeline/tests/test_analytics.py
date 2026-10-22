@@ -351,6 +351,30 @@ _FEED = {
     "pathname": "/ics/wnba/minnesota-lynx.ics",
     "inMain": True,
 }
+_GOOGLE_ADD = {
+    "href": "https://calendar.google.com/calendar/u/0/r?cid=webcal%3A%2F%2Fnexthomegame.com%2Fics%2Fwnba%2Findiana-fever.ics",
+    "hostname": "calendar.google.com",
+    "protocol": "https:",
+    "pathname": "/calendar/u/0/r",
+    "search": "?cid=webcal%3A%2F%2Fnexthomegame.com%2Fics%2Fwnba%2Findiana-fever.ics",
+    "inMain": True,
+}
+_OUTLOOK_ADD = {
+    "href": "https://outlook.live.com/calendar/0/addfromweb/?url=webcal%3A%2F%2Fnexthomegame.com%2Fics%2Fwnba%2Findiana-fever.ics&name=Indiana+Fever",
+    "hostname": "outlook.live.com",
+    "protocol": "https:",
+    "pathname": "/calendar/0/addfromweb/",
+    "search": "?url=webcal%3A%2F%2Fnexthomegame.com%2Fics%2Fwnba%2Findiana-fever.ics&name=Indiana+Fever",
+    "inMain": True,
+}
+_GOOGLE_OTHER = {
+    "href": "https://calendar.google.com/calendar/u/0/r",
+    "hostname": "calendar.google.com",
+    "protocol": "https:",
+    "pathname": "/calendar/u/0/r",
+    "search": "",
+    "inMain": True,
+}
 _FOOTER_TM = {
     "href": "https://developer.ticketmaster.com/support/terms-of-use/",
     "hostname": "developer.ticketmaster.com",
@@ -601,3 +625,29 @@ def test_control_the_node_harness_sees_ga_load_when_a_guard_is_removed(tmp_path:
     assert result["dataLayer"] is not None and result["appended"], "harness missed a removed guard"
     with pytest.raises(AssertionError):
         _assert_nothing_loaded(result)
+
+
+_ADD_LINKS = [_GOOGLE_ADD, _OUTLOOK_ADD]
+
+
+def test_google_and_outlook_add_links_send_calendar_subscribe(tmp_path: Path):
+    """The Google Calendar and Outlook subscribe buttons are https links whose
+    path is not .ics (the feed is in the query), so a path-only matcher never
+    counted them. A bare Google Calendar link with no feed is not a subscribe."""
+    clicks = [*_ADD_LINKS, _GOOGLE_OTHER]
+    rows = [row for row in _LOADED if row[0] == "no-signal"]
+    result = _run_snippet(tmp_path, ga4_head_snippet(TEST_ID, base_url=BASE_URL), _scenarios(rows, clicks))["no-signal"]
+    google, outlook, other = result["clicks"]
+    assert google["pushed"] == [["event", "calendar_subscribe", {"link_url": _GOOGLE_ADD["href"]}]]
+    assert outlook["pushed"] == [["event", "calendar_subscribe", {"link_url": _OUTLOOK_ADD["href"]}]]
+    assert other["pushed"] == []
+
+
+def test_control_the_add_link_check_fails_on_the_old_path_only_matcher(tmp_path: Path):
+    snippet = ga4_head_snippet(TEST_ID, base_url=BASE_URL)
+    old = ' || (/^(calendar\\.google\\.com|outlook\\.(live|office)\\.com)$/i.test(a.hostname) && /\\.ics/i.test(a.search || ""))'
+    broken = _sabotage(snippet, old, "")  # _sabotage asserts the text was present and changed
+    assert broken != snippet
+    rows = [row for row in _LOADED if row[0] == "no-signal"]
+    result = _run_snippet(tmp_path, broken, _scenarios(rows, _ADD_LINKS))["no-signal"]
+    assert [c["pushed"] for c in result["clicks"]] == [[], []], "old matcher should miss both add links"

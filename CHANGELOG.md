@@ -10,6 +10,15 @@ archived and private.
 
 ## [Unreleased]
 
+### Fixed
+
+- The `calendar_subscribe` event now also fires for the "Add to Google
+  Calendar" and Outlook buttons. They are https links to
+  `calendar.google.com` and `outlook.live.com` / `outlook.office.com` whose
+  `.ics` feed sits in the query string, so the old check (a `webcal:` link or
+  a path ending `.ics`) never matched them. Only the Apple Calendar button and
+  the direct feed link were counted.
+
 ### Added
 
 - A build-time switch for the team-page block order, `TEAM_PAGE_NEXT_GAME_FIRST`
@@ -17,6 +26,10 @@ archived and private.
   that game and its ticket link above the subscribe block. Off, pages are
   byte-identical to before (a golden test pins it); paid-link labels and the
   feeds are unaffected either way.
+- The home page links the all-leagues calendar (`/ics/all.ics`, #36), which
+  nothing linked to before: a webcal subscribe link and the plain address,
+  with the feed's own "(time TBA)" wording for all-day entries. No new
+  tracking: a click already counts as `calendar_subscribe`.
 - A per-event removal switch: an event id listed in `REMOVED_EVENTS`
   (`pipeline/src/wsc_pipeline/config.py`) is left out of every page,
   calendar feed and data file even while Ticketmaster still lists it, so a
