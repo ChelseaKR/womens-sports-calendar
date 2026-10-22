@@ -12,6 +12,11 @@ archived and private.
 
 ### Added
 
+- A build-time switch for the team-page block order, `TEAM_PAGE_NEXT_GAME_FIRST`
+  in `site.py`, off as shipped: on, a team page with a next home game shows
+  that game and its ticket link above the subscribe block. Off, pages are
+  byte-identical to before (a golden test pins it); paid-link labels and the
+  feeds are unaffected either way.
 - A per-event removal switch: an event id listed in `REMOVED_EVENTS`
   (`pipeline/src/wsc_pipeline/config.py`) is left out of every page,
   calendar feed and data file even while Ticketmaster still lists it, so a
