@@ -36,8 +36,9 @@ What ga4_head_snippet() emits when an ID is set, on every HTML page:
   a dot, one of the ticket-seller names from sellers.ticket_host_names(),
   e.g. "ticketmaster.", "seatgeek.", "axs.": ticket_click), for the
   "Team shop" link while it exists (a link inside <main> to the Fanatics
-  store: shop_click), or for a calendar-subscribe link (webcal:, or a path
-  ending .ics: calendar_subscribe). It keys on the link's own URL, not on
+  store: shop_click), or for a calendar-subscribe link (webcal:, a path
+  ending .ics, or a Google Calendar or Outlook add-by-URL link whose query
+  names an .ics feed: calendar_subscribe). It keys on the link's own URL, not on
   template markup. An affiliate link (an Impact tracking link, impact.py:
   the /c/<n>/<n>/<n> path, or a host on an Impact shared domain) is matched
   and reported by its destination, decoded from its `u` parameter, so
@@ -177,7 +178,7 @@ _SNIPPET_TEMPLATE = r"""<script>
     if (paid) params.affiliate = true;
     if (a.closest("main") && __TICKET_HOST_RE__.test(to.hostname)) {
       gtag("event", "ticket_click", params);
-    }__SHOP_BRANCH__ else if (a.protocol === "webcal:" || /\.ics$/.test(a.pathname)) {
+    }__SHOP_BRANCH__ else if (a.protocol === "webcal:" || /\.ics$/.test(a.pathname) || (/^(calendar\.google\.com|outlook\.(live|office)\.com)$/i.test(a.hostname) && /\.ics/i.test(a.search || ""))) {
       gtag("event", "calendar_subscribe", { link_url: a.href });
     }
   });
