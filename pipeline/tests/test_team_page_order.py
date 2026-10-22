@@ -15,6 +15,7 @@ Pages are read with html.parser, never a regex over markup.
 
 from __future__ import annotations
 
+import re
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -190,6 +191,12 @@ def test_on_leaves_a_page_without_a_next_home_game_exactly_as_it_was(scenario: s
     assert subscribe_comes_first(off)
 
 
+def _without_dtstamps(raw: bytes) -> bytes:
+    # Each build stamps every event with its own fetch time (see build._write_ics),
+    # so two builds a second apart differ in exactly those lines and nowhere else.
+    return re.sub(rb"DTSTAMP:\d{8}T\d{6}Z", b"DTSTAMP:X", raw)
+
+
 def test_the_constant_does_not_reach_the_feeds_or_data(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     off_dir, on_dir = tmp_path / "off", tmp_path / "on"
     build_fixture_site(off_dir)
@@ -202,7 +209,9 @@ def test_the_constant_does_not_reach_the_feeds_or_data(tmp_path: Path, monkeypat
         for rel in off_files:
             if rel.name == "site.json":
                 continue  # carries build timing, if anything
-            assert (off_dir / rel).read_bytes() == (on_dir / rel).read_bytes(), rel
+            assert _without_dtstamps((off_dir / rel).read_bytes()) == _without_dtstamps((on_dir / rel).read_bytes()), (
+                rel
+            )
     # ...while the pages really did change, so the comparison above had teeth.
     team = Path("wnba/las-vegas-aces/index.html")
     assert (off_dir / team).read_bytes() != (on_dir / team).read_bytes()
