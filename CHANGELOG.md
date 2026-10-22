@@ -26,14 +26,14 @@ archived and private.
   that game and its ticket link above the subscribe block. Off, pages are
   byte-identical to before (a golden test pins it); paid-link labels and the
   feeds are unaffected either way.
-- A footer contact for removal and correction requests, off until the owner
-  sets an address (roadmap decision B). `REMOVAL_CONTACT_EMAIL` in
-  `pipeline/src/wsc_pipeline/site.py` is unset, and with it unset every page
-  is byte-identical to before. Set to a plain address, every page's footer
-  gains one sentence with a mailto link, and nothing else changes (feeds,
-  data files and the sitemap are untouched). A value that is not a plain
-  address stops the build. `REMOVED_EVENTS` is the switch a request is then
-  honoured with.
+- A footer contact for removal and correction requests (roadmap decision B).
+  Every page's footer says to email chelsea@chelseakr.com to ask for a game
+  to be removed or to report a mistake. The address is the
+  `REMOVAL_CONTACT_EMAIL` setting in `pipeline/src/wsc_pipeline/site.py`;
+  set it to `None` and every page is byte-identical to before. Nothing else
+  changes (feeds, data files and the sitemap are untouched). A value that is
+  not a plain address stops the build. `REMOVED_EVENTS` is the switch a
+  request is then honoured with.
 - The home page links the all-leagues calendar (`/ics/all.ics`, #36), which
   nothing linked to before: a webcal subscribe link and the plain address,
   with the feed's own "(time TBA)" wording for all-day entries. No new

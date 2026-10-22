@@ -1,10 +1,10 @@
 """The footer's removal and correction contact (roadmap decision B).
 
-REMOVAL_CONTACT_EMAIL ships unset: every page is then byte-identical to what
-main rendered before the setting existed (two goldens rendered by main's
-unmodified _footer, and a whole fixture-site build). Set, every page's footer
-gains one paragraph with a mailto link and nothing else on any page, feed or
-data file changes. A value that is not a plain address stops the build.
+REMOVAL_CONTACT_EMAIL ships set to the owner's address. Every page's footer carries one paragraph
+with a mailto link (a golden pins the exact footer) and nothing else on any
+page, feed or data file differs from the unset state. Unset (None), every page
+is byte-identical to what main rendered before the setting existed (two
+goldens rendered by main's unmodified _footer, and a whole fixture-site build). A value that is not a plain address stops the build.
 
 Pages are read with html.parser, never a regex over markup. The .ics DTSTAMP
 is the build's fetch time, so a comparison between two builds strips it.
@@ -23,7 +23,7 @@ from wsc_pipeline import site
 from .fixture_site import build_fixture_site
 
 GOLDEN = Path(__file__).parent / "golden"
-ADDRESS = "removals@example.org"
+ADDRESS = "chelsea@chelseakr.com"
 
 
 class _Links(HTMLParser):
@@ -66,20 +66,26 @@ def _tree(root: Path) -> dict[str, bytes]:
     return out
 
 
-def test_unset_by_default():
-    assert site.REMOVAL_CONTACT_EMAIL is None
+def test_ships_set_to_the_owners_address():
+    assert site.REMOVAL_CONTACT_EMAIL == ADDRESS
+
+
+def test_default_footer_equals_the_on_golden():
+    golden = (GOLDEN / "footer_removal_on_no_analytics.html").read_text(encoding="utf-8")
+    assert site._footer(analytics_on=False) == golden
+    assert f'<a href="mailto:{ADDRESS}">{ADDRESS}</a>' in golden
 
 
 @pytest.mark.parametrize("analytics_on,name", [(False, "no_analytics"), (True, "analytics")])
-def test_unset_footer_is_byte_identical_to_main(analytics_on, name):
+def test_unset_footer_is_byte_identical_to_main(analytics_on, name, monkeypatch):
+    monkeypatch.setattr(site, "REMOVAL_CONTACT_EMAIL", None)
     golden = (GOLDEN / f"footer_removal_off_{name}.html").read_text(encoding="utf-8")
-    assert site.REMOVAL_CONTACT_EMAIL is None
+    assert site.REMOVAL_CONTACT_EMAIL is None  # patch applied
     assert site._footer(analytics_on=analytics_on) == golden
 
 
-def test_set_footer_adds_exactly_one_paragraph(monkeypatch):
+def test_set_footer_adds_exactly_one_paragraph():
     golden = (GOLDEN / "footer_removal_off_no_analytics.html").read_text(encoding="utf-8")
-    monkeypatch.setattr(site, "REMOVAL_CONTACT_EMAIL", ADDRESS)
     on = site._footer(analytics_on=False)
     assert on != golden
     page = _parse(on)
@@ -91,8 +97,10 @@ def test_set_footer_adds_exactly_one_paragraph(monkeypatch):
 
 
 def test_a_whole_build_changes_only_by_the_footer_paragraph(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(site, "REMOVAL_CONTACT_EMAIL", None)
     build_fixture_site(tmp_path / "off")
-    monkeypatch.setattr(site, "REMOVAL_CONTACT_EMAIL", ADDRESS)
+    monkeypatch.undo()
+    assert site.REMOVAL_CONTACT_EMAIL == ADDRESS  # the shipped default is what "on" builds
     build_fixture_site(tmp_path / "on")
     off, on = _tree(tmp_path / "off"), _tree(tmp_path / "on")
     assert off.keys() == on.keys()
@@ -136,14 +144,13 @@ def test_a_value_that_is_not_a_plain_address_stops_the_build(monkeypatch, bad):
 
 
 def test_control_a_footer_that_drops_the_paragraph_is_caught(monkeypatch):
-    monkeypatch.setattr(site, "REMOVAL_CONTACT_EMAIL", ADDRESS)
     monkeypatch.setattr(site, "_removal_contact", lambda: "")
     sabotaged = site._footer(analytics_on=False)
     assert site.REMOVAL_CONTACT_EMAIL == ADDRESS and "mailto" not in sabotaged  # sabotage applied
     assert _parse(sabotaged).mailto != [f"mailto:{ADDRESS}"]
 
 
-def test_control_a_stale_golden_is_caught(monkeypatch):
+def test_control_a_stale_golden_is_caught():
     golden = (GOLDEN / "footer_removal_off_no_analytics.html").read_text(encoding="utf-8")
     stale = golden.replace("Accessibility statement", "Accessibility statements", 1)
     assert stale != golden  # sabotage applied

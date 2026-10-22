@@ -51,12 +51,11 @@ ACCESSIBILITY_STATUS = (
 )
 ACCESSIBILITY_CONTACT_URL = "https://chelseakr.com/contact"
 # The address a removal or correction request can reach (roadmap decision B;
-# Ticketmaster's terms ask for a way to request removal of an event). None
-# keeps the footer byte-identical to what it was before this setting existed.
-# Set it to a plain address, rebuild, and every page's footer gains one
-# sentence with a mailto link. REMOVED_EVENTS (config.py, ADR 0006) is the
-# switch the request is then honoured with.
-REMOVAL_CONTACT_EMAIL: str | None = None
+# Ticketmaster's terms ask for a way to request removal of an event). Every
+# page's footer carries one sentence with a mailto link to it. None drops the
+# sentence and gives the footer it had before this setting existed.
+# REMOVED_EVENTS (config.py, ADR 0006) is the switch a request is honoured with.
+REMOVAL_CONTACT_EMAIL: str | None = "chelsea@chelseakr.com"
 _EMAIL_SHAPE = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$")
 # The "Updated" date printed on /privacy/ and /accessibility/, and their
 # sitemap <lastmod>: one value each, so the two cannot disagree. Change it
