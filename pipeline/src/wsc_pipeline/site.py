@@ -25,6 +25,7 @@ not replaced -- see the palette comment on STYLE_CSS below.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from datetime import UTC, date, datetime
 from html import escape as e
@@ -49,6 +50,14 @@ ACCESSIBILITY_STATUS = (
     "No human assistive-technology review has been done yet."
 )
 ACCESSIBILITY_CONTACT_URL = "https://chelseakr.com/contact"
+# The address a removal or correction request can reach (roadmap decision B;
+# Ticketmaster's terms ask for a way to request removal of an event). None
+# keeps the footer byte-identical to what it was before this setting existed.
+# Set it to a plain address, rebuild, and every page's footer gains one
+# sentence with a mailto link. REMOVED_EVENTS (config.py, ADR 0006) is the
+# switch the request is then honoured with.
+REMOVAL_CONTACT_EMAIL: str | None = None
+_EMAIL_SHAPE = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$")
 # The "Updated" date printed on /privacy/ and /accessibility/, and their
 # sitemap <lastmod>: one value each, so the two cannot disagree. Change it
 # whenever that page's text changes.
@@ -253,6 +262,21 @@ ANALYTICS_CHOICE = (
 )
 
 
+def _removal_contact() -> str:
+    """One footer paragraph naming where to send a removal or correction
+    request, or "" while REMOVAL_CONTACT_EMAIL is unset. A value that is not a
+    plain address stops the build rather than publishing a broken link."""
+    address = REMOVAL_CONTACT_EMAIL
+    if address is None:
+        return ""
+    if not _EMAIL_SHAPE.match(address):
+        raise ValueError(f"REMOVAL_CONTACT_EMAIL is not a plain email address: {address!r}")
+    return (
+        '\n<p class="privacy-note">To ask for a game to be removed from this site, '
+        f'or to report a mistake, email <a href="mailto:{e(address)}">{e(address)}</a>.</p>'
+    )
+
+
 def _footer(*, analytics_on: bool, paid_links: bool = False) -> str:
     note = PRIVACY_NOTE_ANALYTICS if analytics_on else PRIVACY_NOTE_NO_ANALYTICS
     choice = f"\n{ANALYTICS_CHOICE}" if analytics_on else ""
@@ -270,7 +294,7 @@ know it, and otherwise to the game's Ticketmaster listing.
 {affiliate_note}</p>
 <p class="privacy-note">{note}
 <a href="{PRIVACY_PATH}">Privacy: what this site measures and what it never does</a>.{choice}</p>
-<p class="privacy-note"><a href="{ACCESSIBILITY_PATH}">Accessibility statement</a>.</p>
+<p class="privacy-note"><a href="{ACCESSIBILITY_PATH}">Accessibility statement</a>.</p>{_removal_contact()}
 </footer>
 """
 
