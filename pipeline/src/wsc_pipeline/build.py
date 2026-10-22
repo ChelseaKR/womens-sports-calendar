@@ -25,7 +25,19 @@ from importlib.metadata import version as package_version
 from pathlib import Path
 from typing import Any
 
-from . import analytics, config, feeds, guard, ics, llms, sellers, site, site_data, sitemap
+from . import (
+    analytics,
+    config,
+    feeds,
+    guard,
+    ics,
+    indexnow,
+    llms,
+    sellers,
+    site,
+    site_data,
+    sitemap,
+)
 from .coverage import BuildCoverage, compute_league_coverage, render_report
 from .normalize import Game, normalize_event, team_is_participant_as_any, unique_by_event_id
 from .ticketmaster import DiscoveryClient, TicketmasterFetchError
@@ -502,6 +514,11 @@ def _write_static(out_dir: Path, *, paid_links: bool = False) -> None:
                 "`uv run python scripts/render_social_assets.py` and commit its output"
             )
         shutil.copyfile(src, out_dir / name)
+
+    # The IndexNow ownership file (indexnow.py): public by design, served from
+    # the site root so a search engine can check that the host's owner sent
+    # the announcement of new and changed pages.
+    indexnow.copy_key_file(ASSETS_DIR, out_dir)
 
     fonts_dir = out_dir / "fonts"
     fonts_dir.mkdir(exist_ok=True)

@@ -142,6 +142,32 @@ jobs:
           set -euo pipefail
           cat dist/COVERAGE.txt >> "$GITHUB_STEP_SUMMARY"
 
+      # Which pages are new or changed since the live site (the previous
+      # deploy) was built: the build's lastmod.json against the live one. This
+      # runs before the deploy job replaces the live site, only reads, and
+      # never fails the build (a problem is a notice). Nothing is sent here;
+      # the indexnow job submits the list after a successful deploy. No
+      # secret is involved: the key is public by design (indexnow.py).
+      - name: Pick the pages to announce to IndexNow
+        continue-on-error: true
+        env:
+          SITE_BASE_URL: ${{ vars.SITE_BASE_URL }}
+        run: |
+          set -euo pipefail
+          uv run python -m wsc_pipeline.indexnow select \
+            --site-dir dist --base-url "${SITE_BASE_URL:-https://nexthomegame.com}" \
+            --kind manifest --file lastmod.json \
+            --out "$RUNNER_TEMP/indexnow-urls.json"
+
+      - name: Keep the IndexNow list for the job after the deploy
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: indexnow-urls
+          path: ${{ runner.temp }}/indexnow-urls.json
+          retention-days: 1
+          if-no-files-found: warn
+
       - name: Upload the built site
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
@@ -165,3 +191,32 @@ jobs:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+  # Tell IndexNow which pages are new or changed, only after the production
+  # deploy succeeded. Never fails the run (a refused or failed ping is a
+  # notice; the sitemap still gets the pages crawled). No secret, no write
+  # token. Not called from pull-request CI. https://www.indexnow.org/documentation
+  indexnow:
+    name: announce new and changed pages to IndexNow
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Fetch the list the build selected
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: indexnow-urls
+          path: ${{ runner.temp }}/indexnow
+
+      - name: Submit to IndexNow
+        run: |
+          set -euo pipefail
+          python3 pipeline/src/wsc_pipeline/indexnow.py submit --list "$RUNNER_TEMP/indexnow/indexnow-urls.json"
