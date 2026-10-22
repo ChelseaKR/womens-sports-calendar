@@ -12,6 +12,10 @@ archived and private.
 
 ### Added
 
+- The home page links the all-leagues calendar (`/ics/all.ics`, #36), which
+  nothing linked to before: a webcal subscribe link and the plain address,
+  with the feed's own "(time TBA)" wording for all-day entries. No new
+  tracking: a click already counts as `calendar_subscribe`.
 - A per-event removal switch: an event id listed in `REMOVED_EVENTS`
   (`pipeline/src/wsc_pipeline/config.py`) is left out of every page,
   calendar feed and data file even while Ticketmaster still lists it, so a
