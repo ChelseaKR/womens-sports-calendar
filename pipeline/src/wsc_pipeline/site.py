@@ -33,7 +33,7 @@ from urllib.parse import quote, urlencode
 
 from . import structured_data
 from .analytics import GA4_DATA_RETENTION, ga4_head_snippet, measurement_id
-from .ics import calendar_name
+from .ics import COMBINED_FEED_PATH, TIME_TBA_NOTE, TIME_TBA_SUFFIX, calendar_name
 from .normalize import display_date
 from .sellers import AFFILIATE_LINK_TEMPLATES, affiliate_links_active, is_affiliate_link
 from .team_shops import shop_links_on, team_shop_url
@@ -579,6 +579,26 @@ def _league_list_text(names: list[str]) -> str:
     return f"{', '.join(names[:-1])} or {names[-1]}"
 
 
+def _all_games_feed_block(base_url: str) -> str:
+    """The home page's link to the all-leagues feed (ics/all.ics): what the
+    file is, and what an all-day, time-TBA entry in it means (the wording is
+    ics.TIME_TBA_SUFFIX and ics.TIME_TBA_NOTE, the feed's own). The link is
+    a plain calendar link, so the analytics click listener already counts it
+    as calendar_subscribe; nothing else is added."""
+    https = f"{base_url}/{COMBINED_FEED_PATH}"
+    return f"""<section class="all-games-feed" aria-labelledby="all-games-heading">
+<h2 id="all-games-heading">One calendar with every listed game</h2>
+<p>This calendar holds every game listed in every league on this site, in one
+place. <a href="{e(_webcal(https))}">Subscribe in your calendar app</a>, or
+copy the address <a href="{e(https)}">{e(https)}</a> into a calendar app that
+asks for one.</p>
+<p>A game with a date and no announced start time is an all-day entry that
+ends &ldquo;{e(TIME_TBA_SUFFIX.strip())}&rdquo;. Its note reads
+&ldquo;{e(TIME_TBA_NOTE)}&rdquo;</p>
+</section>
+"""
+
+
 def render_index(
     *,
     leagues: list[dict[str, Any]],
@@ -614,7 +634,7 @@ Calendar, Apple Calendar or Outlook. Every listed game shows up on its own,
 updated nightly, with a link to buy tickets from the team's seller. No
 account, no ads.</p>
 <p><a href="{SCHEDULE_PATH}">The week ahead in every league, day by day</a></p>
-<h2>Leagues</h2>
+{_all_games_feed_block(base_url)}<h2>Leagues</h2>
 <ul class="league-strip">
 {league_links}
 </ul>
