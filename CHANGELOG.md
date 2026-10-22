@@ -10,6 +10,15 @@ archived and private.
 
 ## [Unreleased]
 
+### Fixed
+
+- The `calendar_subscribe` event now also fires for the "Add to Google
+  Calendar" and Outlook buttons. They are https links to
+  `calendar.google.com` and `outlook.live.com` / `outlook.office.com` whose
+  `.ics` feed sits in the query string, so the old check (a `webcal:` link or
+  a path ending `.ics`) never matched them. Only the Apple Calendar button and
+  the direct feed link were counted.
+
 ### Added
 
 - The home page links the all-leagues calendar (`/ics/all.ics`, #36), which
