@@ -25,7 +25,7 @@ from importlib.metadata import version as package_version
 from pathlib import Path
 from typing import Any
 
-from . import analytics, config, guard, ics, sellers, site, site_data, sitemap
+from . import analytics, config, feeds, guard, ics, llms, sellers, site, site_data, sitemap
 from .coverage import BuildCoverage, compute_league_coverage, render_report
 from .normalize import Game, normalize_event, team_is_participant_as_any, unique_by_event_id
 from .ticketmaster import DiscoveryClient, TicketmasterFetchError
@@ -223,6 +223,12 @@ def build(
     # as a paid link and turn the disclosure on (DECISIONS 0018). The feeds
     # and data/*.json's `ticket_url` carry the unwrapped address either way.
     paid_links = sellers.any_paid_buy_link(games)
+    atom_feeds = feeds.build_feeds(games_by_league, base_url=base_url, fetched=api_key_present)
+    feeds_dir = tmp_dir / feeds.FEEDS_DIR
+    feeds_dir.mkdir()
+    for key, text in atom_feeds.items():
+        (tmp_dir / feeds.feed_path(key)).write_text(text, encoding="utf-8")
+    (tmp_dir / "llms.txt").write_text(llms.render(base_url=base_url, feed_keys=atom_feeds), encoding="utf-8")
     _write_html(
         tmp_dir,
         base_url,
@@ -232,6 +238,7 @@ def build(
         ga4_id,
         fetched_at=fetched_at,
         paid_links=paid_links,
+        feed_keys=frozenset(atom_feeds),
     )
     _write_static(tmp_dir, paid_links=paid_links)
     state = sitemap.next_state(fingerprints, previous_state, fetched_at)
@@ -372,6 +379,7 @@ def _write_html(
     *,
     fetched_at: datetime | None = None,
     paid_links: bool = False,
+    feed_keys: frozenset[str] = frozenset(),
 ) -> None:
     leagues_summary = [
         {
@@ -390,6 +398,7 @@ def _write_html(
             base_url=base_url,
             ga4_id=ga4_id,
             paid_links=paid_links,
+            feed_keys=feed_keys,
         ),
         encoding="utf-8",
     )
@@ -416,7 +425,9 @@ def _write_html(
         league_dir = out_dir / lg.slug
         league_dir.mkdir(exist_ok=True)
         (league_dir / "index.html").write_text(
-            site.render_league(league=league_payload, base_url=base_url, ga4_id=ga4_id, paid_links=paid_links),
+            site.render_league(
+                league=league_payload, base_url=base_url, ga4_id=ga4_id, paid_links=paid_links, feed_keys=feed_keys
+            ),
             encoding="utf-8",
         )
         for team in lg.teams:
@@ -427,7 +438,9 @@ def _write_html(
             team_dir = league_dir / team.slug
             team_dir.mkdir(exist_ok=True)
             (team_dir / "index.html").write_text(
-                site.render_team(team=team_payload, base_url=base_url, ga4_id=ga4_id, paid_links=paid_links),
+                site.render_team(
+                    team=team_payload, base_url=base_url, ga4_id=ga4_id, paid_links=paid_links, feed_keys=feed_keys
+                ),
                 encoding="utf-8",
             )
             for former in team.former_slugs:
