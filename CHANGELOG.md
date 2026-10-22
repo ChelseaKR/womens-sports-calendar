@@ -21,6 +21,11 @@ archived and private.
 
 ### Added
 
+- A build-time switch for the team-page block order, `TEAM_PAGE_NEXT_GAME_FIRST`
+  in `site.py`, off as shipped: on, a team page with a next home game shows
+  that game and its ticket link above the subscribe block. Off, pages are
+  byte-identical to before (a golden test pins it); paid-link labels and the
+  feeds are unaffected either way.
 - The home page links the all-leagues calendar (`/ics/all.ics`, #36), which
   nothing linked to before: a webcal subscribe link and the plain address,
   with the feed's own "(time TBA)" wording for all-day entries. No new

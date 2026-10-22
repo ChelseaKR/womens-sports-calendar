@@ -1104,6 +1104,26 @@ def _team_shop_block(league_slug: str, team_slug: str, team_name: str) -> str:
 """
 
 
+# Team pages are built in one of two block orders. Off (the default, and the
+# order the site has always had): the subscribe block, then the next home
+# game. On: the next home game and its ticket link first, then the subscribe
+# block, for a page that has a next home game; a page without one keeps the
+# subscribe block first, since its "next game" section has no game or ticket
+# link to lead with. A build-time constant, not a runtime or per-visitor
+# choice, so a page is one order or the other (the roadmap's winter PWHL
+# test is done by changing this and redeploying). Nothing else on the page,
+# no link's rel or "Paid link" label, and no feed depends on it.
+TEAM_PAGE_NEXT_GAME_FIRST = False
+
+
+def _has_next_home_game(team: Mapping[str, Any]) -> bool:
+    """True when the team page's next-game section shows a listed home game
+    (the one _next_game_hero labels "Next home game" and links tickets for)."""
+    if not team.get("fetched", True):
+        return False
+    return any(g["event_id"] == team.get("next_home_event_id") for g in team["games"])
+
+
 def render_team(
     *,
     team: dict[str, Any],
@@ -1120,12 +1140,18 @@ def render_team(
     fetched = team.get("fetched", True)
     incomplete_note = _possibly_incomplete_note(team_name) + "\n" if team.get("possibly_incomplete") else ""
     heading = _schedule_heading(team_name, team.get("season"))
+    subscribe = _subscribe_block(
+        ics_https_url=ics_https, subject=f"the {team_name} schedule", cal_name=calendar_name(team_name)
+    )
+    hero = _next_game_hero(team)
+    lead_blocks = (
+        f"{hero}\n{subscribe}" if TEAM_PAGE_NEXT_GAME_FIRST and _has_next_home_game(team) else f"{subscribe}\n{hero}"
+    )
     body = f"""{_breadcrumb([("All leagues", "/"), (league_name, f"/{league_slug}/")], team_name)}
 <h1>{e(heading)}</h1>
 <p class="lede">Every {e(team_name)} ({e(league_name)}) game Ticketmaster
 lists, home and away, with its date, time and venue.</p>
-{_subscribe_block(ics_https_url=ics_https, subject=f"the {team_name} schedule", cal_name=calendar_name(team_name))}
-{_next_game_hero(team)}
+{lead_blocks}
 <h2>Upcoming games</h2>
 {incomplete_note}{_freshness_note(team)}{_games_table(team["games"], buy_link_subject=team_name, fetched=fetched, home_away=True)}
 {_other_apps_block(ics_https_url=ics_https)}{_team_shop_block(league_slug, team_slug, team_name)}{_about_schedule(team["schedule_source_note"])}"""
