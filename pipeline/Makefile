@@ -97,7 +97,7 @@ perf: install install-a11y install-perf build
 	set -euo pipefail; \
 	rm -rf dist/_a11y-fixtures; \
 	uv run python scripts/render_a11y_fixtures.py; \
-	CHROME_PATH="$$(node -e 'import("puppeteer").then((p) => console.log(p.default.executablePath()))')"; \
+	CHROME_PATH="$$(node -e 'import("puppeteer").then(async (p) => console.log(await p.default.executablePath()))')"; \
 	export CHROME_PATH; \
 	python3 -m http.server 8918 --directory dist >/tmp/wsc-perf-server.log 2>&1 & \
 	server_pid=$$!; \
