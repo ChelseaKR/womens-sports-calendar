@@ -80,7 +80,9 @@ def test_workflow_selects_in_build_and_submits_in_a_job_after_deploy():
     assert "needs: deploy" in job
     assert "wsc_pipeline/indexnow.py submit" in job
     assert "secrets." not in job
-    assert "continue-on-error: true" in job
+    # The portfolio workflow policy bans continue-on-error; indexnow.py exits 0 on any problem instead.
+    assert "continue-on-error" not in job
+    assert "continue-on-error" not in build
     assert "contents: read" in job
 
 

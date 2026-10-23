@@ -73,6 +73,8 @@ def _request(method: str, url: str, body: bytes | None, headers: Mapping[str, st
         parts = urlsplit(url)
         if parts.scheme != "https" or not parts.hostname:
             raise IndexNowError(f"only https URLs are requested: {url!r}")
+        # The scheme was checked as https just above; Python 3.12 verifies certificates by default.
+        # nosemgrep: python.lang.security.audit.httpsconnection-detected.httpsconnection-detected
         conn = http.client.HTTPSConnection(parts.hostname, parts.port, timeout=20)
         try:
             target = parts.path or "/"
