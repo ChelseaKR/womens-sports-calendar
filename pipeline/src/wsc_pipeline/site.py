@@ -32,7 +32,7 @@ from html import escape as e
 from typing import Any
 from urllib.parse import quote, urlencode
 
-from . import structured_data
+from . import feeds, structured_data
 from .analytics import GA4_DATA_RETENTION, ga4_head_snippet, measurement_id
 from .ics import COMBINED_FEED_PATH, TIME_TBA_NOTE, TIME_TBA_SUFFIX, calendar_name
 from .normalize import display_date
@@ -115,6 +115,14 @@ LEAGUE_OG_IMAGES: dict[str, tuple[str, str]] = {
 }
 
 
+def _feed_for(feed_keys: frozenset[str], key: str, base_url: str) -> tuple[str, str] | None:
+    """The (title, URL) to advertise for feed `key`, or None when this build
+    wrote no such feed (feeds.py writes a feed only when it has entries)."""
+    if key not in feed_keys:
+        return None
+    return feeds.feed_title(key), f"{base_url}/{feeds.feed_path(key)}"
+
+
 def _base(
     *,
     title: str,
@@ -130,8 +138,10 @@ def _base(
     paid_links: bool = False,
     jsonld: str = "",
     refresh_to: str | None = None,
+    feed: tuple[str, str] | None = None,
 ) -> str:
-    """jsonld is a structured_data.script_block(); it goes last in <head>
+    """feed is (title, absolute URL) of an Atom feed to advertise (feeds.py).
+    jsonld is a structured_data.script_block(); it goes last in <head>
     before the GA4 loader, which must close <head> (tests/test_analytics.py)."""
     image_url = f"{base_url}/{og_image}"
     analytics_head = ga4_head_snippet(ga4_id, base_url=base_url)
@@ -143,6 +153,9 @@ def _base(
     # A noindexed page (the 404) carries no canonical: pointing it at another
     # URL would declare it a duplicate of a page it is not.
     canonical_link = "" if noindex else f'<link rel="canonical" href="{e(canonical_url)}">\n'
+    feed_link = (
+        f'<link rel="alternate" type="application/atom+xml" title="{e(feed[0])}" href="{e(feed[1])}">\n' if feed else ""
+    )
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -151,7 +164,7 @@ def _base(
 <meta name='impact-site-verification' content='672c11dd-230b-463d-b029-e09ce84f1050'>
 <title>{e(title)}</title>
 {robots_meta}<meta name="description" content="{e(description)}">
-{canonical_link}<meta name="theme-color" content="#0b1f3a">
+{canonical_link}{feed_link}<meta name="theme-color" content="#0b1f3a">
 <link rel="preload" href="/fonts/public-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/big-shoulders-display-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="{CSS_PATH}">
@@ -629,6 +642,7 @@ def render_index(
     base_url: str,
     ga4_id: str | None = None,
     paid_links: bool = False,
+    feed_keys: frozenset[str] = frozenset(),
 ) -> str:
     league_rows = []
     for lg in leagues:
@@ -674,6 +688,7 @@ them):</p>
 </section>
 """
     return _base(
+        feed=_feed_for(feed_keys, feeds.ALL_KEY, base_url),
         title=f"{SITE_NAME}: women's sports schedules for Google, Apple and Outlook calendars",
         description=(
             f"Add your {league_names} team's schedule to Google Calendar, Apple Calendar or "
@@ -1043,6 +1058,7 @@ def render_league(
     base_url: str,
     ga4_id: str | None = None,
     paid_links: bool = False,
+    feed_keys: frozenset[str] = frozenset(),
 ) -> str:
     slug = league["league_slug"]
     name = league["league_name"]
@@ -1083,6 +1099,7 @@ just its games.</p>
         *structured_data.sports_events(league["games"], sport=league.get("sport", ""), fetched=fetched),
     ]
     return _base(
+        feed=_feed_for(feed_keys, league["league_slug"], base_url),
         title=f"{heading}: add to your calendar | {SITE_NAME}",
         description=(
             f"{heading}: add every game to Google Calendar, Apple Calendar or Outlook, or just "
@@ -1153,6 +1170,7 @@ def render_team(
     base_url: str,
     ga4_id: str | None = None,
     paid_links: bool = False,
+    feed_keys: frozenset[str] = frozenset(),
 ) -> str:
     league_slug = team["league_slug"]
     team_slug = team["team_slug"]
@@ -1192,6 +1210,7 @@ lists, home and away, with its date, time and venue.</p>
         *structured_data.sports_events(team["games"], sport=team.get("sport", ""), fetched=fetched),
     ]
     return _base(
+        feed=_feed_for(feed_keys, team["league_slug"], base_url),
         title=f"{heading}: add to your calendar | {SITE_NAME}",
         description=_team_description(team, heading),
         canonical_url=page_url,

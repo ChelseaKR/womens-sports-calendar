@@ -59,7 +59,11 @@ def test_a_removed_event_is_on_no_page_feed_or_data_file(tmp_path: Path, monkeyp
     build_fixture_site(tmp_path / "after")
     after = _files(tmp_path / "after")
     assert _mentions(after, "FX-THORNS") == []
-    assert after.keys() == before.keys()  # the team's page and feed are still there, without the game
+    # The team's page and calendar are still there, without the game. Its
+    # Atom feed is gone: the game was the league's only home game with an
+    # exact start, and a feed with no entries is not written.
+    assert before.keys() - after.keys() == {"feeds/nwsl.atom"}
+    assert after.keys() - before.keys() == set()
     # Every other game is untouched.
     assert len(_mentions(after, "FX-H2H")) == len(_mentions(before, "FX-H2H"))
 

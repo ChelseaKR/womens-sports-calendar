@@ -34,6 +34,11 @@ archived and private.
   changes (feeds, data files and the sitemap are untouched). A value that is
   not a plain address stops the build. `REMOVED_EVENTS` is the switch a
   request is then honoured with.
+- Atom 1.0 feeds of upcoming home games under `/feeds/` (one per league with a
+  home game, plus all leagues), advertised with `<link rel="alternate">` on the
+  home, league and team pages, and a `/llms.txt` describing the site, its data
+  source and its update cadence. Entries are dated by the game's own start
+  time, never the build's fetch time, and carry no buy links.
 - The home page links the all-leagues calendar (`/ics/all.ics`, #36), which
   nothing linked to before: a webcal subscribe link and the plain address,
   with the feed's own "(time TBA)" wording for all-day entries. No new
