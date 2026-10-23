@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import shutil
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -214,9 +215,12 @@ def build_fixture_site(
     *,
     previous_state: dict[str, sitemap.PageState] | None = None,
     ga4_id: str | None = None,
+    now: datetime | None = None,
 ) -> None:
     """Builds the fixture site into out_dir through build.build(), with the
-    Discovery client swapped for FakeDiscoveryClient for the duration."""
+    Discovery client swapped for FakeDiscoveryClient for the duration. now pins
+    the build's fetch time; a test that compares two builds passes the same one,
+    so a second ticking over between them cannot fail it."""
     real_client = build_module.DiscoveryClient
     build_module.DiscoveryClient = FakeDiscoveryClient
     try:
@@ -227,6 +231,7 @@ def build_fixture_site(
             affiliate_id=None,
             ga4_id=ga4_id,
             previous_state=previous_state,
+            now=now,
         )
     finally:
         build_module.DiscoveryClient = real_client
