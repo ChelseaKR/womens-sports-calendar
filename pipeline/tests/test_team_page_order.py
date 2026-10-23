@@ -142,6 +142,8 @@ def test_the_constant_ships_off():
 @pytest.mark.parametrize("scenario", SCENARIOS)
 def test_off_is_byte_identical_to_what_main_rendered(scenario: str, monkeypatch: pytest.MonkeyPatch):
     golden = (GOLDEN / f"team_order_{scenario}.html").read_bytes()
+    # The goldens predate the footer's removal contact; this test pins the block order only.
+    monkeypatch.setattr(site, "REMOVAL_CONTACT_EMAIL", None)
     assert page(scenario, monkeypatch).encode() == golden
 
 

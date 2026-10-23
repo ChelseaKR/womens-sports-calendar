@@ -15,6 +15,7 @@ from collections.abc import Callable
 import httpx
 import pytest
 
+from wsc_pipeline import site
 from wsc_pipeline.config import LEAGUES
 from wsc_pipeline.ics import team_calendar
 from wsc_pipeline.normalize import Game, normalize_event, safe_ticket_url
@@ -108,7 +109,8 @@ def test_a_javascript_ticket_url_never_becomes_a_link() -> None:
         assert "javascript:" not in html.lower(), f"{name}: a javascript: URL reached the page"
         hrefs = re.findall(r'href="([^"]*)"', html)
         assert hrefs, f"{name}: no links found; the check examined nothing"
-        unsafe = [h for h in hrefs if not SAFE_HREF.match(h)]
+        # The one mailto link allowed is the footer's removal contact, and only that address.
+        unsafe = [h for h in hrefs if not SAFE_HREF.match(h) and h != f"mailto:{site.REMOVAL_CONTACT_EMAIL}"]
         assert not unsafe, f"{name}: links with an unexpected scheme: {unsafe}"
 
 
