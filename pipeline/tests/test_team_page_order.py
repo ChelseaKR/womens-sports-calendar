@@ -16,6 +16,7 @@ Pages are read with html.parser, never a regex over markup.
 from __future__ import annotations
 
 import re
+from datetime import UTC, datetime
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -199,9 +200,12 @@ def _without_dtstamps(raw: bytes) -> bytes:
 
 def test_the_constant_does_not_reach_the_feeds_or_data(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     off_dir, on_dir = tmp_path / "off", tmp_path / "on"
-    build_fixture_site(off_dir)
+    # One fixed fetch time for both builds: with the wall clock, a second ticking
+    # over between them changed fetched_at in the data files and failed this test.
+    built_at = datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
+    build_fixture_site(off_dir, now=built_at)
     monkeypatch.setattr(site, "TEAM_PAGE_NEXT_GAME_FIRST", True)
-    build_fixture_site(on_dir)
+    build_fixture_site(on_dir, now=built_at)
     for sub in ("ics", "data"):
         off_files = sorted(p.relative_to(off_dir) for p in (off_dir / sub).rglob("*") if p.is_file())
         on_files = sorted(p.relative_to(on_dir) for p in (on_dir / sub).rglob("*") if p.is_file())
