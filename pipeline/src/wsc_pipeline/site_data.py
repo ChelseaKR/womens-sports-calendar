@@ -222,6 +222,13 @@ SCHEDULE_DAYS = 7
 SCHEDULE_DAY_ZONE = ZoneInfo("America/New_York")
 
 
+def schedule_window(fetched_at: datetime) -> tuple[date, date]:
+    """The first and last day (inclusive) the /schedule/ page covers for a
+    build fetched at `fetched_at`; a team page's "this week" uses the same."""
+    first = fetched_at.astimezone(SCHEDULE_DAY_ZONE).date()
+    return first, first + timedelta(days=SCHEDULE_DAYS - 1)
+
+
 def schedule_data(
     leagues: list[League],
     games_by_league: dict[str, list[Game]],
@@ -243,8 +250,7 @@ def schedule_data(
     """
     if not fetched or fetched_at is None:
         return {"fetched": False, "first_day": None, "last_day": None, "days": [], "possibly_incomplete": []}
-    first = fetched_at.astimezone(SCHEDULE_DAY_ZONE).date()
-    last = first + timedelta(days=SCHEDULE_DAYS - 1)
+    first, last = schedule_window(fetched_at)
     by_day: dict[date, list[tuple[Game, League]]] = {}
     for lg in leagues:
         for game in unique_by_event_id(games_by_league[lg.slug]):

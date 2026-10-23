@@ -39,6 +39,14 @@ archived and private.
   "Ohio State women's basketball" in titles and descriptions only; headings,
   addresses, feeds and data files are unchanged. `validate_seo` now fails a
   page whose title or description runs over.
+- Internal links. The home page now links every team's page, grouped by
+  league, so a team page is one click from the home page instead of two. Each
+  team page gains a "This week" strip (this team's listed games in the window
+  the week-ahead page covers, or a plain sentence that none is listed from
+  one date through another, and a link to `/schedule/`; a build that fetched
+  nothing makes no claim, only links) and a list of the league's other teams.
+  League pages link the week-ahead page. No address, heading or data file
+  changes.
 
 ### Fixed
 
