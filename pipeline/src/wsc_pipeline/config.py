@@ -78,10 +78,19 @@ class Team:
     # old path (so no subscriber gets a 404), and the old page is a small
     # notice that points to the new one. Never listed in the sitemap.
     former_slugs: tuple[str, ...] = ()
+    # What a page <title> and meta description call the team when `shown_name`
+    # is too long for them ("Ohio State women's basketball", not the
+    # Ticketmaster keyword "Ohio State Buckeyes Womens Basketball"). Not part
+    # of any page's body, feed or data file. None: `shown_name`.
+    title_name: str | None = None
 
     @property
     def shown_name(self) -> str:
         return self.display_name or self.name
+
+    @property
+    def search_title_name(self) -> str:
+        return self.title_name or self.shown_name
 
     @property
     def all_names(self) -> tuple[str, ...]:
@@ -144,6 +153,28 @@ KEYWORD_COLLISIONS: dict[str, tuple[str, ...]] = {
 
 def _teams(*names: str) -> tuple[Team, ...]:
     return tuple(Team(slug=_slugify(n), name=n, not_this_team=KEYWORD_COLLISIONS.get(n, ())) for n in names)
+
+
+def _titled_teams(titles: dict[str, str]) -> tuple[Team, ...]:
+    """Teams whose long keyword name gets a shorter name for page titles and
+    meta descriptions: {keyword name: name for titles}. Nothing else about the
+    team changes (slug, feed, search keyword, page name)."""
+    return tuple(
+        Team(slug=_slugify(n), name=n, not_this_team=KEYWORD_COLLISIONS.get(n, ()), title_name=short)
+        for n, short in titles.items()
+    )
+
+
+def title_name_for(league_slug: str, shown_name: str) -> str:
+    """The name page titles and descriptions use for a team: its
+    `title_name`, else the name as shown. A team not in the registry (a
+    test's, or one removed) keeps the name it was given."""
+    for lg in LEAGUES:
+        if lg.slug == league_slug:
+            for team in lg.teams:
+                if team.shown_name == shown_name:
+                    return team.search_title_name
+    return shown_name
 
 
 def _slugify(name: str) -> str:
@@ -270,25 +301,27 @@ LEAGUES: tuple[League, ...] = (
         slug="ncaaw-big-ten",
         name="NCAA Women's Basketball (Big Ten)",
         country_codes=("US",),
-        teams=_teams(
-            "Illinois Fighting Illini Womens Basketball",
-            "Indiana Hoosiers Womens Basketball",
-            "Iowa Hawkeyes Womens Basketball",
-            "Maryland Terrapins Womens Basketball",
-            "Michigan Wolverines Womens Basketball",
-            "Michigan State Spartans Womens Basketball",
-            "Minnesota Golden Gophers Womens Basketball",
-            "Nebraska Cornhuskers Womens Basketball",
-            "Northwestern Wildcats Womens Basketball",
-            "Ohio State Buckeyes Womens Basketball",
-            "Oregon Ducks Womens Basketball",
-            "Penn State Nittany Lions Womens Basketball",
-            "Purdue Boilermakers Womens Basketball",
-            "Rutgers Scarlet Knights Womens Basketball",
-            "UCLA Bruins Womens Basketball",
-            "USC Trojans Womens Basketball",
-            "Washington Huskies Womens Basketball",
-            "Wisconsin Badgers Womens Basketball",
+        teams=_titled_teams(
+            {
+                "Illinois Fighting Illini Womens Basketball": "Illinois women's basketball",
+                "Indiana Hoosiers Womens Basketball": "Indiana women's basketball",
+                "Iowa Hawkeyes Womens Basketball": "Iowa women's basketball",
+                "Maryland Terrapins Womens Basketball": "Maryland women's basketball",
+                "Michigan Wolverines Womens Basketball": "Michigan women's basketball",
+                "Michigan State Spartans Womens Basketball": "Michigan State women's basketball",
+                "Minnesota Golden Gophers Womens Basketball": "Minnesota women's basketball",
+                "Nebraska Cornhuskers Womens Basketball": "Nebraska women's basketball",
+                "Northwestern Wildcats Womens Basketball": "Northwestern women's basketball",
+                "Ohio State Buckeyes Womens Basketball": "Ohio State women's basketball",
+                "Oregon Ducks Womens Basketball": "Oregon women's basketball",
+                "Penn State Nittany Lions Womens Basketball": "Penn State women's basketball",
+                "Purdue Boilermakers Womens Basketball": "Purdue women's basketball",
+                "Rutgers Scarlet Knights Womens Basketball": "Rutgers women's basketball",
+                "UCLA Bruins Womens Basketball": "UCLA women's basketball",
+                "USC Trojans Womens Basketball": "USC women's basketball",
+                "Washington Huskies Womens Basketball": "Washington women's basketball",
+                "Wisconsin Badgers Womens Basketball": "Wisconsin women's basketball",
+            }
         ),
         schedule_source_used=False,
         schedule_source_note=(

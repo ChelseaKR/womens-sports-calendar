@@ -34,6 +34,7 @@ from urllib.parse import quote, urlencode
 
 from . import feeds, structured_data
 from .analytics import GA4_DATA_RETENTION, ga4_head_snippet, measurement_id
+from .config import title_name_for
 from .ics import COMBINED_FEED_PATH, TIME_TBA_NOTE, TIME_TBA_SUFFIX, calendar_name
 from .normalize import display_date
 from .sellers import AFFILIATE_LINK_TEMPLATES, affiliate_links_active, is_affiliate_link
@@ -590,6 +591,37 @@ def _schedule_heading(subject: str, season: str | None) -> str:
     return f"{subject} {season} schedule" if season else f"{subject} schedule"
 
 
+# What a results page shows of a title and a description before cutting them
+# off. The build fails (validate_seo) on a page that runs over, so a long name
+# is shortened by the tiers below, never cut mid-word by a search engine.
+TITLE_MAX = 60
+DESCRIPTION_MAX = 155
+
+
+def _fit(candidates: list[str], limit: int) -> str:
+    """The first candidate (longest, most informative first) that fits in
+    `limit` characters; the last one when none does, so a name too long for
+    even the shortest form is caught by validate_seo, not silently cut."""
+    return next((c for c in candidates if len(c) <= limit), candidates[-1])
+
+
+def _team_title(name: str, season: str | None, *, listed: bool, home_listed: bool) -> str:
+    """ "Las Vegas Aces schedule and tickets: home games 2026": the words a
+    fan types. Each claim is made only when the page backs it: "tickets" and
+    the season when games are listed (every game links to its ticket seller;
+    the site shows no prices), "home games" when a home game is listed. A
+    page with nothing listed is just "<team> schedule"."""
+    if not listed:
+        return _fit([f"{name} schedule"], TITLE_MAX)
+    base = f"{name} schedule and tickets"
+    forms = [base, f"{name} schedule"]
+    if home_listed:
+        forms.insert(0, f"{base}: home games")
+    if season:
+        forms.insert(0, f"{forms[0]} {season}")
+    return _fit(forms, TITLE_MAX)
+
+
 def _about_schedule(note: str) -> str:
     """The page's schedule-source note, after the games: why the league's
     own schedule is not used and where these listings come from."""
@@ -689,10 +721,20 @@ them):</p>
 """
     return _base(
         feed=_feed_for(feed_keys, feeds.ALL_KEY, base_url),
-        title=f"{SITE_NAME}: women's sports schedules for Google, Apple and Outlook calendars",
-        description=(
-            f"Add your {league_names} team's schedule to Google Calendar, Apple Calendar or "
-            "Outlook. Subscribe once and every game updates nightly. No account."
+        title=_fit(
+            [
+                f"{SITE_NAME}: women's sports schedules for your calendar",
+                f"{SITE_NAME}: women's sports schedules",
+            ],
+            TITLE_MAX,
+        ),
+        description=_fit(
+            [
+                f"Add your {league_names} team's schedule to Google, Apple or Outlook calendar. "
+                "Updated nightly. No account.",
+                "Add your team's schedule to Google, Apple or Outlook calendar. Updated nightly. No account.",
+            ],
+            DESCRIPTION_MAX,
         ),
         canonical_url=f"{base_url}/",
         base_url=base_url,
@@ -1100,10 +1142,16 @@ just its games.</p>
     ]
     return _base(
         feed=_feed_for(feed_keys, league["league_slug"], base_url),
-        title=f"{heading}: add to your calendar | {SITE_NAME}",
-        description=(
-            f"{heading}: add every game to Google Calendar, Apple Calendar or Outlook, or just "
-            "your team's, with dates, times and venues, updated nightly."
+        title=_fit([f"{heading}: add to your calendar | {SITE_NAME}", f"{heading} | {SITE_NAME}", heading], TITLE_MAX),
+        description=_fit(
+            [
+                f"{heading}: add every game to Google Calendar, Apple Calendar or Outlook, or just "
+                "your team's, with dates, times and venues, updated nightly.",
+                f"{heading}: add every game, or just your team's, to your calendar, with dates, "
+                "times, venues and ticket links. Updated nightly.",
+                f"{heading}: add every game to your calendar, updated nightly.",
+            ],
+            DESCRIPTION_MAX,
         ),
         canonical_url=page_url,
         base_url=base_url,
@@ -1116,17 +1164,60 @@ just its games.</p>
     )
 
 
-def _team_description(team: Mapping[str, Any], heading: str) -> str:
-    """The meta description: the schedule, the three calendar apps, and the
-    next home game when one is listed with a real date."""
-    text = (
-        f"{heading} ({team['league_name']}): add every game to Google Calendar, Apple Calendar "
-        "or Outlook, updated nightly."
-    )
+def _opponent_label(league_slug: str, opponent: str) -> str:
+    """The away team as a meta description names it: a Big Ten opponent by its
+    school ("Rutgers"), or a school outside the registry by its Ticketmaster name
+    without the "Womens Basketball" suffix, not the full keyword ("Rutgers
+    Scarlet Knights Womens Basketball")."""
+    name = title_name_for(league_slug, opponent)
+    for suffix in (" women's basketball", " Womens Basketball"):
+        if name.endswith(suffix):
+            return name[: -len(suffix)]
+    return name
+
+
+def _team_description(team: Mapping[str, Any]) -> str:
+    """The meta description, at most DESCRIPTION_MAX characters: the next home
+    game with its real date when one is listed, and the words a fan types
+    (schedule, ticket links). With no home game listed it says nothing about
+    one."""
+    name = title_name_for(team["league_slug"], team["team_name"])
     home = next((g for g in team["games"] if g["event_id"] == team.get("next_home_event_id")), None)
     if home is not None and not home.get("date_tbd") and home.get("away_team"):
-        text += f" Next home game: {home['start_display']} vs {home['away_team']}."
-    return text
+        when = f"{home['start_display']} vs {_opponent_label(team['league_slug'], home['away_team'])}"
+        return _fit(
+            [
+                f"Next {name} home game: {when}. Add every game to your calendar, with ticket links, updated nightly.",
+                f"Next home game: {when}. Add every {name} game to your calendar, with ticket links, updated nightly.",
+                f"Next home game: {when}. Add the {name} schedule to your calendar. Updated nightly.",
+                f"Next {name} home game: {when}.",
+                f"Next {name} home game: {home['start_display']}.",
+            ],
+            DESCRIPTION_MAX,
+        )
+    if not team["games"]:
+        if team.get("fetched", True):
+            return _fit(
+                [
+                    f"{name} schedule. No games are listed right now; add it to your calendar and "
+                    "games appear as they are listed, updated nightly.",
+                    f"{name} schedule. No games are listed right now.",
+                ],
+                DESCRIPTION_MAX,
+            )
+        return _fit(
+            [f"{name} schedule. Add it to your calendar, updated nightly.", f"{name} schedule."], DESCRIPTION_MAX
+        )
+    return _fit(
+        [
+            f"{name} schedule: every home and away game with dates, venues and ticket links. "
+            "Add it to Google, Apple or Outlook calendar, updated nightly.",
+            f"{name} schedule with dates, venues and ticket links. Add it to your calendar, updated nightly.",
+            f"{name} schedule and ticket links. Add it to your calendar.",
+            f"{name} schedule.",
+        ],
+        DESCRIPTION_MAX,
+    )
 
 
 def _team_shop_block(league_slug: str, team_slug: str, team_name: str) -> str:
@@ -1211,8 +1302,13 @@ lists, home and away, with its date, time and venue.</p>
     ]
     return _base(
         feed=_feed_for(feed_keys, team["league_slug"], base_url),
-        title=f"{heading}: add to your calendar | {SITE_NAME}",
-        description=_team_description(team, heading),
+        title=_team_title(
+            title_name_for(league_slug, team_name),
+            team.get("season"),
+            listed=bool(team["games"]),
+            home_listed=bool(team.get("fetched", True) and team.get("next_home_event_id")),
+        ),
+        description=_team_description(team),
         canonical_url=page_url,
         base_url=base_url,
         body=body,

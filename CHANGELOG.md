@@ -19,6 +19,19 @@ archived and private.
   failed or refused announcement logs a notice and never fails the deploy. No
   secret is involved; the key file served at the site root is public by design.
 
+### Changed
+
+- Page titles and meta descriptions now use the words a fan types and fit
+  what a results page shows (at most 60 and 155 characters). A team page's
+  title reads "<Team> schedule and tickets: home games <season>", and its
+  description opens with the next home game's date and opponent when one is
+  listed. Each claim is made only where the page backs it: "home games" only
+  when a home game is listed, the season only when listed games give one, and
+  a page with nothing listed is just "<Team> schedule". Big Ten teams are
+  "Ohio State women's basketball" in titles and descriptions only; headings,
+  addresses, feeds and data files are unchanged. `validate_seo` now fails a
+  page whose title or description runs over.
+
 ### Fixed
 
 - The `calendar_subscribe` event now also fires for the "Add to Google
