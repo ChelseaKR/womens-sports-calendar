@@ -21,7 +21,10 @@ date), and its pages carry no autodiscovery link. No buy link is in a feed.
 
 from __future__ import annotations
 
-import xml.etree.ElementTree as ET
+# The standard library's ElementTree only writes the feed here (Element,
+# SubElement, tostring); nothing is parsed, so the XXE and entity-expansion
+# risk behind the rule cannot arise. defusedxml has no way to build elements.
+import xml.etree.ElementTree as ET  # nosemgrep: python.lang.security.use-defused-xml.use-defused-xml
 from collections.abc import Mapping
 from datetime import UTC
 from typing import Any
