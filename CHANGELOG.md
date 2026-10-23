@@ -10,6 +10,15 @@ archived and private.
 
 ## [Unreleased]
 
+### Added
+
+- After each production deploy, the pages that are new or changed since the
+  previous deploy are announced to IndexNow (https://www.indexnow.org/documentation)
+  so search engines can crawl them sooner. The list comes from comparing the build's `lastmod.json` with the live one. Only https URLs on this site's own
+  host, only built pages without a robots noindex, at most 10,000 a request. A
+  failed or refused announcement logs a notice and never fails the deploy. No
+  secret is involved; the key file served at the site root is public by design.
+
 ### Fixed
 
 - The `calendar_subscribe` event now also fires for the "Add to Google
