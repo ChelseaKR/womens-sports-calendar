@@ -26,6 +26,11 @@ build before deploy. Exits non-zero on the first site that would publish:
 6. On a team page, exactly one SportsTeam, named as the page's team; on
    league and team pages, a BreadcrumbList whose items are real pages.
 
+7. A page that is noindex because it lists no game (a league or team page
+   whose data says it was fetched and has no games) is neither in the
+   sitemap nor counted as indexable. Any other noindex page, or one whose
+   data lists a game, fails: a page never leaves the index by accident.
+
 Usage: python -m wsc_pipeline.validate_seo <dist-dir>
 """
 
@@ -201,8 +206,19 @@ def _indexable_pages(dist: Path) -> set[str]:
             if not _parse_page(page).noindex:
                 raise SeoError(f"{page}: the notice page at a former slug must be noindex")
             continue
+        if _parse_page(page).noindex and _lists_no_game(dist, site_path):
+            continue
         out.add(site_path)
     return out
+
+
+def _lists_no_game(dist: Path, site_path: str) -> bool:
+    """True for a league or team page whose data says Ticketmaster was
+    checked and listed nothing: the only kind of page allowed to be noindex
+    and outside the sitemap. Anything else that is noindex stays in the
+    indexable set, so _check_page then rejects it."""
+    data = _schedule_data(dist, site_path)
+    return data is not None and bool(data.get("fetched", True)) and not data["games"]
 
 
 def _game_key(home: object, away: object, start: str) -> tuple[str, str, datetime]:

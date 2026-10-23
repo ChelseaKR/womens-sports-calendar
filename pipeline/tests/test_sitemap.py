@@ -238,7 +238,7 @@ def _corrupt(src: Path, dst: Path, rel: str, old: str, new: str) -> Path:
     [
         ("robots.txt", "Allow: /", "Disallow: /", "disallows"),
         ("robots.txt", "Sitemap:", "Sitemaps:", "does not name"),
-        ("sitemap.xml", f"<url><loc>{BASE_URL}/ausl/</loc></url>\n", "", "disagree"),
+        ("sitemap.xml", f"<url><loc>{BASE_URL}/pwhl/toronto-sceptres/</loc></url>\n", "", "disagree"),
         (
             "sitemap.xml",
             f"<lastmod>{PREVIOUS_CHANGED_AT}</lastmod>",
@@ -247,8 +247,8 @@ def _corrupt(src: Path, dst: Path, rel: str, old: str, new: str) -> Path:
         ),
         (
             "sitemap.xml",
-            f"<loc>{BASE_URL}/ausl/</loc>",
-            f"<loc>{BASE_URL}/ausl/</loc><lastmod>2026-09-01</lastmod>",
+            f"<loc>{BASE_URL}/wnba/seattle-storm/</loc>",
+            f"<loc>{BASE_URL}/wnba/seattle-storm/</loc><lastmod>2026-09-01</lastmod>",
             "disagrees",
         ),
         ("sitemap.xml", "<lastmod>2026-09-17</lastmod>", "<lastmod>17 Sep 2026</lastmod>", "not a W3C date"),
