@@ -400,6 +400,8 @@ def _write_html(
             # None, not 0, when nothing was fetched: "0 upcoming games" would
             # state a fact this build never checked.
             "games_count": len(unique_by_event_id(games_by_league[lg.slug])) if api_key_present else None,
+            # Every team's address and name, for the home page's team links.
+            "teams": [{"slug": t.slug, "name": t.shown_name} for t in lg.teams],
         }
         for lg in config.LEAGUES
     ]

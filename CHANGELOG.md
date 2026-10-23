@@ -19,6 +19,17 @@ archived and private.
   failed or refused announcement logs a notice and never fails the deploy. No
   secret is involved; the key file served at the site root is public by design.
 
+### Changed
+
+- Internal links. The home page now links every team's page, grouped by
+  league, so a team page is one click from the home page instead of two. Each
+  team page gains a "This week" strip (this team's listed games in the window
+  the week-ahead page covers, or a plain sentence that none is listed from
+  one date through another, and a link to `/schedule/`; a build that fetched
+  nothing makes no claim, only links) and a list of the league's other teams.
+  League pages link the week-ahead page. No address, heading or data file
+  changes.
+
 ### Fixed
 
 - The `calendar_subscribe` event now also fires for the "Add to Google

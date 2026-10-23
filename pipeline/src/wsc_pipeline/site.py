@@ -32,11 +32,12 @@ from html import escape as e
 from typing import Any
 from urllib.parse import quote, urlencode
 
-from . import feeds, structured_data
+from . import config, feeds, structured_data
 from .analytics import GA4_DATA_RETENTION, ga4_head_snippet, measurement_id
 from .ics import COMBINED_FEED_PATH, TIME_TBA_NOTE, TIME_TBA_SUFFIX, calendar_name
 from .normalize import display_date
 from .sellers import AFFILIATE_LINK_TEMPLATES, affiliate_links_active, is_affiliate_link
+from .site_data import schedule_window
 from .team_shops import shop_links_on, team_shop_url
 
 CSS_PATH = "/style.css"
@@ -635,6 +636,28 @@ ends &ldquo;{e(TIME_TBA_SUFFIX.strip())}&rdquo;. Its note reads
 """
 
 
+def _teams_by_league_block(leagues: list[dict[str, Any]]) -> str:
+    """The home page's links to every team's page, grouped by league, so a
+    team page is one click from the home page. Empty when the summary names
+    no teams (a caller that does not pass them)."""
+    groups = []
+    for lg in leagues:
+        teams = lg.get("teams") or []
+        if not teams:
+            continue
+        items = "\n".join(f'<li><a href="/{e(lg["slug"])}/{e(t["slug"])}/">{e(t["name"])}</a></li>' for t in teams)
+        groups.append(
+            f'<h3 id="teams-{e(lg["slug"])}">{e(lg["name"])} teams</h3>\n<ul class="team-roster" '
+            f'aria-labelledby="teams-{e(lg["slug"])}">\n{items}\n</ul>'
+        )
+    if not groups:
+        return ""
+    return (
+        '<section class="all-teams" aria-labelledby="all-teams-heading">\n'
+        '<h2 id="all-teams-heading">Every team\'s schedule</h2>\n' + "\n".join(groups) + "\n</section>\n"
+    )
+
+
 def render_index(
     *,
     leagues: list[dict[str, Any]],
@@ -675,7 +698,7 @@ account, no ads.</p>
 <ul class="league-strip">
 {league_links}
 </ul>
-<section class="not-included-panel" aria-labelledby="not-included-heading">
+{_teams_by_league_block(leagues)}<section class="not-included-panel" aria-labelledby="not-included-heading">
 <h2 id="not-included-heading">Leagues examined and not included</h2>
 <p>Per this site's own licensing research, these leagues' own schedules
 were not used because their published terms forbid it or could not be
@@ -1092,6 +1115,7 @@ just its games.</p>
 </ul>
 <h2>Upcoming games</h2>
 {incomplete_note}{_freshness_note(league)}{_games_table(league["games"], buy_link_subject=name, fetched=fetched)}
+<p class="league-week-link"><a href="{SCHEDULE_PATH}">The week ahead in every league, day by day</a></p>
 {_other_apps_block(ics_https_url=ics_https)}{_about_schedule(league["schedule_source_note"])}"""
     og_image, og_image_alt = LEAGUE_OG_IMAGES.get(slug, (DEFAULT_OG_IMAGE, DEFAULT_OG_IMAGE_ALT))
     nodes = [
@@ -1127,6 +1151,66 @@ def _team_description(team: Mapping[str, Any], heading: str) -> str:
     if home is not None and not home.get("date_tbd") and home.get("away_team"):
         text += f" Next home game: {home['start_display']} vs {home['away_team']}."
     return text
+
+
+def _this_week_block(team: Mapping[str, Any]) -> str:
+    """A team page's "this week" strip: this team's listed games in the
+    window the /schedule/ page covers, and a link to that page. A build that
+    fetched nothing says nothing about games, only links; a fetched build
+    with no game in the window says exactly that, with the dates."""
+    link = f'<a href="{SCHEDULE_PATH}">The week ahead in every league, day by day</a>'
+    fetched_at = team.get("fetched_at")
+    if not team.get("fetched", True) or not fetched_at:
+        return f"""<section class="this-week" aria-labelledby="this-week-heading">
+<h2 id="this-week-heading">This week</h2>
+<p>{link}</p>
+</section>
+"""
+    first, last = schedule_window(datetime.fromisoformat(fetched_at))
+    in_window = [
+        g
+        for g in team["games"]
+        if not g.get("date_tbd")
+        and g.get("start_local_date")
+        and first <= date.fromisoformat(g["start_local_date"]) <= last
+    ]
+    span = f"{_long_date(first.isoformat())} through {_long_date(last.isoformat())}"
+    if in_window:
+        rows = "\n".join(
+            f'<li><span class="game-date">{_when_html(g)}</span> {e(_matchup_text(g))}{_home_away_tag(g)}</li>'
+            for g in in_window
+        )
+        body = f"<p>{e(team['team_name'])} games listed from {e(span)}:</p>\n<ul>\n{rows}\n</ul>\n<p>{link}</p>"
+    else:
+        body = f"<p>No {e(team['team_name'])} game is listed from {e(span)}.</p>\n<p>{link}</p>"
+    return f"""<section class="this-week" aria-labelledby="this-week-heading">
+<h2 id="this-week-heading">This week</h2>
+{body}
+</section>
+"""
+
+
+def _sibling_teams_block(league_slug: str, team_slug: str, league_name: str) -> str:
+    """Links to the other teams in the team's league, from the team registry
+    (config.LEAGUES), so each team page leads to its neighbors. Empty for a
+    league that is not in the registry or has no other team."""
+    league = next((lg for lg in config.LEAGUES if lg.slug == league_slug), None)
+    if league is None:
+        return ""
+    items = "\n".join(
+        f'<li><a href="/{e(league_slug)}/{e(t.slug)}/">{e(t.shown_name)}</a></li>'
+        for t in league.teams
+        if t.slug != team_slug
+    )
+    if not items:
+        return ""
+    return f"""<section class="more-teams" aria-labelledby="more-teams-heading">
+<h2 id="more-teams-heading">More {e(league_name)} team schedules</h2>
+<ul class="team-roster">
+{items}
+</ul>
+</section>
+"""
 
 
 def _team_shop_block(league_slug: str, team_slug: str, team_name: str) -> str:
@@ -1195,7 +1279,7 @@ lists, home and away, with its date, time and venue.</p>
 {lead_blocks}
 <h2>Upcoming games</h2>
 {incomplete_note}{_freshness_note(team)}{_games_table(team["games"], buy_link_subject=team_name, fetched=fetched, home_away=True)}
-{_other_apps_block(ics_https_url=ics_https)}{_team_shop_block(league_slug, team_slug, team_name)}{_about_schedule(team["schedule_source_note"])}"""
+{_this_week_block(team)}{_other_apps_block(ics_https_url=ics_https)}{_team_shop_block(league_slug, team_slug, team_name)}{_sibling_teams_block(league_slug, team_slug, league_name)}{_about_schedule(team["schedule_source_note"])}"""
     og_image, og_image_alt = LEAGUE_OG_IMAGES.get(league_slug, (DEFAULT_OG_IMAGE, DEFAULT_OG_IMAGE_ALT))
     nodes = [
         structured_data.breadcrumbs(
@@ -1492,6 +1576,12 @@ nav[aria-label="breadcrumb"] {
 .team-roster a:visited { color: var(--ink); }
 .team-roster a:hover { color: var(--link); text-decoration: underline; }
 @media (min-width: 30rem) { .team-roster { columns: 2; } }
+
+/* ---- team page: this week, and the other teams in the league; home page team lists ---- */
+.this-week ul { list-style: none; margin: 0 0 0.75rem; padding: 0; }
+.this-week li { padding: 0.4rem 0; border-bottom: 1px solid var(--border); }
+.more-teams, .all-teams { margin-top: 2rem; }
+.all-teams h3 { margin: 1.5rem 0 0.5rem; }
 
 /* ---- subscribe box: the .ics mechanic, styled as the actual product ---- */
 .subscribe {
