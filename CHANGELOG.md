@@ -19,6 +19,17 @@ archived and private.
   failed or refused announcement logs a notice and never fails the deploy. No
   secret is involved; the key file served at the site root is public by design.
 
+### Changed
+
+- A league or team page whose build checked Ticketmaster and found no listed
+  game is now `noindex` (and has no canonical link) and is left out of
+  `sitemap.xml`, so about a quarter of the site no longer asks search engines
+  to index near-identical empty pages. It still says plainly that no game is
+  listed, `lastmod.json` still tracks it, and it returns to the sitemap, dated
+  that day, on the first build that lists a game. A build that fetched nothing
+  marks no page empty. `validate_seo` now fails if an empty page is indexable
+  or a page with games is `noindex`.
+
 ### Fixed
 
 - The `calendar_subscribe` event now also fires for the "Add to Google
