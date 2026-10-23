@@ -254,7 +254,8 @@ def build(
     )
     _write_static(tmp_dir, paid_links=paid_links)
     state = sitemap.next_state(fingerprints, previous_state, fetched_at)
-    _write_sitemap_and_robots(tmp_dir, base_url, state)
+    unlisted = _pages_with_no_listed_games(games_by_league, api_key_present, truncated)
+    _write_sitemap_and_robots(tmp_dir, base_url, state, unlisted=unlisted)
     _write_version(tmp_dir, fetched_at)
 
     (tmp_dir / "COVERAGE.txt").write_text(render_report(coverage) + "\n", encoding="utf-8")
@@ -531,9 +532,47 @@ def _write_static(out_dir: Path, *, paid_links: bool = False) -> None:
         shutil.copyfile(src, fonts_dir / name)
 
 
-def _write_sitemap_and_robots(out_dir: Path, base_url: str, state: dict[str, sitemap.PageState]) -> None:
-    """sitemap.xml (every indexable page; the 404 is not one), robots.txt,
-    and lastmod.json, the state the next build compares against."""
+def _pages_with_no_listed_games(
+    games_by_league: dict[str, list[Game]],
+    api_key_present: bool,
+    truncated: dict[str, set[str]],
+) -> frozenset[str]:
+    """Site paths of the league and team pages whose build checked
+    Ticketmaster and found no game to list. Each is rendered noindex
+    (site.render_league, site.render_team) and kept out of the sitemap, by
+    the same rule (site_data.nothing_listed); it returns on the first build
+    that lists a game. A build that fetched nothing has none: not checked is
+    not empty."""
+    out: set[str] = set()
+    for lg in config.LEAGUES:
+        games = games_by_league[lg.slug]
+        incomplete = truncated.get(lg.slug, set())
+        if site_data.nothing_listed(
+            site_data.league_data(lg, games, fetched=api_key_present, possibly_incomplete_teams=incomplete)
+        ):
+            out.add(f"/{lg.slug}/")
+        for team in lg.teams:
+            if site_data.nothing_listed(
+                site_data.team_data(
+                    team, lg, games, fetched=api_key_present, possibly_incomplete=team.slug in incomplete
+                )
+            ):
+                out.add(f"/{lg.slug}/{team.slug}/")
+    return frozenset(out)
+
+
+def _write_sitemap_and_robots(
+    out_dir: Path,
+    base_url: str,
+    state: dict[str, sitemap.PageState],
+    *,
+    unlisted: frozenset[str] = frozenset(),
+) -> None:
+    """sitemap.xml (every indexable page; the 404 and the noindex pages in
+    `unlisted` are not), robots.txt, and lastmod.json, the state the next
+    build compares against. lastmod.json still records an unlisted page, so
+    the day a game appears its page is seen as changed and returns to the
+    sitemap dated that day."""
     entries: list[tuple[str, str | date | None]] = [
         ("/", state["/"].changed_at),
         (site.PRIVACY_PATH, site.PRIVACY_UPDATED),
@@ -541,10 +580,12 @@ def _write_sitemap_and_robots(out_dir: Path, base_url: str, state: dict[str, sit
         (site.SCHEDULE_PATH, state[site.SCHEDULE_PATH].changed_at),
     ]
     for lg in config.LEAGUES:
-        entries.append((f"/{lg.slug}/", state[f"/{lg.slug}/"].changed_at))
+        if f"/{lg.slug}/" not in unlisted:
+            entries.append((f"/{lg.slug}/", state[f"/{lg.slug}/"].changed_at))
         for team in lg.teams:
             path = f"/{lg.slug}/{team.slug}/"
-            entries.append((path, state[path].changed_at))
+            if path not in unlisted:
+                entries.append((path, state[path].changed_at))
     (out_dir / "sitemap.xml").write_text(sitemap.render_sitemap(base_url, entries), encoding="utf-8")
     (out_dir / "robots.txt").write_text(sitemap.render_robots(base_url), encoding="utf-8")
     (out_dir / sitemap.STATE_PATH).write_text(sitemap.render_state(state), encoding="utf-8")

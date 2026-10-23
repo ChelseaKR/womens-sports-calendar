@@ -136,6 +136,14 @@ def team_data(
     }
 
 
+def nothing_listed(payload: dict[str, Any]) -> bool:
+    """True when a league or team page's build checked Ticketmaster and it
+    listed no game. False for a build that fetched nothing: that is "not
+    checked", never "no games", so such a page is not treated as empty. The
+    one rule behind a page's noindex and its absence from the sitemap."""
+    return bool(payload.get("fetched", True)) and not payload["games"]
+
+
 def tracked_team_is_home(team: Team, game: Game) -> bool | None:
     """True/False when the event name says who is at home and one side is
     this team; None when that is not known (the teams came from Ticketmaster's

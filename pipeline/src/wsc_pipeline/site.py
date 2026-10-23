@@ -37,7 +37,7 @@ from .analytics import GA4_DATA_RETENTION, ga4_head_snippet, measurement_id
 from .ics import COMBINED_FEED_PATH, TIME_TBA_NOTE, TIME_TBA_SUFFIX, calendar_name
 from .normalize import display_date
 from .sellers import AFFILIATE_LINK_TEMPLATES, affiliate_links_active, is_affiliate_link
-from .site_data import schedule_window
+from .site_data import nothing_listed, schedule_window
 from .team_shops import shop_links_on, team_shop_url
 
 CSS_PATH = "/style.css"
@@ -1134,6 +1134,7 @@ just its games.</p>
         body=body,
         og_image=og_image,
         og_image_alt=og_image_alt,
+        noindex=nothing_listed(league),
         ga4_id=ga4_id,
         paid_links=paid_links,
         jsonld=structured_data.script_block(nodes),
@@ -1302,6 +1303,7 @@ lists, home and away, with its date, time and venue.</p>
         body=body,
         og_image=og_image,
         og_image_alt=og_image_alt,
+        noindex=nothing_listed(team),
         ga4_id=ga4_id,
         paid_links=paid_links,
         jsonld=structured_data.script_block(nodes),
