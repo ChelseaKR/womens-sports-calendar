@@ -11,7 +11,8 @@ build before deploy. Exits non-zero on the first site that would publish:
    disagrees with lastmod.json.
 3. An indexable page without exactly one <title>, one meta description, one
    <h1> and a canonical link to its own sitemap URL, or a title or
-   description another page also uses.
+   description another page also uses, or a title over 60 characters or a
+   description over 155.
 4. A JSON-LD block that is not JSON, or that could close its own <script>.
 5. Structured data that says more than the page's data does. Each
    SportsEvent is checked against the game in the page's data/*.json it
@@ -58,6 +59,11 @@ W3C_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 # A lastmod may not be later than the moment of validation; a small margin
 # absorbs clock skew between the build step and this one.
 FUTURE_MARGIN = timedelta(minutes=5)
+# What a results page shows before cutting a title or description off. Stated
+# here on purpose, not imported from site.py: a bad edit to the page builder's
+# limits must not move the check with it.
+TITLE_MAX = 60
+DESCRIPTION_MAX = 155
 
 
 class SeoError(ValueError):
@@ -338,6 +344,10 @@ def _check_page(dist: Path, site_path: str, base_url: str, pages: set[str]) -> t
         raise SeoError(f"{page}: expected exactly one non-empty <title>")
     if len(parsed.descriptions) != 1 or not parsed.descriptions[0]:
         raise SeoError(f"{page}: expected exactly one non-empty meta description")
+    if len(parsed.titles[0]) > TITLE_MAX:
+        raise SeoError(f"{page}: title is {len(parsed.titles[0])} characters, over {TITLE_MAX}")
+    if len(parsed.descriptions[0]) > DESCRIPTION_MAX:
+        raise SeoError(f"{page}: meta description is {len(parsed.descriptions[0])} characters, over {DESCRIPTION_MAX}")
     if parsed.h1_count != 1:
         raise SeoError(f"{page}: expected exactly one <h1>, found {parsed.h1_count}")
     if parsed.canonicals != [base_url + site_path]:

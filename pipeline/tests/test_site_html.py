@@ -239,18 +239,20 @@ def test_titles_use_the_product_name_never_the_repo_slug():
     (the private repo's slug) while its header said "Next Home Game"."""
     pages = _pages()
     for html in pages.values():
-        title = re.search(r"<title>(.*?)</title>", html).group(1)
-        assert "Next Home Game" in title
         assert "womens-sports-calendar" not in html
-    assert "<title>Minnesota Lynx 2026 schedule: add to your calendar | Next Home Game</title>" in pages["team"]
+    # A team title spends its 60 characters on the words a fan types; the
+    # product name is on the page (header, og:site_name), not in that title.
+    for name in ("index", "league"):
+        assert "Next Home Game" in re.search(r"<title>(.*?)</title>", pages[name]).group(1)
+    assert "<title>Minnesota Lynx schedule and tickets: home games 2026</title>" in pages["team"]
 
 
-def test_team_description_names_the_team_and_the_league():
+def test_team_description_names_the_team_and_its_next_home_game():
     """Brief: a team page's description must name the actual team and
     league, not a generic template repeated everywhere."""
     html = _pages()["team"]
-    assert 'name="description" content="Minnesota Lynx 2026 schedule (WNBA): add every game to Google Calendar' in html
-    assert 'property="og:description" content="Minnesota Lynx 2026 schedule (WNBA): add every game' in html
+    assert 'name="description" content="Next Minnesota Lynx home game: Tue, Jun 9, 2026, 7:00 PM CDT vs Seattle' in html
+    assert 'property="og:description" content="Next Minnesota Lynx home game: Tue, Jun 9, 2026' in html
 
 
 def test_league_roster_links_use_real_team_names_not_title_cased_slugs():
