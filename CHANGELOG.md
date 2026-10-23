@@ -21,6 +21,14 @@ archived and private.
 
 ### Changed
 
+- A league or team page whose build checked Ticketmaster and found no listed
+  game is now `noindex` (and has no canonical link) and is left out of
+  `sitemap.xml`, so about a quarter of the site no longer asks search engines
+  to index near-identical empty pages. It still says plainly that no game is
+  listed, `lastmod.json` still tracks it, and it returns to the sitemap, dated
+  that day, on the first build that lists a game. A build that fetched nothing
+  marks no page empty. `validate_seo` now fails if an empty page is indexable
+  or a page with games is `noindex`.
 - Page titles and meta descriptions now use the words a fan types and fit
   what a results page shows (at most 60 and 155 characters). A team page's
   title reads "<Team> schedule and tickets: home games <season>", and its
