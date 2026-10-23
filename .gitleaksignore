@@ -1,0 +1,3 @@
+# The public IndexNow key used as a fixture in pipeline/tests/test_indexnow.py.
+# An IndexNow key is public by design: the protocol requires it to be served at the site root.
+a9eed04db6bbefee4edbd0a00517fec81f0e48e7:pipeline/tests/test_indexnow.py:generic-api-key:15
