@@ -13,6 +13,7 @@ is the build's fetch time, so a comparison between two builds strips it.
 from __future__ import annotations
 
 import re
+from datetime import UTC, datetime
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -97,11 +98,14 @@ def test_set_footer_adds_exactly_one_paragraph():
 
 
 def test_a_whole_build_changes_only_by_the_footer_paragraph(tmp_path: Path, monkeypatch):
+    # One fixed fetch time for both builds: with the wall clock, a second ticking
+    # over between them changed fetched_at in the data files and failed this test.
+    built_at = datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
     monkeypatch.setattr(site, "REMOVAL_CONTACT_EMAIL", None)
-    build_fixture_site(tmp_path / "off")
+    build_fixture_site(tmp_path / "off", now=built_at)
     monkeypatch.undo()
     assert site.REMOVAL_CONTACT_EMAIL == ADDRESS  # the shipped default is what "on" builds
-    build_fixture_site(tmp_path / "on")
+    build_fixture_site(tmp_path / "on", now=built_at)
     off, on = _tree(tmp_path / "off"), _tree(tmp_path / "on")
     assert off.keys() == on.keys()
     added = site._removal_contact().encode()
