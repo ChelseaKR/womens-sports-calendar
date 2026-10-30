@@ -34,7 +34,7 @@ from urllib.parse import quote, urlencode
 
 from . import config, feeds, structured_data
 from .analytics import GA4_DATA_RETENTION, ga4_head_snippet, measurement_id
-from .config import title_name_for
+from .config import league_names_for, title_name_for
 from .ics import COMBINED_FEED_PATH, TIME_TBA_NOTE, TIME_TBA_SUFFIX, calendar_name
 from .normalize import display_date
 from .sellers import AFFILIATE_LINK_TEMPLATES, affiliate_links_active, is_affiliate_link
@@ -607,20 +607,23 @@ def _fit(candidates: list[str], limit: int) -> str:
 
 
 def _team_title(name: str, season: str | None, *, listed: bool, home_listed: bool) -> str:
-    """ "Las Vegas Aces schedule 2026: home games and tickets": the words a
-    fan types, in the order they type them ("<team> schedule 2027" is the
-    site's most-shown search, Search Console 2026-10-29), so the season sits
-    right after "schedule". Each claim is made only when the page backs it:
-    "tickets" and the season when games are listed (every game links to its
-    ticket seller; the site shows no prices), "home games" when a home game
-    is listed. A page with nothing listed is just "<team> schedule"."""
+    """ "New York Sirens schedule 2026-27: next home game and tickets": the
+    words a fan types, in the order Search Console shows them typed
+    ("minnesota frost schedule 2026-27", "boston fleet 2026-27 schedule",
+    "next valkyries home game"; 2026-10-21 to 10-29). Each claim is made only
+    when the page backs it: "tickets" and the season when games are listed
+    (every game links to its ticket seller; the site shows no prices), "next
+    home game" and "home games" when a home game is listed (the page opens
+    with it). A page with nothing listed is just "<team> schedule"."""
     if not listed:
         return _fit([f"{name} schedule"], TITLE_MAX)
     schedule = f"{name} schedule {season}" if season else f"{name} schedule"
-    forms = [f"{schedule}: dates and tickets", f"{schedule} and tickets", schedule, f"{name} schedule"]
-    if home_listed:
-        forms.insert(0, f"{schedule}: home games and tickets")
-    return _fit(forms, TITLE_MAX)
+    lead = (
+        [f"{schedule}: next home game and tickets", f"{schedule}: home games and tickets"]
+        if home_listed
+        else [f"{schedule}: dates and tickets"]
+    )
+    return _fit([*lead, f"{schedule} and tickets", schedule, f"{name} schedule"], TITLE_MAX)
 
 
 def _about_schedule(note: str) -> str:
@@ -1144,7 +1147,10 @@ def render_league(
     incomplete_note = (
         _possibly_incomplete_note(", ".join(team_name(t) for t in incomplete)) + "\n" if incomplete else ""
     )
-    heading = _schedule_heading(name, season)
+    # "Big Ten women's basketball 2026-27 schedule", not "NCAA Women's
+    # Basketball (Big Ten) ...": the heading and title use the name a fan
+    # searches; the breadcrumb and body keep the league's own name.
+    heading = _schedule_heading(league_names_for(slug, name)[0], season)
     body = f"""{_breadcrumb([("All leagues", "/")], name)}
 <h1>{e(heading)}</h1>
 <p class="lede">Every {e(name)} game Ticketmaster lists, with its date, time
@@ -1207,7 +1213,11 @@ def _team_description(team: Mapping[str, Any]) -> str:
     (schedule, ticket links). With no home game listed it says nothing about
     one."""
     name = title_name_for(team["league_slug"], team["team_name"])
+    league = league_names_for(team["league_slug"], team.get("league_name", ""))[1]
     season = team.get("season")
+    # "<team> (<league>) schedule <season>": the league is in the queries
+    # ("pwhl sirens schedule", "pwhl schedule ottawa").
+    lead = f"{name} ({league}) schedule {season}" if league and season else ""
     home = next((g for g in team["games"] if g["event_id"] == team.get("next_home_event_id")), None)
     if home is not None and not home.get("date_tbd") and home.get("away_team"):
         when = f"{home['start_display']} vs {_opponent_label(team['league_slug'], home['away_team'])}"
@@ -1215,9 +1225,10 @@ def _team_description(team: Mapping[str, Any]) -> str:
             [
                 *(
                     [
-                        f"{name} schedule {season}. Next home game: {when}. Add every game to your calendar, with ticket links."
+                        f"{lead}. Next home game: {when}. Add every game to your calendar, with ticket links.",
+                        f"{lead}. Next home game: {when}. With ticket links.",
                     ]
-                    if season
+                    if lead
                     else []
                 ),
                 f"Next {name} home game: {when}. Add every game to your calendar, with ticket links, updated nightly.",
@@ -1244,11 +1255,8 @@ def _team_description(team: Mapping[str, Any]) -> str:
     return _fit(
         [
             *(
-                [
-                    f"{name} schedule {season}: every home and away game with dates, venues and ticket "
-                    "links. Add it to your calendar, updated nightly."
-                ]
-                if season
+                [f"{lead}: every home and away game with dates, venues and ticket links. Add it to your calendar."]
+                if lead
                 else []
             ),
             f"{name} schedule: every home and away game with dates, venues and ticket links. "
@@ -1408,7 +1416,10 @@ def render_team(
     page_url = f"{base_url}/{league_slug}/{team_slug}/"
     fetched = team.get("fetched", True)
     incomplete_note = _possibly_incomplete_note(team_name) + "\n" if team.get("possibly_incomplete") else ""
-    heading = _schedule_heading(team_name, team.get("season"))
+    # The <h1> uses the name a fan searches ("Nebraska women's basketball", not
+    # the Ticketmaster keyword "Nebraska Cornhuskers Womens Basketball"); the
+    # rest of the page, the feed and the calendar name keep the full name.
+    heading = _schedule_heading(title_name_for(league_slug, team_name), team.get("season"))
     home_listed = bool(fetched and team.get("next_home_event_id"))
     h1 = f"{heading} and home games" if home_listed else heading
     subscribe = _subscribe_block(

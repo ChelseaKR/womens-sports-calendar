@@ -53,12 +53,12 @@ def _meta(html: str, name: str) -> str:
 
 def test_team_page_title_description_and_h1(fixture_dist: Path):
     html = (fixture_dist / "wnba/las-vegas-aces/index.html").read_text()
-    assert "<title>Las Vegas Aces schedule 2026: home games and tickets</title>" in html
+    assert "<title>Las Vegas Aces schedule 2026: next home game and tickets</title>" in html
     assert "<h1>Las Vegas Aces 2026 schedule and home games</h1>" in html
     description = _meta(html, "description")
     # The next HOME game: not the earlier away game, not the cancelled one.
     assert description.startswith(
-        "Las Vegas Aces schedule 2026. Next home game: Sat, Sep 19, 2026, 6:00 PM PDT vs Seattle Storm."
+        "Las Vegas Aces (WNBA) schedule 2026. Next home game: Sat, Sep 19, 2026, 6:00 PM PDT vs Seattle Storm."
     )
 
 
@@ -193,3 +193,16 @@ def test_a_time_tba_game_sorts_among_its_own_date():
     payload = team_data(ACES, WNBA, [later, tba])
     assert [g["event_id"] for g in payload["games"]] == ["E2", "E1"]
     assert payload["next_home_event_id"] == "E2"
+
+
+def test_big_ten_league_page_heading_uses_the_searched_name(fixture_dist: Path):
+    """Search Console (2026-10-21 to 10-29): the Big Ten league page ranks at
+    about 24 under "NCAA Women's Basketball (Big Ten)"; fans type "Big Ten
+    women's basketball schedule". The heading and title use that name; the
+    breadcrumb keeps the league's own."""
+    html = (fixture_dist / "ncaaw-big-ten/index.html").read_text()
+    h1 = re.search(r"<h1>(.*?)</h1>", html).group(1)
+    title = re.search(r"<title>(.*?)</title>", html).group(1)
+    assert h1.startswith("Big Ten women&#x27;s basketball ") and h1.endswith(" schedule")
+    assert title.startswith("Big Ten women&#x27;s basketball ")
+    assert "NCAA Women&#x27;s Basketball (Big Ten)</span>" in html  # breadcrumb, unchanged

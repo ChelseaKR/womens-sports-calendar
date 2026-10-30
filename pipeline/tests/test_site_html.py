@@ -244,18 +244,15 @@ def test_titles_use_the_product_name_never_the_repo_slug():
     # product name is on the page (header, og:site_name), not in that title.
     for name in ("index", "league"):
         assert "Next Home Game" in re.search(r"<title>(.*?)</title>", pages[name]).group(1)
-    assert "<title>Minnesota Lynx schedule 2026: home games and tickets</title>" in pages["team"]
+    assert "<title>Minnesota Lynx schedule 2026: next home game and tickets</title>" in pages["team"]
 
 
 def test_team_description_names_the_team_and_its_next_home_game():
     """Brief: a team page's description must name the actual team and
     league, not a generic template repeated everywhere."""
     html = _pages()["team"]
-    assert (
-        'name="description" content="Minnesota Lynx schedule 2026. Next home game: Tue, Jun 9, 2026, 7:00 PM CDT vs Seattle'
-        in html
-    )
-    assert 'property="og:description" content="Minnesota Lynx schedule 2026. Next home game: Tue, Jun 9, 2026' in html
+    assert 'name="description" content="Minnesota Lynx (WNBA) schedule 2026. Next home game: Tue, Jun 9, 2026' in html
+    assert 'property="og:description" content="Minnesota Lynx (WNBA) schedule 2026. Next home game: Tue, Jun 9' in html
 
 
 def test_league_roster_links_use_real_team_names_not_title_cased_slugs():

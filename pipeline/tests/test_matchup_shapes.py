@@ -267,7 +267,7 @@ def test_the_team_page_shows_the_label_and_the_title_beside_clean_team_names(tmp
     assert f"{ILLINOIS} vs UIS Prairie Stars Womens Basketball (Exhibition)</p>" in page
     # ...and the description names that game's date and opponent (the school
     # name, not the Ticketmaster keyword), without the exhibition label.
-    assert description.group(1).startswith("Next home game: Fri, Oct 30, 2026 (time TBA) vs UIS Prairie Stars.")
+    assert "Next home game: Fri, Oct 30, 2026 (time TBA) vs UIS Prairie Stars." in description.group(1)
 
 
 def test_a_game_without_the_new_fields_renders_no_label(tmp_path: Path, monkeypatch):
