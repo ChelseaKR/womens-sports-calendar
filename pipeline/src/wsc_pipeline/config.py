@@ -97,6 +97,14 @@ class Team:
         """Every name this team is searched for and recognized by."""
         return (self.name, *self.search_names)
 
+    @property
+    def match_names(self) -> tuple[str, ...]:
+        """all_names plus the title name, for recognizing the team as one
+        side of an event's matchup: Ticketmaster names some Big Ten home games
+        "Nebraska Women's Basketball vs ...", which the keyword "Nebraska
+        Cornhuskers Womens Basketball" does not contain."""
+        return (*self.all_names, self.title_name) if self.title_name else self.all_names
+
 
 @dataclass(frozen=True)
 class League:

@@ -357,3 +357,44 @@ def test_a_branded_404_page_is_built_noindexed_and_kept_out_of_the_sitemap(tmp_p
         assert f'href="/{lg.slug}/"' in not_found
     assert "404" not in (out_dir / "sitemap.xml").read_text()
     assert "noindex" not in (out_dir / "index.html").read_text()
+
+
+def test_fetch_all_games_drops_a_mens_game_billed_as_a_womens_team_night(monkeypatch):
+    """The 2026-10-30 live leak: the Phoenix Mercury keyword search returned
+    an NBA G League game named "Valley Suns vs San Diego Clippers: Phoenix
+    Mercury Night", and it was the only game on the Mercury page and feed. A
+    real Mercury game in the same response is kept."""
+    leak = make_raw_event(
+        event_id="EVT-GLEAGUE",
+        name="Valley Suns vs San Diego Clippers: Phoenix Mercury Night",
+        venue_name="Mullett Arena ",
+        venue_city="Tempe",
+        venue_state="AZ",
+        attractions=["Valley Suns", "San Diego Clippers", "Phoenix Mercury"],
+    )
+    real = make_raw_event(event_id="EVT-MERCURY", name="Phoenix Mercury vs Seattle Storm")
+    fake_client = _FakeDiscoveryClient({"phoenix-mercury": [leak, real]})
+    monkeypatch.setattr(build_module, "DiscoveryClient", lambda api_key: fake_client)
+
+    games, _truncated, mismatched, _requests, _bytes = build_module.fetch_all_games("fake-key")
+
+    assert [g.event_id for g in games] == ["EVT-MERCURY"]
+    assert mismatched["wnba"] == {"phoenix-mercury"}
+
+
+def test_fetch_all_games_keeps_a_big_ten_game_named_by_its_short_name(monkeypatch):
+    """Live shape: "Nebraska Women's Basketball vs San Jose State" does not
+    contain the keyword "Nebraska Cornhuskers Womens Basketball"; the team's
+    title name ("Nebraska women's basketball") recognizes it as a side."""
+    game = make_raw_event(
+        event_id="EVT-NEB",
+        name="Nebraska Women's Basketball vs San Jose State - TIME SUBJECT TO CHANGE",
+        attractions=["Nebraska Cornhuskers Womens Basketball"],
+    )
+    fake_client = _FakeDiscoveryClient({"nebraska-cornhuskers-womens-basketball": [game]})
+    monkeypatch.setattr(build_module, "DiscoveryClient", lambda api_key: fake_client)
+
+    games, _truncated, mismatched, _requests, _bytes = build_module.fetch_all_games("fake-key")
+
+    assert [g.event_id for g in games] == ["EVT-NEB"]
+    assert all(slugs == set() for slugs in mismatched.values())

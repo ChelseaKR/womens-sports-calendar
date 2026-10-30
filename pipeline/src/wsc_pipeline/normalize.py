@@ -272,6 +272,9 @@ def team_is_participant(team_name: str, raw_event: dict[str, Any], not_this_team
     clubs). This checks what the event itself says -- its own name and
     attractions -- never the venue, never the city, so a keyword-search
     false positive can be dropped without ever entering the site's data.
+    An event whose name is a matchup ("A vs B") must have the team as A or
+    B; a team mentioned anywhere else in that name (a promotion night, a
+    sponsor) is not a participant.
 
     `not_this_team` names other teams whose names contain team_name (config
     KEYWORD_COLLISIONS, e.g. "Monterey Bay FC" for "Bay FC"); they are
@@ -282,9 +285,18 @@ def team_is_participant(team_name: str, raw_event: dict[str, Any], not_this_team
     embedded = raw_event.get("_embedded", {})
     attractions = embedded.get("attractions") or []
     name = raw_event.get("name", "")
-    home, away = parse_teams(name, attractions)
-    candidates = [c for c in (name, home, away) if c]
-    candidates.extend(a.get("name") for a in attractions if a.get("name"))
+    # When the event's own name is a two-sided matchup, the team must be one
+    # of those two sides. The whole name and the attraction list do not
+    # count then: "Valley Suns vs San Diego Clippers: Phoenix Mercury Night"
+    # (an NBA G League game with a WNBA promotion, live on the Mercury page
+    # until 2026-10-30) names the Mercury without them playing.
+    named_home, named_away = parse_teams(name, [])
+    if named_home and named_away:
+        candidates = [named_home, named_away]
+    else:
+        home, away = parse_teams(name, attractions)
+        candidates = [c for c in (name, home, away) if c]
+        candidates.extend(a.get("name") for a in attractions if a.get("name"))
     if not_this_team:
         candidates = [_without_phrases(c, not_this_team) for c in candidates]
     return any(_phrase_match(team_name, c) for c in candidates)
