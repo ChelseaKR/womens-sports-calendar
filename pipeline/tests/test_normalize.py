@@ -257,3 +257,52 @@ def test_real_bay_fc_games_still_match_with_the_exclusion():
         "Bay FC vs Monterey Bay FC",  # a real meeting of the two still belongs to Bay FC
     ):
         assert team_is_participant(bay_fc.name, make_raw_event(name=name), bay_fc.not_this_team) is True, name
+
+
+# -- A men's game that names a women's team only as a promotion. Live on
+# https://nexthomegame.com/data/wnba/phoenix-mercury.json on 2026-10-30, the
+# only game on the Phoenix Mercury page and in its feed: an NBA G League game
+# at Mullett Arena billed as "Phoenix Mercury Night". The name matched the
+# Mercury because the whole event name used to count as a candidate.
+
+MERCURY_NIGHT = "Valley Suns vs San Diego Clippers: Phoenix Mercury Night"
+
+
+def _mercury_night(attractions: list[str] | None = None) -> dict:
+    return make_raw_event(
+        event_id="1Av0Z_oGkRTlOYS",
+        name=MERCURY_NIGHT,
+        venue_name="Mullett Arena ",
+        venue_city="Tempe",
+        venue_state="AZ",
+        timezone="America/Phoenix",
+        attractions=attractions,
+    )
+
+
+def test_a_mens_game_with_a_womens_team_promotion_night_is_not_that_team():
+    # Control: the team's name really is in the event name, so a check that
+    # reads the whole name would accept it.
+    assert "Phoenix Mercury" in MERCURY_NIGHT
+    assert team_is_participant("Phoenix Mercury", _mercury_night()) is False
+    # ...even if Ticketmaster lists the promoted team as an attraction.
+    raw = _mercury_night(["Valley Suns", "San Diego Clippers", "Phoenix Mercury"])
+    assert team_is_participant("Phoenix Mercury", raw) is False
+    # The two teams that play are still recognized.
+    assert team_is_participant("Valley Suns", raw) is True
+
+
+def test_a_real_game_with_a_promotion_in_its_name_is_still_the_team():
+    raw = make_raw_event(name="Phoenix Mercury vs Seattle Storm: Fan Appreciation Night")
+    assert team_is_participant("Phoenix Mercury", raw) is True
+    assert team_is_participant("Seattle Storm", raw) is True
+
+
+def test_a_name_that_is_not_a_matchup_still_uses_the_attractions():
+    """A tournament or showcase name has no "A vs B"; the attraction list is
+    then what says who plays (the Big Ten invitationals on the live site)."""
+    raw = make_raw_event(
+        name="MarketBeat Invitational Women's Basketball",
+        attractions=["Nebraska Cornhuskers Womens Basketball", "South Dakota State Jackrabbits Womens Basketball"],
+    )
+    assert team_is_participant("Nebraska Cornhuskers Womens Basketball", raw) is True

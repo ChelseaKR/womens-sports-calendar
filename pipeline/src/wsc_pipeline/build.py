@@ -120,7 +120,7 @@ def fetch_all_games(api_key: str) -> tuple[list[Game], dict[str, set[str]], dict
             if team_truncated:
                 truncated[league.slug].add(team.slug)
             for raw in raw_events:
-                if not team_is_participant_as_any(team.all_names, raw, team.not_this_team):
+                if not team_is_participant_as_any(team.match_names, raw, team.not_this_team):
                     mismatched[league.slug].add(team.slug)
                     continue
                 game = normalize_event(

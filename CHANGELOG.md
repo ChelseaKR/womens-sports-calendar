@@ -50,6 +50,12 @@ archived and private.
 
 ### Fixed
 
+- A game whose Ticketmaster name is a matchup ("A vs B") is now listed for a
+  team only when that team is A or B. "Valley Suns vs San Diego Clippers:
+  Phoenix Mercury Night", an NBA G League game, had been the only game on
+  the Phoenix Mercury page and in its calendar feed because the whole event
+  name used to count. A Big Ten game named by the school's short name
+  ("Nebraska Women's Basketball vs ...") is still recognized.
 - The `calendar_subscribe` event now also fires for the "Add to Google
   Calendar" and Outlook buttons. They are https links to
   `calendar.google.com` and `outlook.live.com` / `outlook.office.com` whose
