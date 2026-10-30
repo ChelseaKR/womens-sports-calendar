@@ -609,7 +609,7 @@ def _fit(candidates: list[str], limit: int) -> str:
 def _team_title(name: str, season: str | None, *, listed: bool, home_listed: bool) -> str:
     """ "New York Sirens schedule 2026-27: next home game and tickets": the
     words a fan types, in the order Search Console shows them typed
-    ("phoenix mercury schedule 2027", "minnesota frost schedule 2026-27",
+    ("minnesota frost schedule 2026-27", "boston fleet 2026-27 schedule",
     "next valkyries home game"; 2026-10-21 to 10-29). Each claim is made only
     when the page backs it: "tickets" and the season when games are listed
     (every game links to its ticket seller; the site shows no prices), "next
@@ -1216,7 +1216,7 @@ def _team_description(team: Mapping[str, Any]) -> str:
     league = league_names_for(team["league_slug"], team.get("league_name", ""))[1]
     season = team.get("season")
     # "<team> (<league>) schedule <season>": the league is in the queries
-    # ("pwhl sirens schedule", "wnba mercury schedule", "pwhl schedule ottawa").
+    # ("pwhl sirens schedule", "pwhl schedule ottawa").
     lead = f"{name} ({league}) schedule {season}" if league and season else ""
     home = next((g for g in team["games"] if g["event_id"] == team.get("next_home_event_id")), None)
     if home is not None and not home.get("date_tbd") and home.get("away_team"):
@@ -1306,6 +1306,41 @@ def _this_week_block(team: Mapping[str, Any]) -> str:
 """
 
 
+def _team_lede(team: Mapping[str, Any]) -> str:
+    """The team page's opening paragraph, in the words a fan searches with
+    ("schedule", "home games", "tickets"), each one said only when the page
+    backs it: the season when the listed games give one, "tickets" when a
+    game links to a seller, "home games" when a game is known to be at home.
+    It links the league's page (the hub), so the league is one click away
+    from the body text and not only from the breadcrumb."""
+    name = e(team["team_name"])
+    league_link = f'<a href="/{e(team["league_slug"])}/">{e(team["league_name"])}</a>'
+    if not team.get("fetched", True):
+        return (
+            f'<p class="lede">Every {name} ({league_link}) game Ticketmaster\n'
+            "lists, home and away, with its date, time and venue.</p>"
+        )
+    games = team["games"]
+    if not games:
+        return (
+            f'<p class="lede">Ticketmaster lists no {name} ({league_link}) game\n'
+            "right now. Add the schedule to your calendar below, and each game appears\n"
+            "in it once it is listed.</p>"
+        )
+    season = team.get("season")
+    for_season = f" for the {e(season)} season" if season else ""
+    tickets = " and where to buy tickets" if any(g.get("buy") for g in games) else ""
+    home = (
+        f"\n{name} home games are marked &ldquo;Home&rdquo;."
+        if any(g.get("tracked_team_is_home") is True for g in games)
+        else ""
+    )
+    return (
+        f'<p class="lede">Every {name} ({league_link}) game Ticketmaster\n'
+        f"lists{for_season}, home and away, with its date, time, venue{tickets}.{home}</p>"
+    )
+
+
 def _sibling_teams_block(league_slug: str, team_slug: str, league_name: str) -> str:
     """Links to the other teams in the team's league, from the team registry
     (config.LEAGUES), so each team page leads to its neighbors. Empty for a
@@ -1325,6 +1360,7 @@ def _sibling_teams_block(league_slug: str, team_slug: str, league_name: str) -> 
 <ul class="team-roster">
 {items}
 </ul>
+<p class="league-link"><a href="/{e(league_slug)}/">The full {e(league_name)} schedule, every team in one calendar</a></p>
 </section>
 """
 
@@ -1384,6 +1420,8 @@ def render_team(
     # the Ticketmaster keyword "Nebraska Cornhuskers Womens Basketball"); the
     # rest of the page, the feed and the calendar name keep the full name.
     heading = _schedule_heading(title_name_for(league_slug, team_name), team.get("season"))
+    home_listed = bool(fetched and team.get("next_home_event_id"))
+    h1 = f"{heading} and home games" if home_listed else heading
     subscribe = _subscribe_block(
         ics_https_url=ics_https, subject=f"the {team_name} schedule", cal_name=calendar_name(team_name)
     )
@@ -1392,9 +1430,8 @@ def render_team(
         f"{hero}\n{subscribe}" if TEAM_PAGE_NEXT_GAME_FIRST and _has_next_home_game(team) else f"{subscribe}\n{hero}"
     )
     body = f"""{_breadcrumb([("All leagues", "/"), (league_name, f"/{league_slug}/")], team_name)}
-<h1>{e(heading)}</h1>
-<p class="lede">Every {e(team_name)} ({e(league_name)}) game Ticketmaster
-lists, home and away, with its date, time and venue.</p>
+<h1>{e(h1)}</h1>
+{_team_lede(team)}
 {lead_blocks}
 <h2>Upcoming games</h2>
 {incomplete_note}{_freshness_note(team)}{_games_table(team["games"], buy_link_subject=team_name, fetched=fetched, home_away=True)}
@@ -1418,7 +1455,7 @@ lists, home and away, with its date, time and venue.</p>
             title_name_for(league_slug, team_name),
             team.get("season"),
             listed=bool(team["games"]),
-            home_listed=bool(team.get("fetched", True) and team.get("next_home_event_id")),
+            home_listed=home_listed,
         ),
         description=_team_description(team),
         canonical_url=page_url,

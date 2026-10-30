@@ -54,7 +54,7 @@ def _meta(html: str, name: str) -> str:
 def test_team_page_title_description_and_h1(fixture_dist: Path):
     html = (fixture_dist / "wnba/las-vegas-aces/index.html").read_text()
     assert "<title>Las Vegas Aces schedule 2026: next home game and tickets</title>" in html
-    assert "<h1>Las Vegas Aces 2026 schedule</h1>" in html
+    assert "<h1>Las Vegas Aces 2026 schedule and home games</h1>" in html
     description = _meta(html, "description")
     # The next HOME game: not the earlier away game, not the cancelled one.
     assert description.startswith(
