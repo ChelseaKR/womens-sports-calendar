@@ -141,8 +141,10 @@ def test_every_configured_team_fits_with_the_longest_opponent(scenario: str):
 
 def test_a_team_with_a_home_game_says_schedule_tickets_home_games_and_the_date(dist: Path):
     title, description = _head((dist / "wnba/las-vegas-aces/index.html").read_text())
-    assert title == "Las Vegas Aces schedule and tickets: home games 2026"
-    assert description.startswith("Next Las Vegas Aces home game: Sat, Sep 19, 2026, 6:00 PM PDT vs Seattle Storm.")
+    assert title == "Las Vegas Aces schedule 2026: home games and tickets"
+    assert description.startswith(
+        "Las Vegas Aces schedule 2026. Next home game: Sat, Sep 19, 2026, 6:00 PM PDT vs Seattle Storm."
+    )
     assert "ticket links" in description
 
 
@@ -159,14 +161,14 @@ def test_the_date_is_the_next_home_game_and_a_tba_time_is_not_made_up():
         time_tba=True,
     )
     _, description = _head(_page(league, team, [tba]))
-    assert "Next Minnesota Lynx home game: Thu, Sep 24, 2026 (time TBA) vs Seattle Storm." in description
+    assert "Next home game: Thu, Sep 24, 2026 (time TBA) vs Seattle Storm." in description
 
 
 def test_away_only_claims_no_home_game():
     league, team = config.LEAGUES[1], config.LEAGUES[1].teams[0]
     title, description = _head(_page(league, team, _away_games(league, team)))
     assert "home games" not in title and "home game" not in description
-    assert title.endswith("schedule and tickets 2026")
+    assert title.endswith("schedule 2026: dates and tickets")
     assert "ticket links" in description  # games are listed, each with its seller link
 
 
@@ -201,13 +203,13 @@ def test_big_ten_names_are_short_in_titles_and_descriptions_only(dist: Path):
     ]
     html = _page(league, team, games)
     title, description = _head(html)
-    assert title == "Ohio State women's basketball schedule and tickets 2026" or title.startswith(
+    assert title == "Ohio State women's basketball schedule 2026-27 and tickets" or title.startswith(
         "Ohio State women's basketball"
     )
     assert "Buckeyes" not in title and "Womens" not in title
     assert "vs Rutgers." in description and "Scarlet Knights" not in description
     # The page itself, its feed and its address keep the full name.
-    assert "<h1>Ohio State Buckeyes Womens Basketball 2026 schedule</h1>" in html
+    assert "<h1>Ohio State Buckeyes Womens Basketball 2026 schedule and home games</h1>" in html
     assert team.slug == "ohio-state-buckeyes-womens-basketball"
     assert team.shown_name == "Ohio State Buckeyes Womens Basketball"
 
@@ -240,7 +242,7 @@ def _corrupt(src: Path, dst: Path, rel: str, old: str, new: str) -> Path:
 
 
 def test_control_the_validator_rejects_a_long_title(dist: Path, tmp_path: Path):
-    old = "<title>Las Vegas Aces schedule and tickets: home games 2026</title>"
+    old = "<title>Las Vegas Aces schedule 2026: home games and tickets</title>"
     out = _corrupt(dist, tmp_path / "dist", "wnba/las-vegas-aces/index.html", old, "<title>" + "x" * 61 + "</title>")
     assert len(_head((out / "wnba/las-vegas-aces/index.html").read_text())[0]) == 61
     with pytest.raises(validate_seo.SeoError, match="title is 61 characters"):

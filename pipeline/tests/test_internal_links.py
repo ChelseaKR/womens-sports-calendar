@@ -98,9 +98,25 @@ def test_a_team_page_lists_its_leagues_other_teams_not_itself_or_other_leagues(d
     block = html[html.index('<section class="more-teams"') :]
     block = block[: block.index("</section>")]
     assert "More WNBA team schedules" in block
-    hrefs = set(HREF.findall(block))
+    roster = block[block.index('<ul class="team-roster">') : block.index("</ul>")]
+    hrefs = set(HREF.findall(roster))
     assert hrefs == {f"/wnba/{t.slug}/" for t in config.LEAGUES[0].teams} - {"/wnba/las-vegas-aces/"}
     assert len(hrefs) == 14
+    # ...and leads back up to the league hub, in words, not only the breadcrumb.
+    assert set(HREF.findall(block)) - hrefs == {"/wnba/"}
+    assert "The full WNBA schedule, every team in one calendar</a>" in block
+
+
+def test_every_team_page_links_its_league_hub_from_the_lede_and_the_team_list(dist: Path):
+    pages = _pages(dist)
+    for path in TEAM_PATHS:
+        league = path.split("/")[1]
+        html = pages[path]
+        lede = html[html.index('<p class="lede">') :]
+        lede = lede[: lede.index("</p>")]
+        assert f'href="/{league}/"' in lede, path
+        more = html[html.index('<section class="more-teams"') :]
+        assert f'<p class="league-link"><a href="/{league}/">' in more[: more.index("</section>")], path
 
 
 # ---------------------------------------------------------------------------

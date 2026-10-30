@@ -21,6 +21,14 @@ archived and private.
 
 ### Changed
 
+- Team pages put the season right after "schedule" in the title ("Las Vegas
+  Aces schedule 2026: home games and tickets"), the order fans search in, and
+  the meta description opens the same way. The H1 adds "and home games" when a
+  home game is listed. The opening paragraph names the season and says where
+  to buy tickets only when the listed games back it, and a team with nothing
+  listed now says so up front. Each team page links its league's page from
+  that paragraph and under the list of the league's other teams. No URL,
+  feed or structured data changed.
 - A league or team page whose build checked Ticketmaster and found no listed
   game is now `noindex` (and has no canonical link) and is left out of
   `sitemap.xml`, so about a quarter of the site no longer asks search engines
