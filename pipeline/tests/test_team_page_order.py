@@ -4,6 +4,9 @@ one build-time constant (site.TEAM_PAGE_NEXT_GAME_FIRST), off by default.
 - Off (as shipped): the page is byte-identical to what main rendered. The
   goldens in tests/golden/team_order_*.html were rendered by main's
   render_team before this constant existed.
+  They were re-rendered on
+  2026-10-29 for the team-page title, H1, lede and league-link copy; the
+  block order they pin did not change.
 - On: the "Next home game" section comes before the subscribe section, and
   the page is otherwise the same text (same lines, same links, same rel
   attributes, same "Paid link" labels). Only a page with a next home game
