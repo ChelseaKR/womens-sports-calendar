@@ -78,10 +78,11 @@ class Team:
     # old path (so no subscriber gets a 404), and the old page is a small
     # notice that points to the new one. Never listed in the sitemap.
     former_slugs: tuple[str, ...] = ()
-    # What a page <title> and meta description call the team when `shown_name`
-    # is too long for them ("Ohio State women's basketball", not the
-    # Ticketmaster keyword "Ohio State Buckeyes Womens Basketball"). Not part
-    # of any page's body, feed or data file. None: `shown_name`.
+    # What a page <title>, meta description and <h1> call the team when
+    # `shown_name` is too long or not what a fan searches ("Ohio State women's
+    # basketball", not the Ticketmaster keyword "Ohio State Buckeyes Womens
+    # Basketball"). Not part of any feed or data file, and the rest of the
+    # page keeps `shown_name`. None: `shown_name`.
     title_name: str | None = None
 
     @property
@@ -114,6 +115,21 @@ class League:
     # An override of GAME_DURATIONS for this league (a league whose games run
     # longer or shorter than its sport's usual). None = use the sport's.
     game_duration: timedelta | None = None
+    # What a league page's <title> and <h1> call the league when its `name`
+    # is not what a fan searches ("Big Ten women's basketball", not "NCAA
+    # Women's Basketball (Big Ten)"), and the short label a team page's meta
+    # description puts after the team ("Nebraska women's basketball (Big
+    # Ten)"). None: `name`. Neither changes a slug, feed or data file.
+    title_name: str | None = None
+    short_name: str | None = None
+
+    @property
+    def search_title_name(self) -> str:
+        return self.title_name or self.name
+
+    @property
+    def search_short_name(self) -> str:
+        return self.short_name or self.name
 
 
 # How long a game is assumed to last, per sport (League.sport), for the
@@ -175,6 +191,16 @@ def title_name_for(league_slug: str, shown_name: str) -> str:
                 if team.shown_name == shown_name:
                     return team.search_title_name
     return shown_name
+
+
+def league_names_for(league_slug: str, name: str) -> tuple[str, str]:
+    """(title name, short name) for a league: what its page heading and a
+    team page's meta description call it. A league not in the registry keeps
+    the name it was given for both."""
+    for lg in LEAGUES:
+        if lg.slug == league_slug:
+            return lg.search_title_name, lg.search_short_name
+    return name, name
 
 
 def _slugify(name: str) -> str:
@@ -339,6 +365,8 @@ LEAGUES: tuple[League, ...] = (
         ),
         sport="Basketball",
         organization_name="Big Ten Conference",
+        title_name="Big Ten women's basketball",
+        short_name="Big Ten",
     ),
 )
 

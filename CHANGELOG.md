@@ -21,6 +21,15 @@ archived and private.
 
 ### Changed
 
+- Team page titles put the season right after "schedule" and, when a home
+  game is listed, say "next home game and tickets" ("New York Sirens schedule
+  2026-27: next home game and tickets"), the order and words Search Console
+  showed people typing from 2026-10-21 to 10-29. Meta descriptions open with
+  the team, its league and the season ("Gotham FC (NWSL) schedule 2026").
+  Big Ten team pages' `<h1>` uses the short name ("Nebraska women's
+  basketball 2026-27 schedule"), and the Big Ten league page's title and
+  `<h1>` say "Big Ten women's basketball". No URL, feed, data file,
+  noindex rule or link changed.
 - A league or team page whose build checked Ticketmaster and found no listed
   game is now `noindex` (and has no canonical link) and is left out of
   `sitemap.xml`, so about a quarter of the site no longer asks search engines
