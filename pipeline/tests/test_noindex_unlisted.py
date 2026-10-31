@@ -1,7 +1,10 @@
-"""A league or team page that lists no game is noindex and out of the
-sitemap, and comes back the day a game is listed. It still says plainly that
-nothing is listed (absence is never rendered as a value), and a build that
-fetched nothing treats no page as empty: not checked is not "no games"."""
+"""A league or team page that lists no game and has no verified official
+ticket page is noindex and out of the sitemap, and comes back the day a game
+is listed. A page that lists no game but links its team's (DECISIONS 0020) or
+league's (DECISIONS 0021) official ticket page stays indexable and in the
+sitemap. Every empty page still says plainly that nothing is listed
+(absence is never rendered as a value), and a build that fetched nothing
+treats no page as empty: not checked is not "no games"."""
 
 from __future__ import annotations
 
@@ -14,7 +17,7 @@ from pathlib import Path
 import pytest
 
 from wsc_pipeline import build as build_module
-from wsc_pipeline import sitemap, validate_seo
+from wsc_pipeline import config, official_tickets, sitemap, validate_seo
 
 from .conftest import make_raw_event
 from .fixture_site import BASE_URL, RAW_EVENTS_BY_TEAM, build_fixture_site
@@ -25,7 +28,23 @@ CANONICAL = '<link rel="canonical"'
 # In the fixture: games on these league and team pages only.
 LISTED = {"/wnba/", "/nwsl/", "/pwhl/", "/wnba/las-vegas-aces/", "/wnba/seattle-storm/"}
 LISTED |= {"/nwsl/portland-thorns/", "/pwhl/toronto-sceptres/"}
-EMPTY = ("/ausl/", "/ncaaw-big-ten/", "/wnba/chicago-sky/", "/nwsl/angel-city/")
+# Empty and kept out: the Big Ten league page (the league sells no tickets;
+# each school does) and Rutgers, the one team with no verified official
+# ticket page (official_tickets.py).
+RUTGERS = "/ncaaw-big-ten/rutgers-scarlet-knights-womens-basketball/"
+BIG_TEN = "/ncaaw-big-ten/"
+EMPTY = (BIG_TEN, RUTGERS)
+# Empty but indexable: each links its team's official ticket page.
+EMPTY_TEAMS_WITH_TICKETS = ("/wnba/chicago-sky/", "/nwsl/angel-city/", "/ausl/chicago-bandits/")
+# Empty but indexable: links the league's official ticket page.
+AUSL = "/ausl/"
+EMPTY_WITH_TICKETS = (*EMPTY_TEAMS_WITH_TICKETS, AUSL)
+ALL_TEAMS = sum(len(lg.teams) for lg in config.LEAGUES)
+# Indexable in the fixture: home, privacy, accessibility, schedule, the 3
+# leagues that list a game, the AUSL league page, and every team page but
+# Rutgers's.
+INDEXABLE = 4 + 3 + 1 + ALL_TEAMS - 1
+OFFICIAL_SECTION = '<section class="official-tickets"'
 
 
 @pytest.fixture(scope="module")
@@ -58,6 +77,36 @@ def test_pages_with_games_are_indexable_and_listed(dist: Path):
         assert path in listed, path
 
 
+def test_the_fixture_has_the_cases_the_rule_separates():
+    """The tests below mean something only if the fixture holds both kinds of
+    empty team page and both kinds of empty league page."""
+    assert official_tickets.team_page("ncaaw-big-ten", RUTGERS.split("/")[2]) is None
+    for path in EMPTY_TEAMS_WITH_TICKETS:
+        league, team = path.strip("/").split("/")
+        assert official_tickets.team_page(league, team) is not None, path
+        assert RAW_EVENTS_BY_TEAM.get(team, []) == [], path
+    assert official_tickets.league_page("ausl") is not None
+    assert official_tickets.league_page("ncaaw-big-ten") is None
+    for slug in ("ausl", "ncaaw-big-ten"):
+        league = next(lg for lg in config.LEAGUES if lg.slug == slug)
+        assert all(RAW_EVENTS_BY_TEAM.get(t.slug, []) == [] for t in league.teams), slug
+
+
+def test_an_empty_league_page_follows_its_league_ticket_link(dist: Path):
+    """AUSL lists no game but links theausl.com/tickets/: indexed and listed.
+    The Big Ten lists no game and has no league ticket page: kept out."""
+    listed = _listed_paths(dist)
+    ausl = _page(dist, AUSL)
+    assert NOINDEX not in ausl
+    assert f'<link rel="canonical" href="{BASE_URL}{AUSL}">' in ausl
+    assert OFFICIAL_SECTION in ausl
+    assert AUSL in listed
+    big_ten = _page(dist, BIG_TEN)
+    assert NOINDEX in big_ten
+    assert OFFICIAL_SECTION not in big_ten
+    assert BIG_TEN not in listed
+
+
 def test_pages_with_no_games_are_noindex_and_not_in_the_sitemap(dist: Path):
     listed = _listed_paths(dist)
     for path in EMPTY:
@@ -71,7 +120,55 @@ def test_pages_with_no_games_are_noindex_and_not_in_the_sitemap(dist: Path):
         path = "/" + page.parent.relative_to(dist).as_posix() + "/"
         if path.count("/") >= 3 or path in {"/wnba/", "/nwsl/", "/pwhl/", "/ausl/", "/ncaaw-big-ten/"}:
             assert (path in listed) != (NOINDEX in page.read_text()), path
-    assert len(listed) == 4 + len(LISTED)  # home, privacy, accessibility, schedule + the listed ones
+    assert len(listed) == INDEXABLE
+
+
+def test_an_empty_team_page_with_an_official_ticket_link_is_indexable_and_listed(dist: Path):
+    listed = _listed_paths(dist)
+    for path in EMPTY_TEAMS_WITH_TICKETS:
+        html = _page(dist, path)
+        assert NOINDEX not in html, path
+        assert CANONICAL in html, path
+        assert OFFICIAL_SECTION in html, path
+        assert path in listed, path
+    # Rutgers lists nothing and has no official link: still kept out.
+    assert OFFICIAL_SECTION not in _page(dist, RUTGERS)
+
+
+def test_an_indexed_empty_page_reads_honestly(dist: Path):
+    """Indexed or not, an empty page says no game is listed, and claims none:
+    no season, no "home games" or "tickets" in the title, no SportsEvent."""
+    for path in (*EMPTY_WITH_TICKETS, *EMPTY):
+        html = _page(dist, path)
+        assert "No upcoming games found from Ticketmaster right now." in html, path
+        assert "No games are listed right now" in html, path  # the meta description
+        assert '"SportsEvent"' not in html, path
+        title = re.search(r"<title>([^<]*)</title>", html)
+        assert title is not None
+        assert not re.search(r"\b20\d\d\b|home games|tickets", title.group(1), re.I), title.group(1)
+        assert "Buy tickets" not in html.split('<footer class="site-footer">')[0], path
+    for path in EMPTY_TEAMS_WITH_TICKETS:
+        html = _page(dist, path)
+        assert "next-game--empty" in html, path
+        title = re.search(r"<title>([^<]*)</title>", html)
+        assert title is not None
+        assert title.group(1).endswith(" schedule"), title.group(1)
+    assert "<title>AUSL schedule: add to your calendar | Next Home Game</title>" in _page(dist, AUSL)
+    assert "<h1>AUSL schedule</h1>" in _page(dist, AUSL)
+
+
+def test_an_indexed_empty_big_ten_team_page_may_point_to_its_noindex_league_page(dist: Path):
+    """The breadcrumb relaxation of DECISIONS 0020 is still needed: between
+    seasons the Big Ten league page is noindex (no league ticket page) while
+    its team pages with a school ticket page are indexed, and their
+    breadcrumb names the league page. The validator passes it."""
+    iowa = "/ncaaw-big-ten/iowa-hawkeyes-womens-basketball/"
+    html = _page(dist, iowa)
+    assert NOINDEX not in html
+    assert f'"item": "{BASE_URL}{BIG_TEN}"' in html or f'"item":"{BASE_URL}{BIG_TEN}"' in html
+    assert NOINDEX in _page(dist, BIG_TEN)
+    assert iowa in _listed_paths(dist)
+    assert validate_seo.validate_dist(dist)
 
 
 def test_an_empty_page_still_says_nothing_is_listed(dist: Path):
@@ -93,32 +190,32 @@ def test_the_manifest_still_tracks_empty_pages_so_their_return_is_dated(dist: Pa
 
 def test_a_noindex_empty_page_passes_the_validator(dist: Path):
     pages, _ = validate_seo.validate_dist(dist)
-    assert pages == 4 + len(LISTED)
+    assert pages == INDEXABLE
 
 
 def test_a_page_returns_to_the_sitemap_when_a_game_is_listed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    sky = RAW_EVENTS_BY_TEAM.get("chicago-sky", [])
-    assert sky == []  # the control below means something only if it starts empty
+    slug = RUTGERS.strip("/").split("/")[1]
+    assert RAW_EVENTS_BY_TEAM.get(slug, []) == []  # the control below means something only if it starts empty
     game = make_raw_event(
-        event_id="FX-SKY",
-        name="Chicago Sky vs Dallas Wings",
-        date_time="2026-09-25T00:00:00Z",
-        local_date="2026-09-24",
+        event_id="FX-RU",
+        name="Rutgers Scarlet Knights Womens Basketball vs. Iowa Hawkeyes Womens Basketball",
+        date_time="2026-11-21T00:00:00Z",
+        local_date="2026-11-20",
         local_time="19:00:00",
-        venue_name="Wintrust Arena",
-        venue_city="Chicago",
-        venue_state="IL",
-        venue_street="200 E Cermak Rd",
-        venue_postal_code="60616",
+        venue_name="Jersey Mike's Arena",
+        venue_city="Piscataway",
+        venue_state="NJ",
+        venue_street="83 Rockafeller Rd",
+        venue_postal_code="08854",
         venue_country="US",
-        timezone="America/Chicago",
-        url="https://www.ticketmaster.com/event/FX-SKY",
+        timezone="America/New_York",
+        url="https://www.ticketmaster.com/event/FX-RU",
     )
-    monkeypatch.setitem(RAW_EVENTS_BY_TEAM, "chicago-sky", [game])
+    monkeypatch.setitem(RAW_EVENTS_BY_TEAM, slug, [game])
     out = tmp_path / "dist"
     build_fixture_site(out)
-    assert NOINDEX not in _page(out, "/wnba/chicago-sky/")
-    assert "/wnba/chicago-sky/" in _listed_paths(out)
+    assert NOINDEX not in _page(out, RUTGERS)
+    assert RUTGERS in _listed_paths(out)
     assert validate_seo.validate_dist(out)
 
 
@@ -126,7 +223,7 @@ def test_a_build_that_fetched_nothing_marks_no_page_noindex(tmp_path: Path):
     out = tmp_path / "dist"
     build_module.build(out_dir=out, base_url=BASE_URL, api_key=None, affiliate_id=None)
     listed = _listed_paths(out)
-    assert len(listed) == 4 + 72  # every page: nothing was checked, so nothing is "empty"
+    assert len(listed) == 4 + len(config.LEAGUES) + ALL_TEAMS  # nothing was checked, so nothing is "empty"
     for path in ("/wnba/", "/wnba/chicago-sky/", "/ausl/"):
         assert NOINDEX not in _page(out, path)
         assert path in listed
@@ -140,7 +237,7 @@ def test_a_build_that_fetched_nothing_marks_no_page_noindex(tmp_path: Path):
 
 def test_control_an_empty_page_that_is_not_noindex_fails(dist: Path, tmp_path: Path):
     out = _copy(dist, tmp_path / "dist")
-    page = out / "wnba/chicago-sky/index.html"
+    page = out / RUTGERS.strip("/") / "index.html"
     text = page.read_text()
     assert NOINDEX in text
     page.write_text(text.replace(NOINDEX + "\n", "", 1))
@@ -164,9 +261,9 @@ def test_control_an_empty_page_listed_in_the_sitemap_fails(dist: Path, tmp_path:
     out = _copy(dist, tmp_path / "dist")
     sm = out / "sitemap.xml"
     text = sm.read_text()
-    assert "/wnba/chicago-sky/" not in text
-    sm.write_text(text.replace("</urlset>", f"  <url><loc>{BASE_URL}/wnba/chicago-sky/</loc></url>\n</urlset>"))
-    assert "/wnba/chicago-sky/" in sm.read_text()
+    assert RUTGERS not in text
+    sm.write_text(text.replace("</urlset>", f"  <url><loc>{BASE_URL}{RUTGERS}</loc></url>\n</urlset>"))
+    assert RUTGERS in sm.read_text()
     with pytest.raises(validate_seo.SeoError, match="disagree"):
         validate_seo.validate_dist(out)
 
@@ -174,11 +271,107 @@ def test_control_an_empty_page_listed_in_the_sitemap_fails(dist: Path, tmp_path:
 def test_control_the_rule_is_what_drops_the_page(dist: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """With the rule switched off the same build lists and indexes every page,
     so the omissions above are the rule's doing and nothing else's."""
+    # site.py and build.py both call site_data.kept_out_of_search, which reads
+    # nothing_listed from site_data: one switch turns the rule off everywhere.
     monkeypatch.setattr("wsc_pipeline.site_data.nothing_listed", lambda payload: False)
-    monkeypatch.setattr("wsc_pipeline.site.nothing_listed", lambda payload: False)
-    monkeypatch.setattr(build_module.site_data, "nothing_listed", lambda payload: False)
     out = tmp_path / "dist"
     build_fixture_site(out)
-    assert "/wnba/chicago-sky/" in _listed_paths(out)
-    assert NOINDEX not in _page(out, "/wnba/chicago-sky/")
-    assert len(_listed_paths(out)) == 4 + 72
+    assert RUTGERS in _listed_paths(out)
+    assert NOINDEX not in _page(out, RUTGERS)
+    assert BIG_TEN in _listed_paths(out)
+    assert len(_listed_paths(out)) == 4 + len(config.LEAGUES) + ALL_TEAMS
+
+
+def test_control_an_empty_team_page_with_a_ticket_link_made_noindex_fails(dist: Path, tmp_path: Path):
+    """The old rule (every empty page out) applied to a page with an official
+    ticket link, in both the page and the sitemap so they agree: the
+    validator still refuses it."""
+    out = _copy(dist, tmp_path / "dist")
+    page = out / "wnba/chicago-sky/index.html"
+    text = page.read_text()
+    assert NOINDEX not in text
+    page.write_text(text.replace('<meta name="description"', NOINDEX + '\n<meta name="description"', 1))
+    assert NOINDEX in page.read_text()
+    sm = out / "sitemap.xml"
+    entry = re.search(rf"<url><loc>{re.escape(BASE_URL)}/wnba/chicago-sky/</loc>.*?</url>\n?", sm.read_text())
+    assert entry is not None
+    sm.write_text(sm.read_text().replace(entry.group(0), ""))
+    assert "/wnba/chicago-sky/" not in sm.read_text()  # both halves of the sabotage applied
+    with pytest.raises(validate_seo.SeoError, match="links an official ticket page"):
+        validate_seo.validate_dist(out)
+
+
+def test_control_an_empty_league_page_with_a_ticket_link_made_noindex_fails(dist: Path, tmp_path: Path):
+    """The rule before DECISIONS 0021 (every empty league page out) applied
+    to AUSL, in both the page and the sitemap so they agree: the validator
+    refuses it, because the page links the league's official ticket page."""
+    out = _copy(dist, tmp_path / "dist")
+    page = out / "ausl/index.html"
+    text = page.read_text()
+    canonical = f'<link rel="canonical" href="{BASE_URL}{AUSL}">'
+    assert NOINDEX not in text
+    assert canonical in text
+    page.write_text(text.replace(canonical, NOINDEX, 1))
+    assert NOINDEX in page.read_text()
+    assert canonical not in page.read_text()
+    sm = out / "sitemap.xml"
+    entry = re.search(rf"<url><loc>{re.escape(BASE_URL + AUSL)}</loc>.*?</url>\n?", sm.read_text())
+    assert entry is not None
+    sm.write_text(sm.read_text().replace(entry.group(0), ""))
+    assert AUSL not in _listed_paths(out)  # both halves of the sabotage applied
+    with pytest.raises(validate_seo.SeoError, match="links an official ticket page"):
+        validate_seo.validate_dist(out)
+
+
+def test_control_an_empty_league_page_without_a_ticket_link_indexed_and_listed_fails(dist: Path, tmp_path: Path):
+    """The Big Ten league page lists no game and links no league ticket page.
+    Put back in the index, consistently in the page and the sitemap, it
+    fails: an empty page earns its place only with an official ticket link."""
+    out = _copy(dist, tmp_path / "dist")
+    page = out / "ncaaw-big-ten/index.html"
+    text = page.read_text()
+    assert NOINDEX in text
+    assert OFFICIAL_SECTION not in text
+    canonical = f'<link rel="canonical" href="{BASE_URL}{BIG_TEN}">'
+    page.write_text(text.replace(NOINDEX, canonical, 1))
+    assert NOINDEX not in page.read_text()
+    sm = out / "sitemap.xml"
+    sm.write_text(sm.read_text().replace("</urlset>", f"  <url><loc>{BASE_URL}{BIG_TEN}</loc></url>\n</urlset>"))
+    assert BIG_TEN in _listed_paths(out)  # both halves of the sabotage applied
+    with pytest.raises(validate_seo.SeoError, match="links no official ticket page, so it must be noindex"):
+        validate_seo.validate_dist(out)
+
+
+def test_control_the_league_ticket_link_is_what_indexes_an_empty_league_page(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Take AUSL's league ticket link away and its empty page is kept out
+    again; give the Big Ten one and its empty page is indexed. The validator
+    agrees with both builds."""
+    monkeypatch.delitem(official_tickets.OFFICIAL_LEAGUE_TICKETS, "ausl")
+    fake = official_tickets.OfficialTicketPage("https://example.org/tickets", "test only")
+    monkeypatch.setitem(official_tickets.OFFICIAL_LEAGUE_TICKETS, "ncaaw-big-ten", fake)
+    assert official_tickets.league_page("ausl") is None  # the sabotage applied
+    assert official_tickets.league_page("ncaaw-big-ten") is fake
+    out = tmp_path / "dist"
+    build_fixture_site(out)
+    listed = _listed_paths(out)
+    assert NOINDEX in _page(out, AUSL)
+    assert AUSL not in listed
+    assert NOINDEX not in _page(out, BIG_TEN)
+    assert BIG_TEN in listed
+    assert validate_seo.validate_dist(out)
+
+
+def test_control_rutgers_given_a_ticket_link_is_indexed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """The ticket link is what keeps an empty team page indexed: give Rutgers
+    one and its page joins the sitemap; the validator agrees."""
+    slug = RUTGERS.strip("/").split("/")[1]
+    fake = official_tickets.OfficialTicketPage("https://example.org/tickets", "test only")
+    monkeypatch.setitem(official_tickets.OFFICIAL_TEAM_TICKETS, ("ncaaw-big-ten", slug), fake)
+    assert official_tickets.team_page("ncaaw-big-ten", slug) is fake  # the sabotage applied
+    out = tmp_path / "dist"
+    build_fixture_site(out)
+    assert RUTGERS in _listed_paths(out)
+    assert NOINDEX not in _page(out, RUTGERS)
+    assert validate_seo.validate_dist(out)

@@ -12,6 +12,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from . import official_tickets
 from .config import League, Team
 from .normalize import (
     Game,
@@ -139,9 +140,30 @@ def team_data(
 def nothing_listed(payload: dict[str, Any]) -> bool:
     """True when a league or team page's build checked Ticketmaster and it
     listed no game. False for a build that fetched nothing: that is "not
-    checked", never "no games", so such a page is not treated as empty. The
-    one rule behind a page's noindex and its absence from the sitemap."""
+    checked", never "no games", so such a page is not treated as empty.
+    kept_out_of_search builds the noindex rule on it."""
     return bool(payload.get("fetched", True)) and not payload["games"]
+
+
+def kept_out_of_search(payload: dict[str, Any]) -> bool:
+    """True when a league or team page is rendered noindex and left out of
+    the sitemap: the one rule behind both (site.render_league,
+    site.render_team, build._pages_kept_out_of_search).
+
+    A page that lists no game (nothing_listed) is kept out, except one with
+    a verified official ticket page: a team page with an entry in
+    official_tickets.team_page (DECISIONS 0020), or a league page with one in
+    official_tickets.league_page (DECISIONS 0021). That page still answers
+    what the searcher came for, where the team or league sells tickets, and
+    says plainly that no game is listed yet. Both narrow the empty-page rule
+    of 2026-10-22."""
+    if not nothing_listed(payload):
+        return False
+    league_slug = payload["league_slug"]
+    team_slug = payload.get("team_slug")
+    if team_slug is None:
+        return official_tickets.league_page(league_slug) is None
+    return official_tickets.team_page(league_slug, team_slug) is None
 
 
 def tracked_team_is_home(team: Team, game: Game) -> bool | None:

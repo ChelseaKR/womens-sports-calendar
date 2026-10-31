@@ -29,6 +29,20 @@ archived and private.
 
 ### Changed
 
+- A team page that lists no game but links the team's official ticket page
+  is indexed and in `sitemap.xml` again. #58 had made every empty page
+  `noindex`, and those pages had drawn 133 of the site's 509 Search Console
+  impressions in October. A league page with no game, and a team page with
+  no game and no official ticket link (Rutgers), stay `noindex`. On the
+  2026-10-31 live build this returns 19 team pages (13 WNBA, 6 AUSL) to the
+  index. Empty pages still say no game is listed and carry no event markup.
+  `validate_seo` fails if a page breaks the rule either way (DECISIONS 0020).
+- A league page that lists no game but links the league's official ticket
+  page is indexed and in `sitemap.xml` too (DECISIONS 0021). On the
+  2026-10-31 live build that is the AUSL league page. The Big Ten league
+  page, which has no league ticket link, stays `noindex` whenever it lists
+  no game. An empty league page's meta description now says no games are
+  listed.
 - Big Ten team pages' calendar heading uses the name fans search ("Add the
   Nebraska women's basketball schedule to your calendar", not "Nebraska
   Cornhuskers Womens Basketball"). Other leagues' headings are unchanged.
