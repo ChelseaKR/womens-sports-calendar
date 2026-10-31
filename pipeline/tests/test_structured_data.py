@@ -187,10 +187,11 @@ def test_hostile_strings_cannot_close_the_json_ld_block():
 def test_validator_passes_the_fixture_site_and_counts_its_events(fixture_dist: Path):
     pages, events = validate_seo.validate_dist(fixture_dist)
     # Home, privacy, accessibility, schedule; the 3 leagues that list a game;
-    # every team page but Rutgers's: an empty team page with an official
-    # ticket link stays indexed (DECISIONS 0020). The 2 empty league pages
-    # and Rutgers (empty, no official link) are noindex and unlisted.
-    assert pages == 4 + 3 + sum(len(lg.teams) for lg in config.LEAGUES) - 1
+    # the empty AUSL league page and every team page but Rutgers's: an empty
+    # page with an official ticket link stays indexed (DECISIONS 0020, 0021).
+    # The empty Big Ten league page and Rutgers (empty, no official link)
+    # are noindex and unlisted.
+    assert pages == 4 + 3 + 1 + sum(len(lg.teams) for lg in config.LEAGUES) - 1
     # Aces 4 + Storm 1 + Thorns 1 + Sceptres 1 on team pages; WNBA 4, NWSL 1
     # and PWHL 1 on league pages (the Aces/Storm game once).
     assert events == 13

@@ -29,12 +29,12 @@ build before deploy. Exits non-zero on the first site that would publish:
 
 7. A page that lists no game (a league or team page whose data says it was
    fetched and has no games) is noindex and neither in the sitemap nor
-   counted as indexable, unless it is a team page that links an official
+   counted as indexable, unless it links its team's or league's official
    ticket page: that one must be indexable and in the sitemap (DECISIONS
-   0020). An empty team page with that link that is noindex fails, and so
-   does an indexable empty page without it. Any other noindex page, or one
-   whose data lists a game, fails: a page never leaves the index by
-   accident.
+   0020 for team pages, 0021 for league pages). An empty page with that
+   link that is noindex fails, and so does an indexable empty page without
+   it. Any other noindex page, or one whose data lists a game, fails: a
+   page never leaves the index by accident.
 
 Usage: python -m wsc_pipeline.validate_seo <dist-dir>
 """
@@ -231,9 +231,9 @@ def _indexable_pages(dist: Path) -> set[str]:
             continue
         parsed = _parse_page(page)
         if parsed.noindex and _lists_no_game(dist, site_path):
-            if _is_team_page(site_path) and parsed.official_ticket_link:
+            if parsed.official_ticket_link:
                 raise SeoError(
-                    f"{page}: lists no game but links the team's official ticket page, "
+                    f"{page}: lists no game but links an official ticket page, "
                     "so it must be indexable and in the sitemap"
                 )
             continue
@@ -248,8 +248,7 @@ def _is_team_page(site_path: str) -> bool:
 def _lists_no_game(dist: Path, site_path: str) -> bool:
     """True for a league or team page whose data says Ticketmaster was
     checked and listed nothing: the only kind of page allowed to be noindex
-    and outside the sitemap (and, for a team page, only without an official
-    ticket link). Anything else that is noindex stays in the indexable set,
+    and outside the sitemap (and only without an official ticket link). Anything else that is noindex stays in the indexable set,
     so _check_page then rejects it."""
     data = _schedule_data(dist, site_path)
     return data is not None and bool(data.get("fetched", True)) and not data["games"]
@@ -353,16 +352,24 @@ def _check_events(page: Path, events: list[dict[str, Any]], games: list[dict[str
 
 def _breadcrumb_target_ok(dist: Path, base_url: str, url: str, pages: set[str]) -> bool:
     """A breadcrumb item links an indexable page, or a league page left out
-    of the index because it lists no game: an empty team page with an
-    official ticket link is indexable (DECISIONS 0020) while its league's
-    page may not be, and its breadcrumb still names that real page."""
+    of the index because it lists no game and links no official league
+    ticket page. An empty team page with an official ticket link is
+    indexable (DECISIONS 0020) while its league's page may not be: the Big
+    Ten has no league ticket page, so between seasons its page is noindex
+    while 17 of its 18 team pages are indexed (DECISIONS 0021). Their
+    breadcrumb still names that real page."""
     if not url.startswith(base_url + "/"):
         return False
     target = url[len(base_url) :]
     if target in pages:
         return True
-    built = (dist / target.strip("/") / "index.html").is_file()
-    return built and not _is_team_page(target) and _lists_no_game(dist, target)
+    built = dist / target.strip("/") / "index.html"
+    return (
+        built.is_file()
+        and not _is_team_page(target)
+        and _lists_no_game(dist, target)
+        and not _parse_page(built).official_ticket_link
+    )
 
 
 def _check_breadcrumbs(dist: Path, page: Path, nodes: list[dict[str, Any]], base_url: str, pages: set[str]) -> None:
@@ -386,10 +393,8 @@ def _check_page(dist: Path, site_path: str, base_url: str, pages: set[str]) -> t
     parsed = _parse_page(page)
     if parsed.noindex:
         raise SeoError(f"{page}: a noindex page is listed in the sitemap")
-    if _lists_no_game(dist, site_path) and not (_is_team_page(site_path) and parsed.official_ticket_link):
-        raise SeoError(
-            f"{page}: lists no game and is not a team page with an official ticket link, so it must be noindex"
-        )
+    if _lists_no_game(dist, site_path) and not parsed.official_ticket_link:
+        raise SeoError(f"{page}: lists no game and links no official ticket page, so it must be noindex")
     if len(parsed.titles) != 1 or not parsed.titles[0]:
         raise SeoError(f"{page}: expected exactly one non-empty <title>")
     if len(parsed.descriptions) != 1 or not parsed.descriptions[0]:

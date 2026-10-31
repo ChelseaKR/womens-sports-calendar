@@ -1173,16 +1173,7 @@ just its games.</p>
     return _base(
         feed=_feed_for(feed_keys, league["league_slug"], base_url),
         title=_fit([f"{heading}: add to your calendar | {SITE_NAME}", f"{heading} | {SITE_NAME}", heading], TITLE_MAX),
-        description=_fit(
-            [
-                f"{heading}: add every game to Google Calendar, Apple Calendar or Outlook, or just "
-                "your team's, with dates, times and venues, updated nightly.",
-                f"{heading}: add every game, or just your team's, to your calendar, with dates, "
-                "times, venues and ticket links. Updated nightly.",
-                f"{heading}: add every game to your calendar, updated nightly.",
-            ],
-            DESCRIPTION_MAX,
-        ),
+        description=_league_description(heading, league),
         canonical_url=page_url,
         base_url=base_url,
         body=body,
@@ -1192,6 +1183,32 @@ just its games.</p>
         ga4_id=ga4_id,
         paid_links=paid_links,
         jsonld=structured_data.script_block(nodes),
+    )
+
+
+def _league_description(heading: str, league: dict[str, Any]) -> str:
+    """A league page's meta description. When the build checked Ticketmaster
+    and it listed no game, it says so, as an empty team page's does: an
+    empty league page with an official ticket link is indexed (DECISIONS
+    0021), and a search result must not promise games that are not there."""
+    if league.get("fetched", True) and not league["games"]:
+        return _fit(
+            [
+                f"{heading}. No games are listed right now; add it to your calendar and "
+                "games appear as they are listed, updated nightly.",
+                f"{heading}. No games are listed right now.",
+            ],
+            DESCRIPTION_MAX,
+        )
+    return _fit(
+        [
+            f"{heading}: add every game to Google Calendar, Apple Calendar or Outlook, or just "
+            "your team's, with dates, times and venues, updated nightly.",
+            f"{heading}: add every game, or just your team's, to your calendar, with dates, "
+            "times, venues and ticket links. Updated nightly.",
+            f"{heading}: add every game to your calendar, updated nightly.",
+        ],
+        DESCRIPTION_MAX,
     )
 
 
