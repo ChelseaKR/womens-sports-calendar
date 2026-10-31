@@ -581,3 +581,46 @@ click events.*
   page gains its "Paid links" section, the date does not move by itself.
   The owner moves it in the pull request that follows the account change,
   as for her own ids.
+
+## 0019 — A "Get tickets" link to each team's and league's official ticket page (2026-10-31)
+
+**Why:** a game's "Buy tickets" link (0013) exists only while Ticketmaster
+lists that game. Between seasons a team page lists nothing, and Search
+Console (2026-10-21 to 10-29) showed that most of the site's impressions
+were for teams in that state (WNBA "<team> schedule" and "schedule 2027"
+queries). Those visitors still want to know where tickets are sold.
+
+What ships (`pipeline/src/wsc_pipeline/official_tickets.py`):
+
+- **One plain link per team and per league** to the page the team, school
+  or league publishes for tickets, under a "Get <team> tickets" heading,
+  whether or not a game is listed. 66 of the 67 tracked teams and 4 of the
+  5 leagues have one (the Big Ten has none: each school sells its own).
+- **Verified, never guessed.** Each URL is the one the league's or team's
+  own site links (wnba.com/teams, nwslsoccer.com/tickets and /teams,
+  thepwhl.com/en/tickets, theausl.com team pages, each school's athletics
+  site), fetched on 2026-10-31 with HTTP 200 and a ticket page title. Each
+  entry records where it was found. Rutgers has no link: its
+  "TicketCentral" address now redirects to football tickets, and a guessed
+  women's basketball address served a placeholder page.
+- **Never a resale marketplace**, as 0018 requires.
+- **Affiliate hook, empty.** `official_tickets.AFFILIATE_TEMPLATES` maps a
+  destination host to a URL template with `{url}`. It is empty because no
+  ticket affiliate program has been joined. While it is empty every link is
+  the plain official URL. When the owner sets one in a reviewed pull
+  request, only links to that host are wrapped, each gets
+  `rel="sponsored noopener"` and the "Paid link" label, and the footer
+  disclosure turns on (`sellers.affiliate_links_active`). That pull request
+  also updates the privacy page's "Paid links" section, which names Impact
+  today, and moves `site.PRIVACY_UPDATED`.
+- **Clicks (0012, amended):** a click on one of these links in `<main>`
+  sends `ticket_click` with `official: true`. It is matched by the section
+  the link sits in, not by a list of URLs, so the inline script on every
+  page stays the size it was (a URL list added about 3 KB per page and
+  failed the page-weight budget). The privacy page now lists these links among the counted
+  ones (`PRIVACY_UPDATED` moved to 2026-10-31).
+- **Feeds unchanged.** The `.ics` feeds and `data/*.json` never carry these
+  links (`tests/test_official_tickets.py`).
+
+Revisit: re-check the URLs at the start of each league's season; team sites
+move ticket pages between seasons.

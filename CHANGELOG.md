@@ -12,6 +12,14 @@ archived and private.
 
 ### Added
 
+- Every team page has a "Get <team> tickets" link to the team's own ticket
+  page (the school's, for Big Ten teams), and each league page links the
+  league's, even when no game is listed. Each address was checked against
+  the league's or team's own site on 2026-10-31; Rutgers has no link because
+  no women's basketball ticket page could be verified. Links are plain, with
+  an empty per-host affiliate setting for later (DECISIONS 0019). A click
+  sends the GA4 `ticket_click` event with `official: true`. Feeds and data
+  files are unchanged.
 - After each production deploy, the pages that are new or changed since the
   previous deploy are announced to IndexNow (https://www.indexnow.org/documentation)
   so search engines can crawl them sooner. The list comes from comparing the build's `lastmod.json` with the live one. Only https URLs on this site's own
@@ -21,6 +29,9 @@ archived and private.
 
 ### Changed
 
+- Big Ten team pages' calendar heading uses the name fans search ("Add the
+  Nebraska women's basketball schedule to your calendar", not "Nebraska
+  Cornhuskers Womens Basketball"). Other leagues' headings are unchanged.
 - Team pages put the season right after "schedule" in the title ("Las Vegas
   Aces schedule 2026: home games and tickets"), the order fans search in, and
   the meta description opens the same way. The H1 adds "and home games" when a

@@ -34,7 +34,11 @@ What ga4_head_snippet() emits when an ID is set, on every HTML page:
 - A click listener that sends a gtag event for a "Buy tickets" link (any
   link inside <main> whose destination host starts with, or contains after
   a dot, one of the ticket-seller names from sellers.ticket_host_names(),
-  e.g. "ticketmaster.", "seatgeek.", "axs.": ticket_click), for the
+  e.g. "ticketmaster.", "seatgeek.", "axs.": ticket_click; a link to a
+  team's or league's official ticket page (a link inside the "Get tickets"
+  section, official_tickets.OFFICIAL_SECTION_SELECTOR) is a ticket_click
+  too, with `official: true`; matched by its section rather than a list of
+  URLs so every page does not carry that list), for the
   "Team shop" link while it exists (a link inside <main> to the Fanatics
   store: shop_click), or for a calendar-subscribe link (webcal:, a path
   ending .ics, or a Google Calendar or Outlook add-by-URL link whose query
@@ -62,6 +66,7 @@ import re
 from urllib.parse import urlparse
 
 from .impact import IMPACT_SHARED_DOMAINS
+from .official_tickets import OFFICIAL_SECTION_SELECTOR
 from .sellers import ticket_host_names
 from .team_shops import FANATICS_HOST, shop_links_on
 
@@ -176,7 +181,9 @@ _SNIPPET_TEMPLATE = r"""<script>
     var to = (paid && landing(a.href)) || a;
     var params = { link_url: to.href, link_domain: to.hostname };
     if (paid) params.affiliate = true;
-    if (a.closest("main") && __TICKET_HOST_RE__.test(to.hostname)) {
+    var official = !!a.closest(__OFFICIAL_SECTION__);
+    if (official) params.official = true;
+    if (a.closest("main") && (official || __TICKET_HOST_RE__.test(to.hostname))) {
       gtag("event", "ticket_click", params);
     }__SHOP_BRANCH__ else if (a.protocol === "webcal:" || /\.ics$/.test(a.pathname) || (/^(calendar\.google\.com|outlook\.(live|office)\.com)$/i.test(a.hostname) && /\.ics/i.test(a.search || ""))) {
       gtag("event", "calendar_subscribe", { link_url: a.href });
@@ -257,6 +264,7 @@ def ga4_head_snippet(ga4_id: str | None, *, base_url: str) -> str:
         "__IMPACT_PATH_RE__": impact_path_re,
         "__IMPACT_HOST_RE__": impact_host_re,
         "__SHOP_BRANCH__": _shop_branch(),
+        "__OFFICIAL_SECTION__": json.dumps(OFFICIAL_SECTION_SELECTOR),
         "__OPT_OUT_KEY__": json.dumps(OPT_OUT_STORAGE_KEY),
         "__GA_DISABLE__": json.dumps(f"ga-disable-{mid}"),
         **{token: json.dumps(message) for token, message in OPT_OUT_MESSAGES.items()},
