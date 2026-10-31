@@ -95,8 +95,8 @@ review is open (#5).
 4. **Secret-management policy:** `SECURITY.md`, Credentials. Two Actions
    secrets are read only by the `pages.yml` build job, redacted from errors,
    and rotated on suspicion and reviewed annually.
-5. **VEX:** `pipeline/vex.cdx.json` (extract-zip, dev-only, no fix
-   released; waiver expires 2026-12-16).
+5. **VEX:** `pipeline/vex.cdx.json` (no active statements; the extract-zip
+   ones went with the package when puppeteer 25 dropped it).
 
 ### Threat model (STRIDE, draft)
 
