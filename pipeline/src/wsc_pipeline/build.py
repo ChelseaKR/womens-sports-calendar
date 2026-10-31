@@ -254,7 +254,7 @@ def build(
     )
     _write_static(tmp_dir, paid_links=paid_links)
     state = sitemap.next_state(fingerprints, previous_state, fetched_at)
-    unlisted = _pages_with_no_listed_games(games_by_league, api_key_present, truncated)
+    unlisted = _pages_kept_out_of_search(games_by_league, api_key_present, truncated)
     _write_sitemap_and_robots(tmp_dir, base_url, state, unlisted=unlisted)
     _write_version(tmp_dir, fetched_at)
 
@@ -532,27 +532,28 @@ def _write_static(out_dir: Path, *, paid_links: bool = False) -> None:
         shutil.copyfile(src, fonts_dir / name)
 
 
-def _pages_with_no_listed_games(
+def _pages_kept_out_of_search(
     games_by_league: dict[str, list[Game]],
     api_key_present: bool,
     truncated: dict[str, set[str]],
 ) -> frozenset[str]:
-    """Site paths of the league and team pages whose build checked
-    Ticketmaster and found no game to list. Each is rendered noindex
+    """Site paths of the league and team pages rendered noindex
     (site.render_league, site.render_team) and kept out of the sitemap, by
-    the same rule (site_data.nothing_listed); it returns on the first build
-    that lists a game. A build that fetched nothing has none: not checked is
-    not empty."""
+    the same rule (site_data.kept_out_of_search): the build checked
+    Ticketmaster and found no game to list, and, for a team page, no verified
+    official ticket page exists. A page returns on the first build that lists
+    a game. A build that fetched nothing has none: not checked is not
+    empty."""
     out: set[str] = set()
     for lg in config.LEAGUES:
         games = games_by_league[lg.slug]
         incomplete = truncated.get(lg.slug, set())
-        if site_data.nothing_listed(
+        if site_data.kept_out_of_search(
             site_data.league_data(lg, games, fetched=api_key_present, possibly_incomplete_teams=incomplete)
         ):
             out.add(f"/{lg.slug}/")
         for team in lg.teams:
-            if site_data.nothing_listed(
+            if site_data.kept_out_of_search(
                 site_data.team_data(
                     team, lg, games, fetched=api_key_present, possibly_incomplete=team.slug in incomplete
                 )

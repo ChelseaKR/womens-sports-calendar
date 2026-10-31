@@ -38,7 +38,7 @@ from .config import league_names_for, title_name_for
 from .ics import COMBINED_FEED_PATH, TIME_TBA_NOTE, TIME_TBA_SUFFIX, calendar_name
 from .normalize import display_date
 from .sellers import AFFILIATE_LINK_TEMPLATES, affiliate_links_active, is_affiliate_link
-from .site_data import nothing_listed, schedule_window
+from .site_data import kept_out_of_search, schedule_window
 from .team_shops import shop_links_on, team_shop_url
 
 CSS_PATH = "/style.css"
@@ -1188,7 +1188,7 @@ just its games.</p>
         body=body,
         og_image=og_image,
         og_image_alt=og_image_alt,
-        noindex=nothing_listed(league),
+        noindex=kept_out_of_search(league),
         ga4_id=ga4_id,
         paid_links=paid_links,
         jsonld=structured_data.script_block(nodes),
@@ -1489,7 +1489,7 @@ def render_team(
         body=body,
         og_image=og_image,
         og_image_alt=og_image_alt,
-        noindex=nothing_listed(team),
+        noindex=kept_out_of_search(team),
         ga4_id=ga4_id,
         paid_links=paid_links,
         jsonld=structured_data.script_block(nodes),
