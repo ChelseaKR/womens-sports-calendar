@@ -296,7 +296,7 @@ const out = scenarios.map((sc) => {
   const clicks = (sc.clicks || []).map((link) => {
     const before = ctx.dataLayer ? ctx.dataLayer.length : 0;
     let prevented = false;
-    const anchor = Object.assign({}, link, { closest: (sel) => (sel === "main" ? (link.inMain ? {} : null) : null) });
+    const anchor = Object.assign({}, link, { closest: (sel) => (sel === "main" ? (link.inMain ? {} : null) : sel === ".official-tickets" ? (link.inOfficial ? {} : null) : null) });
     const ev = { target: { closest: (sel) => (sel === "a[href]" ? anchor : null) }, preventDefault: () => { prevented = true; } };
     if (listeners.click) listeners.click(ev);
     const pushed = ctx.dataLayer ? Array.from(ctx.dataLayer).slice(before).map((a) => Array.from(a)) : [];

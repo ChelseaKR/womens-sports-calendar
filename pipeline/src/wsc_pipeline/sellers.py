@@ -43,7 +43,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from urllib.parse import quote, urlparse
 
-from . import config, impact
+from . import config, impact, official_tickets
 from .normalize import Game, team_is_participant
 
 
@@ -181,9 +181,10 @@ def ticket_host_names() -> tuple[str, ...]:
 
 def affiliate_links_active() -> bool:
     """True when any link on the site can be an affiliate link: a buy-link
-    template or the Fanatics shop link. The footer and privacy disclosure
+    template, the Fanatics shop link, or an official-ticket-page template
+    (official_tickets.AFFILIATE_TEMPLATES). The footer and privacy disclosure
     follow this."""
-    return any(AFFILIATE_LINK_TEMPLATES.values()) or bool(FANATICS_TEMPLATE)
+    return any(AFFILIATE_LINK_TEMPLATES.values()) or bool(FANATICS_TEMPLATE) or official_tickets.affiliate_on()
 
 
 def is_affiliate_link(seller: str, url: str = "") -> bool:

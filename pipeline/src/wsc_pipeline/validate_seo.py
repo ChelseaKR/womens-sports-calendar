@@ -27,10 +27,14 @@ build before deploy. Exits non-zero on the first site that would publish:
 6. On a team page, exactly one SportsTeam, named as the page's team; on
    league and team pages, a BreadcrumbList whose items are real pages.
 
-7. A page that is noindex because it lists no game (a league or team page
-   whose data says it was fetched and has no games) is neither in the
-   sitemap nor counted as indexable. Any other noindex page, or one whose
-   data lists a game, fails: a page never leaves the index by accident.
+7. A page that lists no game (a league or team page whose data says it was
+   fetched and has no games) is noindex and neither in the sitemap nor
+   counted as indexable, unless it links its team's or league's official
+   ticket page: that one must be indexable and in the sitemap (DECISIONS
+   0020 for team pages, 0021 for league pages). An empty page with that
+   link that is noindex fails, and so does an indexable empty page without
+   it. Any other noindex page, or one whose data lists a game, fails: a
+   page never leaves the index by accident.
 
 Usage: python -m wsc_pipeline.validate_seo <dist-dir>
 """
@@ -64,6 +68,10 @@ FUTURE_MARGIN = timedelta(minutes=5)
 # limits must not move the check with it.
 TITLE_MAX = 60
 DESCRIPTION_MAX = 155
+# The class of the "Get <team> tickets" section a link to a team's official
+# ticket page sits in. Stated here, not imported from official_tickets.py,
+# for the same reason: the check reads the page as written.
+OFFICIAL_TICKETS_CLASS = "official-tickets"
 
 
 class SeoError(ValueError):
@@ -79,6 +87,9 @@ class _PageParser(HTMLParser):
         self.h1_count = 0
         self.noindex = False
         self.jsonld: list[str] = []
+        # True once a link sits inside the "Get <team> tickets" section.
+        self.official_ticket_link = False
+        self._in_official = False
         self._in: str | None = None
         self._buf: list[str] = []
 
@@ -94,10 +105,16 @@ class _PageParser(HTMLParser):
             self.canonicals.append(a.get("href", ""))
         elif tag == "h1":
             self.h1_count += 1
+        elif tag == "section" and OFFICIAL_TICKETS_CLASS in a.get("class", "").split():
+            self._in_official = True
+        elif tag == "a" and self._in_official and a.get("href", "").startswith("https://"):
+            self.official_ticket_link = True
         elif tag == "script" and a.get("type") == "application/ld+json":
             self._in, self._buf = "jsonld", []
 
     def handle_endtag(self, tag: str) -> None:
+        if tag == "section":
+            self._in_official = False
         if tag == "title" and self._in == "title":
             self.titles.append("".join(self._buf).strip())
             self._in = None
@@ -212,17 +229,27 @@ def _indexable_pages(dist: Path) -> set[str]:
             if not _parse_page(page).noindex:
                 raise SeoError(f"{page}: the notice page at a former slug must be noindex")
             continue
-        if _parse_page(page).noindex and _lists_no_game(dist, site_path):
+        parsed = _parse_page(page)
+        if parsed.noindex and _lists_no_game(dist, site_path):
+            if parsed.official_ticket_link:
+                raise SeoError(
+                    f"{page}: lists no game but links an official ticket page, "
+                    "so it must be indexable and in the sitemap"
+                )
             continue
         out.add(site_path)
     return out
 
 
+def _is_team_page(site_path: str) -> bool:
+    return len(site_path.strip("/").split("/")) == 2
+
+
 def _lists_no_game(dist: Path, site_path: str) -> bool:
     """True for a league or team page whose data says Ticketmaster was
     checked and listed nothing: the only kind of page allowed to be noindex
-    and outside the sitemap. Anything else that is noindex stays in the
-    indexable set, so _check_page then rejects it."""
+    and outside the sitemap (and only without an official ticket link). Anything else that is noindex stays in the indexable set,
+    so _check_page then rejects it."""
     data = _schedule_data(dist, site_path)
     return data is not None and bool(data.get("fetched", True)) and not data["games"]
 
@@ -323,14 +350,40 @@ def _check_events(page: Path, events: list[dict[str, Any]], games: list[dict[str
         raise SeoError(f"{page}: eligible games not marked up: {missing[:5]}")
 
 
-def _check_breadcrumbs(page: Path, nodes: list[dict[str, Any]], base_url: str, pages: set[str]) -> None:
+def _breadcrumb_target_ok(dist: Path, base_url: str, url: str, pages: set[str]) -> bool:
+    """A breadcrumb item links an indexable page, or a league page left out
+    of the index because it lists no game and links no official league
+    ticket page. An empty team page with an official ticket link is
+    indexable (DECISIONS 0020) while its league's page may not be: the Big
+    Ten has no league ticket page, so between seasons its page is noindex
+    while 17 of its 18 team pages are indexed (DECISIONS 0021). Their
+    breadcrumb still names that real page."""
+    if not url.startswith(base_url + "/"):
+        return False
+    target = url[len(base_url) :]
+    if target in pages:
+        return True
+    built = dist / target.strip("/") / "index.html"
+    return (
+        built.is_file()
+        and not _is_team_page(target)
+        and _lists_no_game(dist, target)
+        and not _parse_page(built).official_ticket_link
+    )
+
+
+def _check_breadcrumbs(dist: Path, page: Path, nodes: list[dict[str, Any]], base_url: str, pages: set[str]) -> None:
     for node in nodes:
         if node.get("@type") != "BreadcrumbList":
             continue
         items = node.get("itemListElement") or []
         for i, item in enumerate(items, start=1):
             url = item.get("item", "")
-            if item.get("position") != i or not item.get("name") or url[len(base_url) :] not in pages:
+            if (
+                item.get("position") != i
+                or not item.get("name")
+                or not _breadcrumb_target_ok(dist, base_url, str(url), pages)
+            ):
                 raise SeoError(f"{page}: breadcrumb item {i} is not a named link to a page on this site")
 
 
@@ -340,6 +393,8 @@ def _check_page(dist: Path, site_path: str, base_url: str, pages: set[str]) -> t
     parsed = _parse_page(page)
     if parsed.noindex:
         raise SeoError(f"{page}: a noindex page is listed in the sitemap")
+    if _lists_no_game(dist, site_path) and not parsed.official_ticket_link:
+        raise SeoError(f"{page}: lists no game and links no official ticket page, so it must be noindex")
     if len(parsed.titles) != 1 or not parsed.titles[0]:
         raise SeoError(f"{page}: expected exactly one non-empty <title>")
     if len(parsed.descriptions) != 1 or not parsed.descriptions[0]:
@@ -354,7 +409,7 @@ def _check_page(dist: Path, site_path: str, base_url: str, pages: set[str]) -> t
         raise SeoError(f"{page}: canonical {parsed.canonicals} is not {base_url + site_path}")
     nodes = _nodes(page, parsed.jsonld)
     _check_structured_data(dist, site_path, page, nodes)
-    _check_breadcrumbs(page, nodes, base_url, pages)
+    _check_breadcrumbs(dist, page, nodes, base_url, pages)
     return parsed.titles[0], parsed.descriptions[0], sum(1 for n in nodes if n.get("@type") == "SportsEvent")
 
 

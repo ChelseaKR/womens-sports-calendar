@@ -581,3 +581,149 @@ click events.*
   page gains its "Paid links" section, the date does not move by itself.
   The owner moves it in the pull request that follows the account change,
   as for her own ids.
+
+## 0019 — A "Get tickets" link to each team's and league's official ticket page (2026-10-31)
+
+**Why:** a game's "Buy tickets" link (0013) exists only while Ticketmaster
+lists that game. Between seasons a team page lists nothing, and Search
+Console (2026-10-21 to 10-29) showed that most of the site's impressions
+were for teams in that state (WNBA "<team> schedule" and "schedule 2027"
+queries). Those visitors still want to know where tickets are sold.
+
+What ships (`pipeline/src/wsc_pipeline/official_tickets.py`):
+
+- **One plain link per team and per league** to the page the team, school
+  or league publishes for tickets, under a "Get <team> tickets" heading,
+  whether or not a game is listed. 66 of the 67 tracked teams and 4 of the
+  5 leagues have one (the Big Ten has none: each school sells its own).
+- **Verified, never guessed.** Each URL is the one the league's or team's
+  own site links (wnba.com/teams, nwslsoccer.com/tickets and /teams,
+  thepwhl.com/en/tickets, theausl.com team pages, each school's athletics
+  site), fetched on 2026-10-31 with HTTP 200 and a ticket page title. Each
+  entry records where it was found. Rutgers has no link: its
+  "TicketCentral" address now redirects to football tickets, and a guessed
+  women's basketball address served a placeholder page.
+- **Never a resale marketplace**, as 0018 requires.
+- **Affiliate hook, empty.** `official_tickets.AFFILIATE_TEMPLATES` maps a
+  destination host to a URL template with `{url}`. It is empty because no
+  ticket affiliate program has been joined. While it is empty every link is
+  the plain official URL. When the owner sets one in a reviewed pull
+  request, only links to that host are wrapped, each gets
+  `rel="sponsored noopener"` and the "Paid link" label, and the footer
+  disclosure turns on (`sellers.affiliate_links_active`). That pull request
+  also updates the privacy page's "Paid links" section, which names Impact
+  today, and moves `site.PRIVACY_UPDATED`.
+- **Clicks (0012, amended):** a click on one of these links in `<main>`
+  sends `ticket_click` with `official: true`. It is matched by the section
+  the link sits in, not by a list of URLs, so the inline script on every
+  page stays the size it was (a URL list added about 3 KB per page and
+  failed the page-weight budget). The privacy page now lists these links among the counted
+  ones (`PRIVACY_UPDATED` moved to 2026-10-31).
+- **Feeds unchanged.** The `.ics` feeds and `data/*.json` never carry these
+  links (`tests/test_official_tickets.py`).
+
+Revisit: re-check the URLs at the start of each league's season; team sites
+move ticket pages between seasons.
+
+## 0020 — An empty team page with an official ticket link stays in the index (2026-10-31)
+
+**Supersedes part of** the empty-page rule of 2026-10-22 (pull request #58,
+recorded in the CHANGELOG, not here): "a league or team page whose build
+checked Ticketmaster and found no listed game is `noindex` and left out of
+`sitemap.xml`". That rule still holds for every league page and for a team
+page with no verified official ticket page. It no longer holds for a team
+page that has one (0019).
+
+**Why:** Search Console for 2026-10-01 to 10-30 gave the site 509
+impressions. 133 of them went to pages that #58 had just made `noindex`
+because they listed no game: 132 to 16 empty WNBA and AUSL team pages and 1
+to the AUSL league page. The largest was the Phoenix Mercury page, at an
+average position of 8.7 for "phoenix mercury schedule 2027" (12
+impressions). Those pages were ranking for what fans search between
+seasons. #58 assumed an empty page had nothing to offer. Since 0019, an
+empty team page links the team's own ticket page, which answers the
+question most of those searchers have. The owner decided on 2026-10-31 to
+put those pages back.
+
+The rule (`site_data.kept_out_of_search`, used by both the page's robots
+meta and the sitemap):
+
+- A page that lists a game is indexed, as before.
+- A **team** page that lists no game is indexed and in the sitemap when
+  `official_tickets.team_page` has an entry for it. It is `noindex` and
+  out of the sitemap when it has none (Rutgers today).
+- A **league** page that lists no game stays `noindex` and out of the
+  sitemap, whether or not it has a league ticket link. The decision covered
+  team pages only. The validator accepts a breadcrumb that points from an
+  indexed team page to its noindex, empty league page. (Amended by 0021: an
+  empty league page with a league ticket link is now indexed too.)
+- A build that fetched nothing marks no page empty, as before.
+
+**An empty page still reads honestly.** Its title is "<Team> schedule",
+with no season, "home games" or "tickets". Its description says "No games
+are listed right now". The body says Ticketmaster lists no game, and it has
+no SportsEvent markup. The "Get <team> tickets" link names the team's
+official ticket page and claims no game.
+
+**Enforced by** `validate_seo` rule 7. A noindex empty team page that links
+an official ticket page fails. An indexable empty page that is not a team
+page with that link fails. Both are tested, with controls, in
+`tests/test_noindex_unlisted.py`.
+
+**Effect on the live build of 2026-10-31 (commit 7727c3b):** 19 team pages
+move from `noindex` to indexed and listed: 13 WNBA (Minnesota Lynx, Las
+Vegas Aces, Indiana Fever, New York Liberty, Washington Mystics, Dallas
+Wings, Portland Fire, Chicago Sky, Los Angeles Sparks, Phoenix Mercury,
+Toronto Tempo, Connecticut Sun, Seattle Storm) and all 6 AUSL teams. The
+sitemap grows from 56 to 75 URLs. No page that is indexed today leaves the
+index. The AUSL league page stays `noindex`.
+
+Revisit: if Search Console shows these pages losing position or being
+reported as "soft 404", or if the AUSL league page should follow its
+teams back into the index.
+
+## 0021 — An empty league page with an official league ticket link stays in the index (2026-10-31)
+
+**Amends** 0020, which kept every empty league page `noindex`.
+
+**Why:** the owner decided on 2026-10-31 that a league page should follow
+the same rule as its team pages. An empty league page that links the
+league's own ticket page (`official_tickets.league_page`; AUSL's is
+theausl.com/tickets/) answers the same between-season question an empty
+team page does. In the October Search Console data cited in 0020, the empty
+AUSL league page drew 1 impression.
+
+The rule (`site_data.kept_out_of_search`) is now one rule for both kinds of
+page: a page that lists no game is indexed and in the sitemap when it links
+a verified official ticket page (the team's for a team page, the league's
+for a league page), and `noindex` and out of the sitemap when it does not.
+Big Ten women's basketball has no league ticket page (each school sells its
+own), so its league page stays out whenever it lists no game.
+
+**The breadcrumb relaxation of 0020 stays.** No page on the 2026-10-31 live
+build needs it, because the AUSL league page is now indexed. But when the
+Big Ten lists no game (between seasons), its league page is `noindex` while
+17 of its 18 team pages are indexed through their schools' ticket pages, and
+their breadcrumbs name the league page. The validator now accepts a noindex
+breadcrumb target only when it is a league page that lists no game and links
+no official ticket page.
+
+**An empty league page still reads honestly.** Its title and heading carry
+no season ("AUSL schedule"). Its meta description now says "No games are
+listed right now", as an empty team page's does, instead of promising
+dates, times and venues. The body says Ticketmaster lists no game, and it
+has no SportsEvent markup.
+
+**Enforced by** `validate_seo` rule 7, both ways: a noindex empty page that
+links an official ticket page fails, and an indexable empty page that links
+none fails. Tested, with controls whose sabotage is asserted to apply, in
+`tests/test_noindex_unlisted.py`.
+
+**Effect on the live build of 2026-10-31 (commit 7727c3b):** one league
+page changes state. The AUSL league page (0 games listed) moves from
+`noindex` to indexed and listed, so the sitemap grows from 75 to 76 URLs
+on top of 0020. WNBA (1 game), NWSL (10), PWHL (122) and Big Ten (223) list
+games and stay indexed. No indexed page leaves the index.
+
+Revisit: if Search Console reports the AUSL league page as a "soft 404", or
+if the Big Ten publishes a league-wide ticket page.

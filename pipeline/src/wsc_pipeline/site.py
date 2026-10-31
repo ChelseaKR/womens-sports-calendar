@@ -32,13 +32,13 @@ from html import escape as e
 from typing import Any
 from urllib.parse import quote, urlencode
 
-from . import config, feeds, structured_data
+from . import config, feeds, official_tickets, structured_data
 from .analytics import GA4_DATA_RETENTION, ga4_head_snippet, measurement_id
 from .config import league_names_for, title_name_for
 from .ics import COMBINED_FEED_PATH, TIME_TBA_NOTE, TIME_TBA_SUFFIX, calendar_name
 from .normalize import display_date
 from .sellers import AFFILIATE_LINK_TEMPLATES, affiliate_links_active, is_affiliate_link
-from .site_data import nothing_listed, schedule_window
+from .site_data import kept_out_of_search, schedule_window
 from .team_shops import shop_links_on, team_shop_url
 
 CSS_PATH = "/style.css"
@@ -62,7 +62,7 @@ _EMAIL_SHAPE = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$"
 # The "Updated" date printed on /privacy/ and /accessibility/, and their
 # sitemap <lastmod>: one value each, so the two cannot disagree. Change it
 # whenever that page's text changes.
-PRIVACY_UPDATED = date(2026, 9, 17)
+PRIVACY_UPDATED = date(2026, 10, 31)
 ACCESSIBILITY_UPDATED = date(2026, 9, 17)
 # One-click subscribe links. Each takes the feed's webcal:// address; Google
 # and Outlook then fetch the feed themselves and keep it subscribed.
@@ -845,9 +845,9 @@ def render_privacy(*, base_url: str, ga4_id: str | None = None, paid_links: bool
         # The team-shop link exists only with the Fanatics link set
         # (team_shops.py), and its clicks are counted only then (analytics.py).
         counted_links = (
-            "&ldquo;Buy tickets&rdquo;, &ldquo;Team shop&rdquo; and calendar-subscribe links"
+            "&ldquo;Buy tickets&rdquo;, official ticket page, &ldquo;Team shop&rdquo; and calendar-subscribe links"
             if shop_links_on()
-            else "&ldquo;Buy tickets&rdquo; and calendar-subscribe links"
+            else "&ldquo;Buy tickets&rdquo;, official ticket page and calendar-subscribe links"
         )
         pages_section = f"""<h2>Web pages: Google Analytics</h2>
 <p>This site's pages use Google Analytics 4, a Google service, to count page
@@ -1161,7 +1161,7 @@ just its games.</p>
 <ul class="team-roster">
 {team_links}
 </ul>
-<h2>Upcoming games</h2>
+{_official_tickets_block(official_tickets.league_page(slug), subject=name, owner="the league's")}<h2>Upcoming games</h2>
 {incomplete_note}{_freshness_note(league)}{_games_table(league["games"], buy_link_subject=name, fetched=fetched)}
 <p class="league-week-link"><a href="{SCHEDULE_PATH}">The week ahead in every league, day by day</a></p>
 {_other_apps_block(ics_https_url=ics_https)}{_about_schedule(league["schedule_source_note"])}"""
@@ -1173,25 +1173,42 @@ just its games.</p>
     return _base(
         feed=_feed_for(feed_keys, league["league_slug"], base_url),
         title=_fit([f"{heading}: add to your calendar | {SITE_NAME}", f"{heading} | {SITE_NAME}", heading], TITLE_MAX),
-        description=_fit(
-            [
-                f"{heading}: add every game to Google Calendar, Apple Calendar or Outlook, or just "
-                "your team's, with dates, times and venues, updated nightly.",
-                f"{heading}: add every game, or just your team's, to your calendar, with dates, "
-                "times, venues and ticket links. Updated nightly.",
-                f"{heading}: add every game to your calendar, updated nightly.",
-            ],
-            DESCRIPTION_MAX,
-        ),
+        description=_league_description(heading, league),
         canonical_url=page_url,
         base_url=base_url,
         body=body,
         og_image=og_image,
         og_image_alt=og_image_alt,
-        noindex=nothing_listed(league),
+        noindex=kept_out_of_search(league),
         ga4_id=ga4_id,
         paid_links=paid_links,
         jsonld=structured_data.script_block(nodes),
+    )
+
+
+def _league_description(heading: str, league: dict[str, Any]) -> str:
+    """A league page's meta description. When the build checked Ticketmaster
+    and it listed no game, it says so, as an empty team page's does: an
+    empty league page with an official ticket link is indexed (DECISIONS
+    0021), and a search result must not promise games that are not there."""
+    if league.get("fetched", True) and not league["games"]:
+        return _fit(
+            [
+                f"{heading}. No games are listed right now; add it to your calendar and "
+                "games appear as they are listed, updated nightly.",
+                f"{heading}. No games are listed right now.",
+            ],
+            DESCRIPTION_MAX,
+        )
+    return _fit(
+        [
+            f"{heading}: add every game to Google Calendar, Apple Calendar or Outlook, or just "
+            "your team's, with dates, times and venues, updated nightly.",
+            f"{heading}: add every game, or just your team's, to your calendar, with dates, "
+            "times, venues and ticket links. Updated nightly.",
+            f"{heading}: add every game to your calendar, updated nightly.",
+        ],
+        DESCRIPTION_MAX,
     )
 
 
@@ -1365,6 +1382,27 @@ def _sibling_teams_block(league_slug: str, team_slug: str, league_name: str) -> 
 """
 
 
+def _official_tickets_block(page: official_tickets.OfficialTicketPage | None, *, subject: str, owner: str) -> str:
+    """The "Get <team> tickets" section: one link to the team's or league's
+    own ticket page (official_tickets.py), shown whether or not any game is
+    listed, so a page between seasons still says where tickets are sold.
+    Empty when no official page was verified: never a guessed address. Plain
+    unless an affiliate template is set for its host, and then labelled like
+    every other paid link."""
+    found = official_tickets.link_for(page)
+    if page is None or found is None:
+        return ""
+    href, paid = found
+    host = official_tickets.display_host(page.url)
+    text = f"{e(subject)} {e(page.kind)} at {e(host)}, {e(owner)} official ticket page"
+    link = _paid_link(href, text) if paid else f'<a href="{e(href)}">{text}</a>'
+    return f"""<section class="{official_tickets.OFFICIAL_SECTION_CLASS}" aria-labelledby="official-tickets-heading">
+<h2 id="official-tickets-heading">Get {e(subject)} tickets</h2>
+<p>{link}.</p>
+</section>
+"""
+
+
 def _team_shop_block(league_slug: str, team_slug: str, team_name: str) -> str:
     """The "Team shop" link to the team's Fanatics store (team_shops.py), on
     team pages only. Empty -- not an unpaid link -- unless the Fanatics
@@ -1422,8 +1460,13 @@ def render_team(
     heading = _schedule_heading(title_name_for(league_slug, team_name), team.get("season"))
     home_listed = bool(fetched and team.get("next_home_event_id"))
     h1 = f"{heading} and home games" if home_listed else heading
+    search_name = title_name_for(league_slug, team_name)
     subscribe = _subscribe_block(
-        ics_https_url=ics_https, subject=f"the {team_name} schedule", cal_name=calendar_name(team_name)
+        ics_https_url=ics_https, subject=f"the {search_name} schedule", cal_name=calendar_name(team_name)
+    )
+    owner = "the school's" if league_slug == "ncaaw-big-ten" else "the team's"
+    tickets = _official_tickets_block(
+        official_tickets.team_page(league_slug, team_slug), subject=search_name, owner=owner
     )
     hero = _next_game_hero(team)
     lead_blocks = (
@@ -1433,7 +1476,7 @@ def render_team(
 <h1>{e(h1)}</h1>
 {_team_lede(team)}
 {lead_blocks}
-<h2>Upcoming games</h2>
+{tickets}<h2>Upcoming games</h2>
 {incomplete_note}{_freshness_note(team)}{_games_table(team["games"], buy_link_subject=team_name, fetched=fetched, home_away=True)}
 {_this_week_block(team)}{_other_apps_block(ics_https_url=ics_https)}{_team_shop_block(league_slug, team_slug, team_name)}{_sibling_teams_block(league_slug, team_slug, league_name)}{_about_schedule(team["schedule_source_note"])}"""
     og_image, og_image_alt = LEAGUE_OG_IMAGES.get(league_slug, (DEFAULT_OG_IMAGE, DEFAULT_OG_IMAGE_ALT))
@@ -1463,7 +1506,7 @@ def render_team(
         body=body,
         og_image=og_image,
         og_image_alt=og_image_alt,
-        noindex=nothing_listed(team),
+        noindex=kept_out_of_search(team),
         ga4_id=ga4_id,
         paid_links=paid_links,
         jsonld=structured_data.script_block(nodes),
