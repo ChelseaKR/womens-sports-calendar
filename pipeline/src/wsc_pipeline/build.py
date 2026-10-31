@@ -540,8 +540,8 @@ def _pages_kept_out_of_search(
     """Site paths of the league and team pages rendered noindex
     (site.render_league, site.render_team) and kept out of the sitemap, by
     the same rule (site_data.kept_out_of_search): the build checked
-    Ticketmaster and found no game to list, and, for a team page, no verified
-    official ticket page exists. A page returns on the first build that lists
+    Ticketmaster and found no game to list, and no verified official ticket
+    page exists for the team or league. A page returns on the first build that lists
     a game. A build that fetched nothing has none: not checked is not
     empty."""
     out: set[str] = set()

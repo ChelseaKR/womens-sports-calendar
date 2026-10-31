@@ -150,18 +150,20 @@ def kept_out_of_search(payload: dict[str, Any]) -> bool:
     the sitemap: the one rule behind both (site.render_league,
     site.render_team, build._pages_kept_out_of_search).
 
-    A page that lists no game (nothing_listed) is kept out, except a team
-    page with a verified official ticket page (official_tickets.team_page):
-    that page still answers what the searcher came for, where the team sells
-    tickets, and says plainly that no game is listed yet (DECISIONS 0020,
-    which narrows the empty-page rule of 2026-10-22). A league page that
-    lists no game stays out whatever its ticket link."""
+    A page that lists no game (nothing_listed) is kept out, except one with
+    a verified official ticket page: a team page with an entry in
+    official_tickets.team_page (DECISIONS 0020), or a league page with one in
+    official_tickets.league_page (DECISIONS 0021). That page still answers
+    what the searcher came for, where the team or league sells tickets, and
+    says plainly that no game is listed yet. Both narrow the empty-page rule
+    of 2026-10-22."""
     if not nothing_listed(payload):
         return False
+    league_slug = payload["league_slug"]
     team_slug = payload.get("team_slug")
     if team_slug is None:
-        return True
-    return official_tickets.team_page(payload["league_slug"], team_slug) is None
+        return official_tickets.league_page(league_slug) is None
+    return official_tickets.team_page(league_slug, team_slug) is None
 
 
 def tracked_team_is_home(team: Team, game: Game) -> bool | None:

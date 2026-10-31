@@ -655,7 +655,8 @@ meta and the sitemap):
 - A **league** page that lists no game stays `noindex` and out of the
   sitemap, whether or not it has a league ticket link. The decision covered
   team pages only. The validator accepts a breadcrumb that points from an
-  indexed team page to its noindex, empty league page.
+  indexed team page to its noindex, empty league page. (Amended by 0021: an
+  empty league page with a league ticket link is now indexed too.)
 - A build that fetched nothing marks no page empty, as before.
 
 **An empty page still reads honestly.** Its title is "<Team> schedule",
@@ -680,3 +681,49 @@ index. The AUSL league page stays `noindex`.
 Revisit: if Search Console shows these pages losing position or being
 reported as "soft 404", or if the AUSL league page should follow its
 teams back into the index.
+
+## 0021 — An empty league page with an official league ticket link stays in the index (2026-10-31)
+
+**Amends** 0020, which kept every empty league page `noindex`.
+
+**Why:** the owner decided on 2026-10-31 that a league page should follow
+the same rule as its team pages. An empty league page that links the
+league's own ticket page (`official_tickets.league_page`; AUSL's is
+theausl.com/tickets/) answers the same between-season question an empty
+team page does. In the October Search Console data cited in 0020, the empty
+AUSL league page drew 1 impression.
+
+The rule (`site_data.kept_out_of_search`) is now one rule for both kinds of
+page: a page that lists no game is indexed and in the sitemap when it links
+a verified official ticket page (the team's for a team page, the league's
+for a league page), and `noindex` and out of the sitemap when it does not.
+Big Ten women's basketball has no league ticket page (each school sells its
+own), so its league page stays out whenever it lists no game.
+
+**The breadcrumb relaxation of 0020 stays.** No page on the 2026-10-31 live
+build needs it, because the AUSL league page is now indexed. But when the
+Big Ten lists no game (between seasons), its league page is `noindex` while
+17 of its 18 team pages are indexed through their schools' ticket pages, and
+their breadcrumbs name the league page. The validator now accepts a noindex
+breadcrumb target only when it is a league page that lists no game and links
+no official ticket page.
+
+**An empty league page still reads honestly.** Its title and heading carry
+no season ("AUSL schedule"). Its meta description now says "No games are
+listed right now", as an empty team page's does, instead of promising
+dates, times and venues. The body says Ticketmaster lists no game, and it
+has no SportsEvent markup.
+
+**Enforced by** `validate_seo` rule 7, both ways: a noindex empty page that
+links an official ticket page fails, and an indexable empty page that links
+none fails. Tested, with controls whose sabotage is asserted to apply, in
+`tests/test_noindex_unlisted.py`.
+
+**Effect on the live build of 2026-10-31 (commit 7727c3b):** one league
+page changes state. The AUSL league page (0 games listed) moves from
+`noindex` to indexed and listed, so the sitemap grows from 75 to 76 URLs
+on top of 0020. WNBA (1 game), NWSL (10), PWHL (122) and Big Ten (223) list
+games and stay indexed. No indexed page leaves the index.
+
+Revisit: if Search Console reports the AUSL league page as a "soft 404", or
+if the Big Ten publishes a league-wide ticket page.
