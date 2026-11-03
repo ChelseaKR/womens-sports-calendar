@@ -220,6 +220,18 @@ def _normalize_for_match(s: str) -> str:
     return _NON_ALNUM.sub(" ", s.lower()).strip()
 
 
+def side_begins_with(name: str, side: str) -> bool:
+    """True if a matchup side, once normalized, begins with `name` as whole
+    words. Stricter than _phrase_match, for a short school name ("Nebraska
+    women's basketball"), which as a plain phrase also sits inside another
+    school's ("Western Michigan Women's Basketball" contains "Michigan
+    women's basketball")."""
+    n, s = _normalize_for_match(name), _normalize_for_match(side)
+    if len(n) < _MIN_MATCH_LEN:
+        return False
+    return s == n or s.startswith(n + " ")
+
+
 def _phrase_match(a: str, b: str) -> bool:
     """True if the shorter of (a, b), once lowercased and stripped of
     punctuation, is a contiguous substring of the longer one. Both sides
