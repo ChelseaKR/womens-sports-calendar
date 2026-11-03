@@ -27,6 +27,12 @@ The other ~332 Division I women's basketball programs, and every NCAA
 women's sport other than basketball, are NOT tracked -- see
 LEAGUES_EXAMINED_NOT_INCLUDED below for why.
 
+NCAA women's basketball (SEC) was added 2026-11-02 (docs/DECISIONS.md 0023)
+the same way, with the SEC's 16 members for 2026-27. Each keyword was
+measured on the Discovery API before it was added (the measure-leagues
+workflow, run on the branch that added it): Georgia is "Georgia Bulldogs",
+not "Georgia Lady Bulldogs", which found 2 events and matched none.
+
 WPBL (Women's Pro Baseball League) was examined 2026-09-16 (docs/DECISIONS.md
 0011) and NOT added: it is a real, currently operating league with fixed
 team franchises, so team identity was never the blocker, and licensing was
@@ -215,6 +221,42 @@ def _slugify(name: str) -> str:
     return name.lower().replace(" ", "-").replace(".", "")
 
 
+# Every other school whose "<School> women's basketball" contains an SEC
+# school's as a phrase: "Middle Tennessee women's basketball" contains
+# "Tennessee women's basketball", so the participant check would accept a
+# Middle Tennessee game for Tennessee (the title name is one of the names a
+# team is recognized by, Team.match_names). These are taken out of an event
+# before matching, as KEYWORD_COLLISIONS is (DECISIONS 0022, 0023).
+# "Southeast" is for Southeast Missouri; "Middle" for Middle Tennessee.
+COLLEGE_DIRECTION_PREFIXES: tuple[str, ...] = (
+    "North",
+    "South",
+    "Northern",
+    "Southern",
+    "Eastern",
+    "Western",
+    "Central",
+    "East",
+    "West",
+    "Middle",
+    "Southeast",
+)
+
+
+def _college_team(slug: str, school: str, mascot: str) -> Team:
+    """One school, named the Big Ten way (DECISIONS 0010): the Ticketmaster
+    keyword and shown name "<School> <Mascot> Womens Basketball", titled
+    "<School> women's basketball", with the other schools whose names contain
+    this one's excluded (COLLEGE_DIRECTION_PREFIXES). The slug is given, not
+    derived: "Texas A&M" has a character no slug may carry."""
+    return Team(
+        slug=slug,
+        name=f"{school} {mascot} Womens Basketball",
+        not_this_team=tuple(f"{d} {school} women's basketball" for d in COLLEGE_DIRECTION_PREFIXES),
+        title_name=f"{school} women's basketball",
+    )
+
+
 LEAGUES: tuple[League, ...] = (
     League(
         slug="wnba",
@@ -376,19 +418,57 @@ LEAGUES: tuple[League, ...] = (
         title_name="Big Ten women's basketball",
         short_name="Big Ten",
     ),
+    League(
+        slug="ncaaw-sec",
+        name="NCAA Women's Basketball (SEC)",
+        country_codes=("US",),
+        teams=(
+            _college_team("alabama-crimson-tide-womens-basketball", "Alabama", "Crimson Tide"),
+            _college_team("arkansas-razorbacks-womens-basketball", "Arkansas", "Razorbacks"),
+            _college_team("auburn-tigers-womens-basketball", "Auburn", "Tigers"),
+            _college_team("florida-gators-womens-basketball", "Florida", "Gators"),
+            _college_team("georgia-bulldogs-womens-basketball", "Georgia", "Bulldogs"),
+            _college_team("kentucky-wildcats-womens-basketball", "Kentucky", "Wildcats"),
+            _college_team("lsu-tigers-womens-basketball", "LSU", "Tigers"),
+            _college_team("mississippi-state-bulldogs-womens-basketball", "Mississippi State", "Bulldogs"),
+            _college_team("missouri-tigers-womens-basketball", "Missouri", "Tigers"),
+            _college_team("oklahoma-sooners-womens-basketball", "Oklahoma", "Sooners"),
+            _college_team("ole-miss-rebels-womens-basketball", "Ole Miss", "Rebels"),
+            _college_team("south-carolina-gamecocks-womens-basketball", "South Carolina", "Gamecocks"),
+            _college_team("tennessee-lady-volunteers-womens-basketball", "Tennessee", "Lady Volunteers"),
+            _college_team("texas-longhorns-womens-basketball", "Texas", "Longhorns"),
+            _college_team("texas-am-aggies-womens-basketball", "Texas A&M", "Aggies"),
+            _college_team("vanderbilt-commodores-womens-basketball", "Vanderbilt", "Commodores"),
+        ),
+        schedule_source_used=False,
+        schedule_source_note=(
+            "No NCAA women's basketball schedule source -- not NCAA.com, "
+            "not NCAA.org, not secsports.com, not any school's athletics "
+            "site -- is used, for the same reasons as the Big Ten. Games "
+            "below are Ticketmaster Discovery API listings for SEC women's "
+            "basketball teams, not any NCAA, conference or school feed. "
+            "Limited to the SEC's 16 teams."
+        ),
+        sport="Basketball",
+        organization_name="Southeastern Conference",
+        title_name="SEC women's basketball",
+        short_name="SEC",
+    ),
 )
 
 LEAGUES_EXAMINED_NOT_INCLUDED: tuple[dict[str, str], ...] = (
     {
-        "name": ("NCAA women's basketball outside the Big Ten, and NCAA women's sports other than basketball"),
+        "name": (
+            "NCAA women's basketball outside the Big Ten and the SEC, and NCAA women's sports other than basketball"
+        ),
         "reason": (
             "Big Ten women's basketball is a tracked league (see above) via "
             "Ticketmaster team-keyword search, same as WNBA/NWSL/PWHL/AUSL "
-            "-- added 2026-09-16, after confirming "
+            "-- added 2026-09-16, and the SEC added 2026-11-02, after confirming "
             "real Ticketmaster inventory (dedicated '<School> Womens "
             "Basketball' artist pages carrying real dated 2026-27 games) "
             "across Big Ten programs, not just a couple of blue bloods. The "
-            "other ~332 Division I women's basketball programs, and every "
+            "other ~316 Division I women's basketball programs, and every "
             "NCAA women's sport other than basketball (soccer, volleyball, "
             "softball, etc.), remain untracked. Not a licensing gap -- "
             "NCAA.com's and NCAA.org's Terms of Service ban commercial "

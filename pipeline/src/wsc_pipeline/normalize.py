@@ -25,6 +25,7 @@ from .impact import plain_url
 _VS_SPLIT = re.compile(r"\s+(vs\.?|v\.?|at|@)\s+", re.IGNORECASE)
 _AWAY_FIRST_SEPARATORS = frozenset({"at", "@"})
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
+_APOSTROPHES = re.compile("['\u2019]")
 _MIN_MATCH_LEN = 4
 
 # What Ticketmaster appends to the second side of a matchup name that is a
@@ -217,7 +218,13 @@ def parse_teams(event_name: str, attractions: list[dict[str, Any]]) -> tuple[str
 
 
 def _normalize_for_match(s: str) -> str:
-    return _NON_ALNUM.sub(" ", s.lower()).strip()
+    """Lowercase, apostrophes dropped, every other run of punctuation a space.
+    Dropping the apostrophe makes "Women's" and "Womens" the same word:
+    Ticketmaster writes both ("Tennessee Lady Volunteers Women's Basketball",
+    "Florida Gators Womens Basketball"), and the keyword "Tennessee Lady
+    Volunteers Womens Basketball" matched none of the 27 Tennessee events the
+    2026-11-02 measurement returned (DECISIONS 0023)."""
+    return _NON_ALNUM.sub(" ", _APOSTROPHES.sub("", s.lower())).strip()
 
 
 def side_begins_with(name: str, side: str) -> bool:

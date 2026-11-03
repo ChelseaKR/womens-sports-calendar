@@ -33,7 +33,10 @@ from .fixture_site import build_fixture_site
 from .test_analytics import _LOADED, BASE_URL, TEST_ID, _link, _run_snippet, _scenarios
 
 # Teams with no verified official ticket page, and why (official_tickets.py).
-NO_OFFICIAL_PAGE = {("ncaaw-big-ten", "rutgers-scarlet-knights-womens-basketball")}
+NO_OFFICIAL_PAGE = {
+    ("ncaaw-big-ten", "rutgers-scarlet-knights-womens-basketball"),
+    ("ncaaw-sec", "georgia-bulldogs-womens-basketball"),
+}
 
 WNBA = next(lg for lg in LEAGUES if lg.slug == "wnba")
 MERCURY = next(t for t in WNBA.teams if t.slug == "phoenix-mercury")
@@ -62,7 +65,8 @@ def test_every_url_is_plain_https_with_evidence():
     pages = [*official_tickets.OFFICIAL_TEAM_TICKETS.values(), *official_tickets.OFFICIAL_LEAGUE_TICKETS.values()]
     for page in pages:
         assert page.url.startswith("https://") and "?" not in page.url and "#" not in page.url, page.url
-        assert official_tickets.CHECKED_ON in page.evidence or "fetched" in page.evidence, page.url
+        checked = (official_tickets.CHECKED_ON, official_tickets.SEC_CHECKED_ON)
+        assert any(day in page.evidence for day in checked) or "fetched" in page.evidence, page.url
     official_tickets._check()
 
 

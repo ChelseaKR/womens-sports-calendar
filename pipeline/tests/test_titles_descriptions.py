@@ -113,7 +113,7 @@ def test_every_page_of_an_unfetched_build_fits(tmp_path: Path):
     out = tmp_path / "dist"
     build_module.build(out_dir=out, base_url=BASE_URL, api_key=None, affiliate_id=None)
     seen = list(_pages_of(out))
-    assert len(seen) >= 70  # every team page: the worst case, 67 teams plus the site pages
+    assert len(seen) >= 70  # every team page: the worst case, 83 teams plus the site pages
     for page, title, description in seen:
         assert len(title) <= TITLE_MAX, (page, title)
         assert len(description) <= DESCRIPTION_MAX, (page, description)
@@ -132,7 +132,7 @@ def test_every_configured_team_fits_with_the_longest_opponent(scenario: str):
         assert len(description) <= DESCRIPTION_MAX, description
         titles.append(title)
         descriptions.append(description)
-    assert len(set(titles)) == len(titles) == 67
+    assert len(set(titles)) == len(titles) == 83
     assert len(set(descriptions)) == len(descriptions)
 
 

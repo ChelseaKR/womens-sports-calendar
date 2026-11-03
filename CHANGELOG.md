@@ -12,6 +12,13 @@ archived and private.
 
 ### Added
 
+- SEC women's basketball is the sixth league: a league page, 16 team pages,
+  `.ics` feeds, the Atom home-game feed and sitemap entries. A Discovery API
+  run on the branch found 243 upcoming games for all 16 teams. 15 teams
+  link their school's ticket page; Georgia has none that could be verified.
+  The participant check now treats "Women's" and "Womens" as the same word,
+  and SEC teams ignore other schools named "<direction> <School>"
+  (DECISIONS 0023).
 - A manual `measure-leagues` workflow counts, with the site's own search and
   attribution code, how many upcoming Ticketmaster events SEC, ACC, Big 12 and
   Big East women's basketball, Major League Volleyball, Unrivaled and LOVB
