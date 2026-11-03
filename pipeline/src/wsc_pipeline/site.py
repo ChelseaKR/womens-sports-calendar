@@ -645,7 +645,7 @@ def _breadcrumb(trail: list[tuple[str, str]], current: str) -> str:
 
 
 def _league_list_text(names: list[str]) -> str:
-    """ "WNBA, NWSL, PWHL, AUSL or NCAA Women's Basketball (Big Ten)"."""
+    """ "WNBA, NWSL, PWHL, AUSL, Big Ten or SEC"."""
     if len(names) <= 1:
         return "".join(names)
     return f"{', '.join(names[:-1])} or {names[-1]}"
@@ -723,6 +723,9 @@ def render_index(
         f"<li><strong>{e(item['name'])}:</strong> {e(item['reason'])}</li>" for item in not_included
     )
     league_names = _league_list_text([lg["name"] for lg in leagues])
+    # The same list in each league's short name ("Big Ten", "SEC"), for when
+    # the full names no longer fit the description.
+    short_league_names = _league_list_text([league_names_for(lg["slug"], lg["name"])[1] for lg in leagues])
     body = f"""<h1>Women's sports schedules for your calendar</h1>
 <p class="lede">Pick a league or a team and add its schedule to Google
 Calendar, Apple Calendar or Outlook. Every listed game shows up on its own,
@@ -757,6 +760,8 @@ them):</p>
         description=_fit(
             [
                 f"Add your {league_names} team's schedule to Google, Apple or Outlook calendar. "
+                "Updated nightly. No account.",
+                f"Add your {short_league_names} team's schedule to Google, Apple or Outlook calendar. "
                 "Updated nightly. No account.",
                 "Add your team's schedule to Google, Apple or Outlook calendar. Updated nightly. No account.",
             ],
@@ -1464,7 +1469,7 @@ def render_team(
     subscribe = _subscribe_block(
         ics_https_url=ics_https, subject=f"the {search_name} schedule", cal_name=calendar_name(team_name)
     )
-    owner = "the school's" if league_slug == "ncaaw-big-ten" else "the team's"
+    owner = "the school's" if league_slug.startswith("ncaaw-") else "the team's"
     tickets = _official_tickets_block(
         official_tickets.team_page(league_slug, team_slug), subject=search_name, owner=owner
     )

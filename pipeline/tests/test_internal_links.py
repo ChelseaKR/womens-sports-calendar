@@ -66,7 +66,7 @@ def test_the_home_page_links_every_team(dist: Path):
     home = _pages(dist)["/"]
     linked = set(HREF.findall(home))
     assert linked >= TEAM_PATHS
-    assert len(TEAM_PATHS) == 67
+    assert len(TEAM_PATHS) == 83  # 67, plus the SEC's 16 (DECISIONS 0023)
     assert '<h3 id="teams-wnba">WNBA teams</h3>' in home
 
 

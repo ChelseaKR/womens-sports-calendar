@@ -29,11 +29,14 @@ CANONICAL = '<link rel="canonical"'
 LISTED = {"/wnba/", "/nwsl/", "/pwhl/", "/wnba/las-vegas-aces/", "/wnba/seattle-storm/"}
 LISTED |= {"/nwsl/portland-thorns/", "/pwhl/toronto-sceptres/"}
 # Empty and kept out: the Big Ten league page (the league sells no tickets;
-# each school does) and Rutgers, the one team with no verified official
-# ticket page (official_tickets.py).
+# each school does) and Rutgers, a team with no verified official ticket
+# page (official_tickets.py).
 RUTGERS = "/ncaaw-big-ten/rutgers-scarlet-knights-womens-basketball/"
 BIG_TEN = "/ncaaw-big-ten/"
-EMPTY = (BIG_TEN, RUTGERS)
+# The same for the SEC league page and Georgia (DECISIONS 0023).
+GEORGIA = "/ncaaw-sec/georgia-bulldogs-womens-basketball/"
+SEC = "/ncaaw-sec/"
+EMPTY = (BIG_TEN, RUTGERS, SEC, GEORGIA)
 # Empty but indexable: each links its team's official ticket page.
 EMPTY_TEAMS_WITH_TICKETS = ("/wnba/chicago-sky/", "/nwsl/angel-city/", "/ausl/chicago-bandits/")
 # Empty but indexable: links the league's official ticket page.
@@ -42,8 +45,8 @@ EMPTY_WITH_TICKETS = (*EMPTY_TEAMS_WITH_TICKETS, AUSL)
 ALL_TEAMS = sum(len(lg.teams) for lg in config.LEAGUES)
 # Indexable in the fixture: home, privacy, accessibility, schedule, the 3
 # leagues that list a game, the AUSL league page, and every team page but
-# Rutgers's.
-INDEXABLE = 4 + 3 + 1 + ALL_TEAMS - 1
+# Rutgers's and Georgia's.
+INDEXABLE = 4 + 3 + 1 + ALL_TEAMS - 2
 OFFICIAL_SECTION = '<section class="official-tickets"'
 
 
@@ -81,13 +84,15 @@ def test_the_fixture_has_the_cases_the_rule_separates():
     """The tests below mean something only if the fixture holds both kinds of
     empty team page and both kinds of empty league page."""
     assert official_tickets.team_page("ncaaw-big-ten", RUTGERS.split("/")[2]) is None
+    assert official_tickets.team_page("ncaaw-sec", GEORGIA.split("/")[2]) is None
     for path in EMPTY_TEAMS_WITH_TICKETS:
         league, team = path.strip("/").split("/")
         assert official_tickets.team_page(league, team) is not None, path
         assert RAW_EVENTS_BY_TEAM.get(team, []) == [], path
     assert official_tickets.league_page("ausl") is not None
     assert official_tickets.league_page("ncaaw-big-ten") is None
-    for slug in ("ausl", "ncaaw-big-ten"):
+    assert official_tickets.league_page("ncaaw-sec") is None
+    for slug in ("ausl", "ncaaw-big-ten", "ncaaw-sec"):
         league = next(lg for lg in config.LEAGUES if lg.slug == slug)
         assert all(RAW_EVENTS_BY_TEAM.get(t.slug, []) == [] for t in league.teams), slug
 
@@ -118,7 +123,7 @@ def test_pages_with_no_games_are_noindex_and_not_in_the_sitemap(dist: Path):
     # nothing is left out of the sitemap while still indexable.
     for page in dist.rglob("index.html"):
         path = "/" + page.parent.relative_to(dist).as_posix() + "/"
-        if path.count("/") >= 3 or path in {"/wnba/", "/nwsl/", "/pwhl/", "/ausl/", "/ncaaw-big-ten/"}:
+        if path.count("/") >= 3 or path in {"/wnba/", "/nwsl/", "/pwhl/", "/ausl/", "/ncaaw-big-ten/", "/ncaaw-sec/"}:
             assert (path in listed) != (NOINDEX in page.read_text()), path
     assert len(listed) == INDEXABLE
 

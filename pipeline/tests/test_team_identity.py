@@ -113,6 +113,25 @@ PUBLISHED_SLUGS: dict[str, tuple[str, ...]] = {
         "washington-huskies-womens-basketball",
         "wisconsin-badgers-womens-basketball",
     ),
+    # First published by the change that adds the SEC (DECISIONS 0023).
+    "ncaaw-sec": (
+        "alabama-crimson-tide-womens-basketball",
+        "arkansas-razorbacks-womens-basketball",
+        "auburn-tigers-womens-basketball",
+        "florida-gators-womens-basketball",
+        "georgia-bulldogs-womens-basketball",
+        "kentucky-wildcats-womens-basketball",
+        "lsu-tigers-womens-basketball",
+        "mississippi-state-bulldogs-womens-basketball",
+        "missouri-tigers-womens-basketball",
+        "oklahoma-sooners-womens-basketball",
+        "ole-miss-rebels-womens-basketball",
+        "south-carolina-gamecocks-womens-basketball",
+        "tennessee-lady-volunteers-womens-basketball",
+        "texas-longhorns-womens-basketball",
+        "texas-am-aggies-womens-basketball",
+        "vanderbilt-commodores-womens-basketball",
+    ),
 }
 
 # The UIDs in every non-empty feed of the fixture site (tests/fixture_site.py),
@@ -168,7 +187,7 @@ def test_the_published_slug_list_has_every_team_configured_today():
     add it to PUBLISHED_SLUGS the day it first publishes."""
     configured = {lg.slug: {t.slug for t in lg.teams} for lg in config.LEAGUES}
     assert {k: set(v) for k, v in PUBLISHED_SLUGS.items()} == configured
-    assert sum(len(v) for v in PUBLISHED_SLUGS.values()) == 67
+    assert sum(len(v) for v in PUBLISHED_SLUGS.values()) == 83
 
 
 def test_every_published_slug_still_gets_a_feed_a_page_and_a_data_file(tmp_path: Path):

@@ -8,6 +8,7 @@
       "chrome": "the Chrome for Testing build pinned by puppeteer 24.43.1 (../package-lock.json)",
       "node": "22"
     },
+    "page_weight_update": "2026-11-02, DECISIONS 0023: total_byte_weight_kb 120 -> 133 (the home page, measured locally uncompressed by make perf). An intentional regression: the home page links every team, and the SEC adds 16. Needs the owner sign-off in its PR (PERFORMANCE-STANDARD §2). The other metrics are unchanged from the 2026-09-18 run.",
     "notes": "PERFORMANCE-STANDARD §2 schema. The regression metrics are the worst page across perf/lighthouse.json's paths: the lowest performance score, the slowest LCP, the heaviest page. null = not applicable here: p95_ms (k6; the site is static files on GitHub Pages, no route of ours runs), llm_* (no LLM), js_kb_gzip (no external script; the only script is an inline loader counted in the page weight). CLS and TBT are gated by absolute budgets only: in CI they measure 0 to 0.005 and 0 ms, and 10% of (nearly) zero is not a usable tolerance."
   },
   "metrics": {
@@ -17,7 +18,7 @@
     "js_kb_gzip": null,
     "lighthouse_performance": 1.0,
     "lcp_ms": 1580,
-    "total_byte_weight_kb": 120
+    "total_byte_weight_kb": 133
   },
   "direction": {
     "p95_ms": "lower_is_better",

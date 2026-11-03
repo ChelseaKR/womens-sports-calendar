@@ -13,7 +13,9 @@ module, and an error is recorded as "failed", never as a number. A team that
 was not measured (failed, over the request cap, or no confirmed team name) is
 shown as not measured, never as 0 events (absence is not a value).
 
-The candidate rosters below were read on 2026-11-02. The college keywords
+The SEC was added to config.LEAGUES on 2026-11-02 (DECISIONS 0023); its
+candidate is now that league, so a run re-measures exactly what the nightly
+build fetches. The other candidate rosters below were read on 2026-11-02. The college keywords
 follow the Big Ten pattern ("<School> <Mascot> Womens Basketball", with a
 "<School> women's basketball" title name, DECISIONS 0010). They were NOT
 checked against Ticketmaster's artist pages first, so a team with 0 events
@@ -33,7 +35,7 @@ from pathlib import Path
 from typing import Any
 
 from .build import _search_team
-from .config import League, Team
+from .config import League, Team, league_by_slug
 from .normalize import Game, normalize_event, team_is_participant_as_any
 from .site_data import tracked_team_is_home
 from .ticketmaster import DiscoveryClient, TicketmasterFetchError
@@ -98,32 +100,11 @@ def _league(slug: str, name: str, teams: tuple[Team, ...]) -> League:
 
 
 CANDIDATES: tuple[Candidate, ...] = (
+    # The SEC as config.LEAGUES ships it, so a run measures exactly what the
+    # nightly build would fetch (DECISIONS 0023).
     Candidate(
-        _league(
-            "ncaaw-sec",
-            "NCAA Women's Basketball (SEC)",
-            _college_teams(
-                {
-                    "Alabama": "Crimson Tide",
-                    "Arkansas": "Razorbacks",
-                    "Auburn": "Tigers",
-                    "Florida": "Gators",
-                    "Georgia": "Lady Bulldogs",
-                    "Kentucky": "Wildcats",
-                    "LSU": "Tigers",
-                    "Mississippi State": "Bulldogs",
-                    "Missouri": "Tigers",
-                    "Oklahoma": "Sooners",
-                    "Ole Miss": "Rebels",
-                    "South Carolina": "Gamecocks",
-                    "Tennessee": "Lady Volunteers",
-                    "Texas": "Longhorns",
-                    "Texas A&M": "Aggies",
-                    "Vanderbilt": "Commodores",
-                }
-            ),
-        ),
-        source="SEC membership for 2026-27 (16 schools).",
+        league_by_slug("ncaaw-sec"),
+        source="The SEC as tracked in config.LEAGUES (16 schools, 2026-27).",
     ),
     Candidate(
         _league(

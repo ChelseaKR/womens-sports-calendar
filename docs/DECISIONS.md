@@ -767,3 +767,85 @@ should carry the same exclusions. Unrivaled uses its 2026 clubs, because the
 
 Revisit: remove the workflow once a league has been chosen, or keep it for
 the next candidate.
+
+## 0023 — Sixth tracked league: SEC women's basketball (2026-11-02)
+
+**Decision (owner, 2026-11-02):** add only the top-ranked candidate from the
+0022 measurement, and wait before adding another.
+
+**Why the SEC.** The 0022 run of 2026-11-02 (run 41571451396) counted
+upcoming events the site's own code would attribute to a team: SEC 197 (14 of
+16 teams), Big 12 176 (15 of 16), ACC 115, Big East 64, Major League
+Volleyball 32, LOVB 1 and Unrivaled 0. College team pages are also the site's
+best search pages: in Search Console for 2026-10-03 to 11-01, Big Ten women's
+basketball pages averaged position 10.1, against 17.6 to 46.0 for the pro
+leagues.
+
+**What ships,** the Big Ten pattern (0010) with the same 16 schools the
+measurement used:
+
+- `config.LEAGUES` gains `ncaaw-sec` ("SEC women's basketball", short name
+  "SEC"). Each keyword is "<School> <Mascot> Womens Basketball" with the
+  title name "<School> women's basketball". Pages, `.ics` feeds, the Atom
+  home-game feed, data files and sitemap entries come from the existing
+  code, unchanged. A team page now says "the school's official ticket page"
+  for any `ncaaw-` league, not only the Big Ten.
+- **Keyword fixes the measurement exposed,** each re-measured on this branch
+  (the workflow can be dispatched on a branch; runs 41572551780,
+  41572999452, 41573136146 and 41573687756, counts only):
+  - "Women's" and "Womens" are now the same word to the participant check
+    (`normalize._normalize_for_match` drops apostrophes). Ticketmaster names
+    Tennessee "Tennessee Lady Volunteers Women's Basketball" and South
+    Carolina "University of South Carolina Gamecocks Women's Basketball"
+    (their ticketmaster.com artist pages). Attributed events went from 0 to
+    21 for Tennessee, 8 to 23 for South Carolina and 5 to 24 for Florida.
+    This applies to every league. It can only add matches where one side
+    had an apostrophe, and no existing test needed a change for it.
+  - Georgia is "Georgia Bulldogs Womens Basketball": "Georgia Lady Bulldogs"
+    found 2 events and matched none; "Georgia Bulldogs" found 24 and
+    matched 24.
+  - Arkansas and Missouri keep their keywords. Probes of "University of
+    Arkansas Women's Basketball", "Arkansas Lady Razorbacks", "Mizzou
+    Tigers Womens Basketball" and "Mizzou Women's Basketball" added no
+    attributed event. Ticketmaster lists only their away games today (6 and
+    9), so neither shows a home game.
+- **Stricter college exclusions (0022):** every SEC team excludes "<direction>
+  <School> women's basketball" for North, South, Northern, Southern,
+  Eastern, Western, Central, East, West, Middle (Middle Tennessee) and
+  Southeast (Southeast Missouri) (`config.COLLEGE_DIRECTION_PREFIXES`). No SEC
+  school is inside another's name the way Kansas is inside Arkansas, so no
+  other collision is listed. The Big Ten teams are unchanged.
+- **Official ticket links (0019),** fetched 2026-11-02 with HTTP 200, no
+  redirect and a ticket page title, each on the school's athletics site
+  (Texas A&M's on its ticket office's site): 15 of 16 schools. Georgia has none: georgiadogs.com's ticket links
+  go to its Paciolan store, which answered 403, and to the Georgia Bulldog
+  Club's home page, which is not a ticket page. Mississippi State, Oklahoma
+  and Missouri sell through Paciolan or Ticketmaster Account Manager; their
+  links are the athletics site's ticket page, as for the Big Ten. Texas A&M's
+  is the 12th Man Foundation's ticket center, which runs its ticket office.
+  There is no league ticket page; each school sells its own.
+- **Indexing (0020, 0021), unchanged:** an empty SEC team page is indexed
+  only with an official ticket link, so Georgia's page is `noindex` and out
+  of the sitemap whenever it lists no game. The SEC league page has no
+  ticket link, so it is indexed only while it lists a game.
+- `measure_leagues.py` measures the SEC as `config.LEAGUES` ships it, so a
+  later run checks exactly what the nightly build fetches.
+
+**Measured on this branch (run 41573687756, 2026-11-03 03:41 UTC, 16
+requests):** 243 upcoming attributed events, every one of the 16 teams with
+at least one, 14 with home games (230 home games). Nightly cost: 16 more
+Discovery requests, inside the 5,000 a day.
+
+**Not verified until after merge:** the first nightly build is the first
+time these pages, feeds and the apostrophe rule run on live data. The Big
+Ten's count may rise where Ticketmaster writes "Women's"; that is not
+measured here.
+
+**Before the next league (Big 12 is next in line):** wait three weeks after
+the first deploy, then check Search Console for the `/ncaaw-sec/` pages:
+impressions, average position against the Big Ten's 10.1, and any "soft
+404" or "crawled, not indexed" reports. Add the Big 12 only if SEC pages are
+being indexed and shown.
+
+Revisit: re-check the ticket links at the start of next season, and Georgia's
+when its ticket page can be fetched.

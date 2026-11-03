@@ -13,12 +13,13 @@ Rules for an entry:
 - The URL is on the team's or league's own site, or is the address the
   league's own site links as that team's ticket page. Each entry says
   where the link was found ("evidence").
-- It was fetched on CHECKED_ON and returned HTTP 200 with a ticket page's
-  title. A candidate that 404'd, redirected somewhere else (a football
+- It was fetched on CHECKED_ON (SEC_CHECKED_ON for the SEC) and returned
+  HTTP 200 with a ticket page's title. A candidate that 404'd, redirected somewhere else (a football
   ticket page), or served a placeholder title ("@title") is left out.
 - A team with no entry gets no link. Rutgers has none: its "TicketCentral"
   address now redirects to football tickets, and no women's basketball
-  ticket page was found on scarletknights.com.
+  ticket page was found on scarletknights.com. Georgia has none either (see
+  its place in OFFICIAL_TEAM_TICKETS).
 
 Affiliate links: AFFILIATE_TEMPLATES below maps a destination host to a URL
 template with "{url}" where the percent-encoded official URL goes. It is
@@ -66,6 +67,11 @@ _NWSL_CLUB_SITE = (
 _AUSL_TEAM = "Linked from this team's page on theausl.com, the league's own site, read " + CHECKED_ON + "."
 _SCHOOL_WBB = (
     "Linked from the school's official athletics site (women's basketball or main menu), read " + CHECKED_ON + "."
+)
+# The SEC schools' pages were found and fetched later than the rest.
+SEC_CHECKED_ON = "2026-11-02"
+_SEC_SCHOOL_WBB = (
+    "Linked from the school's official athletics site (women's basketball or main menu), read " + SEC_CHECKED_ON + "."
 )
 
 # (league slug, team slug) -> the team's official ticket page.
@@ -213,10 +219,63 @@ OFFICIAL_TEAM_TICKETS: dict[tuple[str, str], OfficialTicketPage] = {
         'Where uwbadgers.com/tickets redirects ("Ticket Central - Wisconsin Athletic Ticket Office"); '
         "fetched " + CHECKED_ON + ".",
     ),
+    # SEC women's basketball (DECISIONS 0023), the same rule as the Big Ten.
+    # Fetched SEC_CHECKED_ON. No entry for Georgia: georgiadogs.com's ticket
+    # links go to its Paciolan store (which answered 403) and to the Georgia
+    # Bulldog Club's home page, which is not a ticket page.
+    ("ncaaw-sec", "alabama-crimson-tide-womens-basketball"): OfficialTicketPage(
+        "https://rolltide.com/sports/2016/6/10/tickets-w-baskbl-html", _SEC_SCHOOL_WBB
+    ),
+    ("ncaaw-sec", "arkansas-razorbacks-womens-basketball"): OfficialTicketPage(
+        "https://arkansasrazorbacks.com/sport/w-baskbl/tickets/",
+        "The women's basketball ticket page on the school's own site (title \"Tickets | Arkansas Razorbacks\", "
+        'heading "Women\'s Basketball Tickets"); fetched ' + SEC_CHECKED_ON + ".",
+    ),
+    ("ncaaw-sec", "auburn-tigers-womens-basketball"): OfficialTicketPage(
+        "https://auburntigers.com/tickets/wbb", _SEC_SCHOOL_WBB
+    ),
+    ("ncaaw-sec", "florida-gators-womens-basketball"): OfficialTicketPage(
+        "https://floridagators.com/sports/2022/12/15/womens-basketball-tickets", _SEC_SCHOOL_WBB
+    ),
+    ("ncaaw-sec", "kentucky-wildcats-womens-basketball"): OfficialTicketPage(
+        "https://ukathletics.com/ticketing/", _SEC_SCHOOL_WBB
+    ),
+    ("ncaaw-sec", "lsu-tigers-womens-basketball"): OfficialTicketPage(
+        "https://lsusports.net/tickets/wbball", _SEC_SCHOOL_WBB
+    ),
+    ("ncaaw-sec", "mississippi-state-bulldogs-womens-basketball"): OfficialTicketPage(
+        "https://hailstate.com/sports/2022/7/29/tickets", _SEC_SCHOOL_WBB
+    ),
+    ("ncaaw-sec", "missouri-tigers-womens-basketball"): OfficialTicketPage(
+        "https://mutigers.com/tickets", _SEC_SCHOOL_WBB
+    ),
+    ("ncaaw-sec", "oklahoma-sooners-womens-basketball"): OfficialTicketPage(
+        "https://soonersports.com/sports/2023/6/21/tickets-home", _SEC_SCHOOL_WBB
+    ),
+    ("ncaaw-sec", "ole-miss-rebels-womens-basketball"): OfficialTicketPage(
+        "https://olemisssports.com/sports/2024/6/27/ole-miss-womens-basketball-tickets", _SEC_SCHOOL_WBB
+    ),
+    ("ncaaw-sec", "south-carolina-gamecocks-womens-basketball"): OfficialTicketPage(
+        "https://gamecocksonline.com/tickets/wbb/", _SEC_SCHOOL_WBB
+    ),
+    ("ncaaw-sec", "tennessee-lady-volunteers-womens-basketball"): OfficialTicketPage(
+        "https://utsports.com/sports/2026/8/18/womens-basketball-ticket-information", _SEC_SCHOOL_WBB
+    ),
+    ("ncaaw-sec", "texas-longhorns-womens-basketball"): OfficialTicketPage(
+        "https://texaslonghorns.com/sports/2026/1/26/ticket-information-womens-basketball", _SEC_SCHOOL_WBB
+    ),
+    ("ncaaw-sec", "texas-am-aggies-womens-basketball"): OfficialTicketPage(
+        "https://www.12thmanfoundation.com/tickets/index.html",
+        "Texas A&M's ticket center, run by the 12th Man Foundation, whose ticket pages 12thman.com links "
+        '("Ticket Center | 12th Man Foundation"); fetched ' + SEC_CHECKED_ON + ".",
+    ),
+    ("ncaaw-sec", "vanderbilt-commodores-womens-basketball"): OfficialTicketPage(
+        "https://vucommodores.com/wbb-ticketing", _SEC_SCHOOL_WBB
+    ),
 }
 
-# league slug -> the league's own ticket page. No entry for the Big Ten:
-# tickets are sold by each school.
+# league slug -> the league's own ticket page. No entry for the Big Ten or
+# the SEC: tickets are sold by each school.
 OFFICIAL_LEAGUE_TICKETS: dict[str, OfficialTicketPage] = {
     "wnba": OfficialTicketPage(
         "https://www.wnba.com/tickets", "Linked from wnba.com/teams; fetched " + CHECKED_ON + "."

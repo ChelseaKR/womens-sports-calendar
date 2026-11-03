@@ -281,6 +281,13 @@ addendum checks:
   Ticketmaster coverage or team-roster stability either. Both remain in
   `LEAGUES_EXAMINED_NOT_INCLUDED`, not a licensing block — see
   `pipeline/src/wsc_pipeline/config.py`.
+- **Addendum 2026-11-02, the SEC added:** the same pattern, the same
+  licensing position (no NCAA, conference or school site is read), for
+  the SEC's 16 teams. It was chosen by a Discovery API count, not a
+  spot-check: the counts-only measurement workflow (`docs/DECISIONS.md`
+  0022) ranked it first of the candidates measured, and a run on the
+  branch that added it found 243 upcoming attributed events for 15 of
+  its 16 teams (`docs/DECISIONS.md` 0023).
 
 ### Unrivaled (3x3 basketball league)
 
