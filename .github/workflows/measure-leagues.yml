@@ -1,0 +1,86 @@
+# Measure candidate leagues on the Ticketmaster Discovery API (DECISIONS 0022).
+#
+# Manual only: run it with
+#   gh workflow run measure-leagues.yml -R ChelseaKR/womens-sports-calendar
+# (optionally `-f candidates=ncaaw-sec,mlv`). It reads the API with the
+# existing TICKETMASTER_API_KEY secret and writes counts only (no event names,
+# ids, URLs or prices) to the job summary and a `league-measurement` artifact.
+# It never builds or deploys the site, never writes to the repository or to
+# Pages, and has no write token. The client self-limits to 1 request a second
+# and the script stops at 1,500 requests, well inside the 5,000-a-day limit
+# the nightly build shares.
+#
+# Every action is pinned to a commit, as in pages.yml.
+
+name: measure-leagues
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidates:
+        description: "'all', or comma-separated slugs: ncaaw-sec, ncaaw-acc, ncaaw-big-12, ncaaw-big-east, mlv, unrivaled, lovb"
+        required: false
+        default: all
+        type: string
+
+permissions:
+  contents: read
+
+# One measurement at a time, so two runs never double the API load. A queued
+# run waits; nothing is cancelled.
+concurrency:
+  group: measure-leagues
+  cancel-in-progress: false
+
+env:
+  UV_VERSION: "0.12.9"
+
+jobs:
+  measure:
+    name: measure candidate leagues
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: pipeline
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv (Python 3.12)
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+          enable-cache: false
+
+      - name: make install
+        run: |
+          set -euo pipefail
+          make install
+
+      # The input arrives through env, never interpolated into the script
+      # (zizmor template-injection); the script rejects an unknown slug.
+      - name: Measure
+        env:
+          TICKETMASTER_API_KEY: ${{ secrets.TICKETMASTER_API_KEY }}
+          CANDIDATES: ${{ inputs.candidates }}
+        run: |
+          set -euo pipefail
+          uv run python -m wsc_pipeline.measure_leagues --out "$RUNNER_TEMP/league-measurement" --candidates "${CANDIDATES:-all}"
+
+      # Uploaded even when a fetch failed, so the counts that were measured
+      # are kept; the failed rows say "failed", never 0.
+      - name: Upload the counts
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: league-measurement
+          path: ${{ runner.temp }}/league-measurement
+          retention-days: 30
+          if-no-files-found: error

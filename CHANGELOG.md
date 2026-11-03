@@ -12,6 +12,11 @@ archived and private.
 
 ### Added
 
+- A manual `measure-leagues` workflow counts, with the site's own search and
+  attribution code, how many upcoming Ticketmaster events SEC, ACC, Big 12 and
+  Big East women's basketball, Major League Volleyball, Unrivaled and LOVB
+  would get. It writes counts only to the job summary and an artifact, and
+  never builds or deploys the site (DECISIONS 0022).
 - Every team page has a "Get <team> tickets" link to the team's own ticket
   page (the school's, for Big Ten teams), and each league page links the
   league's, even when no game is listed. Each address was checked against

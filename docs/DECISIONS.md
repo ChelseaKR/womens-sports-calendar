@@ -727,3 +727,43 @@ games and stay indexed. No indexed page leaves the index.
 
 Revisit: if Search Console reports the AUSL league page as a "soft 404", or
 if the Big Ten publishes a league-wide ticket page.
+
+## 0022 — Candidate leagues are measured by a manual, counts-only workflow (2026-11-02)
+
+**Why:** the next league to add (another women's college basketball
+conference, Major League Volleyball, Unrivaled or LOVB) depends on how many
+upcoming events Ticketmaster lists for it and how many of them the site can
+attribute to a team. That needs the Discovery API key, which exists only as
+the `TICKETMASTER_API_KEY` Actions secret. Running `pages.yml` to get it would
+deploy. The owner approved on 2026-11-02 a separate, read-only measurement
+workflow that uses the secret inside GitHub.
+
+The decision:
+
+- `.github/workflows/measure-leagues.yml` runs only on `workflow_dispatch`,
+  with `contents: read`, no write token, no deploy, no write to the
+  repository or Pages, pinned actions and a 30-minute timeout.
+- `pipeline/src/wsc_pipeline/measure_leagues.py` runs the site's own search
+  and attribution code (`build._search_team`, `team_is_participant_as_any`,
+  `normalize_event`, `site_data.tracked_team_is_home`) on candidate rosters
+  kept in that module, not in `config.LEAGUES`. Nothing is published.
+- It writes counts only (per candidate and per team: events returned,
+  attributed, upcoming, home games, truncated) to the job summary and a
+  `league-measurement` artifact kept 30 days. No event name, id, URL, venue
+  or price is written. A failed fetch is shown as "failed" and fails the run
+  after the counts are written; a team with no confirmed name (four MLV 2027
+  expansion teams) is shown as not measured. Neither is ever shown as 0.
+- Rate limits: the existing client's 1 request a second and 429 backoff, plus
+  a cap of 1,500 requests a run, inside the 5,000 a day the nightly build
+  shares.
+
+**Known limits of the numbers:** the college keywords follow the Big Ten
+pattern (0010) and were not checked against Ticketmaster artist pages first,
+so a team with 0 returned may have the wrong keyword. The college candidates
+also drop "<direction> <school> women's basketball" and Arkansas-for-Kansas
+games, which the Big Ten teams do not do today; a conference that is added
+should carry the same exclusions. Unrivaled uses its 2026 clubs, because the
+2027 rosters were not announced on 2026-11-02.
+
+Revisit: remove the workflow once a league has been chosen, or keep it for
+the next candidate.
