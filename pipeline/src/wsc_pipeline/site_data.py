@@ -20,6 +20,7 @@ from .normalize import (
     feed_start,
     feed_ticket_url,
     local_start,
+    side_begins_with,
     team_is_participant_as_any,
     unique_by_event_id,
 )
@@ -173,11 +174,23 @@ def tracked_team_is_home(team: Team, game: Game) -> bool | None:
     from the venue or the city."""
     if not game.home_away_known or not game.home_team or not game.away_team:
         return None
-    if team_is_participant_as_any(team.all_names, {"name": game.home_team}, team.not_this_team):
+    if _side_is_team(team, game.home_team):
         return True
-    if team_is_participant_as_any(team.all_names, {"name": game.away_team}, team.not_this_team):
+    if _side_is_team(team, game.away_team):
         return False
     return None
+
+
+def _side_is_team(team: Team, side: str) -> bool:
+    """True if one side of a matchup names this team: by any of its search
+    names, or by its title name at the start of the side. The build accepts
+    a game through the title name (Team.match_names), as in "Nebraska Women's
+    Basketball vs San Jose State" (live 2026-11-02), so the home flag must
+    read it too. Only at the start: "Western Michigan Women's Basketball" is
+    not Michigan."""
+    if team_is_participant_as_any(team.all_names, {"name": side}, team.not_this_team):
+        return True
+    return team.title_name is not None and side_begins_with(team.title_name, side)
 
 
 def season_label(games: list[Game]) -> str | None:
