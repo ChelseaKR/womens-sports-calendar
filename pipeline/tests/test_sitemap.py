@@ -176,11 +176,13 @@ def test_sitemap_dates_follow_the_previous_live_manifest(tmp_path: Path):
     assert lastmods[CHANGED_PAGE] == fetched_at  # its content changed
     assert lastmods[NEW_PAGE] == fetched_at  # the previous site did not have it
     assert lastmods["/nwsl/"] is None  # unchanged, and never dated before
-    # Privacy and accessibility: the date printed on each page.
+    # Privacy, accessibility and terms: the date printed on each page.
     assert lastmods[site.PRIVACY_PATH] == site.PRIVACY_UPDATED.isoformat()
     assert lastmods[site.ACCESSIBILITY_PATH] == site.ACCESSIBILITY_UPDATED.isoformat()
     assert f"Updated {display_date(site.PRIVACY_UPDATED)}." in (dist / "privacy/index.html").read_text()
     assert f"Updated {display_date(site.ACCESSIBILITY_UPDATED)}." in (dist / "accessibility/index.html").read_text()
+    assert lastmods[site.TERMS_PATH] == site.TERMS_UPDATED.isoformat()
+    assert f"Updated {display_date(site.TERMS_UPDATED)}." in (dist / "terms/index.html").read_text()
     assert validate_seo.validate_dist(dist)
 
 
@@ -208,6 +210,7 @@ def test_sitemap_lists_every_indexable_page_and_not_the_404(tmp_path: Path):
     assert {p: m for p, m in _lastmods(dist).items() if m} == {
         site.PRIVACY_PATH: site.PRIVACY_UPDATED.isoformat(),
         site.ACCESSIBILITY_PATH: site.ACCESSIBILITY_UPDATED.isoformat(),
+        site.TERMS_PATH: site.TERMS_UPDATED.isoformat(),
     }
 
 

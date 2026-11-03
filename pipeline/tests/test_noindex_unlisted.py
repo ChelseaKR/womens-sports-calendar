@@ -42,10 +42,10 @@ EMPTY_TEAMS_WITH_TICKETS = ("/wnba/chicago-sky/", "/nwsl/angel-city/", "/ausl/ch
 AUSL = "/ausl/"
 EMPTY_WITH_TICKETS = (*EMPTY_TEAMS_WITH_TICKETS, AUSL)
 ALL_TEAMS = sum(len(lg.teams) for lg in config.LEAGUES)
-# Indexable in the fixture: home, privacy, accessibility, schedule, the 3
-# leagues that list a game, the AUSL league page, and every team page but
+# Indexable in the fixture: home, privacy, accessibility, terms, schedule, the
+# 3 leagues that list a game, the AUSL league page, and every team page but
 # Rutgers's and Georgia's.
-INDEXABLE = 4 + 3 + 1 + ALL_TEAMS - 2
+INDEXABLE = 5 + 3 + 1 + ALL_TEAMS - 2
 OFFICIAL_SECTION = '<section class="official-tickets"'
 
 
@@ -227,7 +227,7 @@ def test_a_build_that_fetched_nothing_marks_no_page_noindex(tmp_path: Path):
     out = tmp_path / "dist"
     build_module.build(out_dir=out, base_url=BASE_URL, api_key=None, affiliate_id=None)
     listed = _listed_paths(out)
-    assert len(listed) == 4 + len(config.LEAGUES) + ALL_TEAMS  # nothing was checked, so nothing is "empty"
+    assert len(listed) == 5 + len(config.LEAGUES) + ALL_TEAMS  # nothing was checked, so nothing is "empty"
     for path in ("/wnba/", "/wnba/chicago-sky/", "/ausl/"):
         assert NOINDEX not in _page(out, path)
         assert path in listed
@@ -283,7 +283,7 @@ def test_control_the_rule_is_what_drops_the_page(dist: Path, monkeypatch: pytest
     assert RUTGERS in _listed_paths(out)
     assert NOINDEX not in _page(out, RUTGERS)
     assert BIG_TEN in _listed_paths(out)
-    assert len(_listed_paths(out)) == 4 + len(config.LEAGUES) + ALL_TEAMS
+    assert len(_listed_paths(out)) == 5 + len(config.LEAGUES) + ALL_TEAMS
 
 
 def test_control_an_empty_team_page_with_a_ticket_link_made_noindex_fails(dist: Path, tmp_path: Path):

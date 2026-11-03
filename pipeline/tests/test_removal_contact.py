@@ -116,8 +116,11 @@ def test_a_whole_build_changes_only_by_the_footer_paragraph(tmp_path: Path, monk
             # Every page carries the paragraph once; without it the page is main's.
             assert on[name].count(added) == 1, name
             assert on[name].replace(added, b"", 1) == off[name], name
-            assert _parse(off[name].decode()).mailto == [], name
-            assert _parse(on[name].decode()).mailto == [f"mailto:{ADDRESS}"], name
+            # The terms page names the operator's address in its own text too.
+            own = _parse(off[name].decode()).mailto if name == "terms/index.html" else []
+            assert all(m == f"mailto:{ADDRESS}" for m in own), name
+            assert _parse(off[name].decode()).mailto == own, name
+            assert _parse(on[name].decode()).mailto == [*own, f"mailto:{ADDRESS}"], name
         elif name not in ("data/site.json", "version.json") and (
             name == "sitemap.xml" or name.endswith((".ics", ".json"))
         ):

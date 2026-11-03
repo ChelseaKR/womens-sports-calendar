@@ -76,6 +76,7 @@ def render(*, base_url: str, feed_keys: Iterable[str] = ()) -> str:
         "",
         f"- [Privacy]({base_url}/privacy/): what the site collects and the affiliate-link disclosure",
         f"- [Accessibility]({base_url}/accessibility/)",
+        f"- [Terms of use]({base_url}/terms/): who runs the site and the limits of its schedules",
         "",
     ]
     return "\n".join(lines)

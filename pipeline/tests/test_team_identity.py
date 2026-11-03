@@ -359,8 +359,8 @@ def test_the_validators_accept_a_site_with_a_former_slug_and_reject_a_diverged_f
     feeds, _events = validate_ics.validate_dist(out)
     assert feeds == 3 + other_feeds  # the league feed, the team feed and the former-slug feed
     pages, _ = validate_seo.validate_dist(out)
-    # home, league, team, privacy, accessibility: the old-slug notice is not indexable
-    assert pages == 5 + other_pages
+    # home, league, team, privacy, accessibility, terms: the old-slug notice is not indexable
+    assert pages == 6 + other_pages
     # Negative control: a former-slug feed that differs from the current one is refused.
     (out / "ics" / "demo" / "old-name.ics").write_bytes((out / "ics" / "demo" / "new-name.ics").read_bytes() + b" ")
     with pytest.raises(validate_ics.FeedError, match=r"does not parse|differs"):
