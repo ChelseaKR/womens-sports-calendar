@@ -15,6 +15,14 @@ archived and private.
 - Every page's footer says "Next Home Game is independent and is not
   affiliated with any league, team or Ticketmaster.", the sentence the Atom
   feeds already carry (DECISIONS 0024).
+- A plain-language terms of use page at `/terms/`, linked from every page's
+  footer beside the accessibility statement and listed in the sitemap with
+  its own `TERMS_UPDATED` date. It names who runs the site, says it is not
+  affiliated with any league, team or seller, that the Ticketmaster schedules
+  can be wrong or late, that ticket purchases are between the buyer and the
+  seller, and sets California law. Its affiliate paragraph follows the same
+  switch as the footer note, so it says "commission" only when a link can
+  earn one. Not reviewed by an attorney.
 - SEC women's basketball is the sixth league: a league page, 16 team pages,
   `.ics` feeds, the Atom home-game feed and sitemap entries. A Discovery API
   run on the branch found 243 upcoming games for all 16 teams. 15 teams

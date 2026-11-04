@@ -44,6 +44,7 @@ from .team_shops import shop_links_on, team_shop_url
 CSS_PATH = "/style.css"
 PRIVACY_PATH = "/privacy/"
 ACCESSIBILITY_PATH = "/accessibility/"
+TERMS_PATH = "/terms/"
 # The status line docs/a11y/STATEMENT.md opens with. The page renders this
 # exact sentence and tests/test_accessibility_page.py asserts the two agree,
 # so the published statement and the committed one cannot drift apart.
@@ -59,11 +60,12 @@ ACCESSIBILITY_CONTACT_URL = "https://chelseakr.com/contact"
 # REMOVED_EVENTS (config.py, ADR 0006) is the switch a request is honoured with.
 REMOVAL_CONTACT_EMAIL: str | None = "chelsea@chelseakr.com"
 _EMAIL_SHAPE = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$")
-# The "Updated" date printed on /privacy/ and /accessibility/, and their
+# The "Updated" date printed on /privacy/, /accessibility/ and /terms/, and their
 # sitemap <lastmod>: one value each, so the two cannot disagree. Change it
 # whenever that page's text changes.
 PRIVACY_UPDATED = date(2026, 10, 31)
 ACCESSIBILITY_UPDATED = date(2026, 9, 17)
+TERMS_UPDATED = date(2026, 11, 3)
 # One-click subscribe links. Each takes the feed's webcal:// address; Google
 # and Outlook then fetch the feed themselves and keep it subscribed.
 # Google's "add by URL" prompt:
@@ -309,7 +311,7 @@ know it, and otherwise to the game's Ticketmaster listing.
 {affiliate_note}</p>
 <p class="privacy-note">{note}
 <a href="{PRIVACY_PATH}">Privacy: what this site measures and what it never does</a>.{choice}</p>
-<p class="privacy-note"><a href="{ACCESSIBILITY_PATH}">Accessibility statement</a>.</p>{_removal_contact()}
+<p class="privacy-note"><a href="{ACCESSIBILITY_PATH}">Accessibility statement</a> &middot; <a href="{TERMS_PATH}">Terms of use</a>.</p>{_removal_contact()}
 </footer>
 """
 
@@ -1011,6 +1013,98 @@ subscribing to a calendar or following a ticket link is fixed first.</p>
         title=f"Accessibility | {SITE_NAME}",
         description="How Next Home Game is checked for accessibility, its known gaps, and how to report a problem.",
         canonical_url=f"{base_url}{ACCESSIBILITY_PATH}",
+        base_url=base_url,
+        body=body,
+        ga4_id=ga4_id,
+        paid_links=paid_links,
+    )
+
+
+# The terms page's affiliate paragraph, in the two states the build can be in,
+# following the same switch as the footer's AFFILIATE_NOTE_* (``_any_paid``).
+TERMS_AFFILIATE_ACTIVE = (
+    "Links marked &ldquo;Paid link&rdquo; are affiliate links: if you buy through one, "
+    "this site earns a commission, and it costs you nothing extra. A paid link never "
+    "changes which seller a game&rsquo;s &ldquo;Buy tickets&rdquo; link goes to. Every "
+    "other link is plain, and this site is not paid for it."
+)
+TERMS_AFFILIATE_INACTIVE = (
+    "Today no link on this site earns it money. If that changes, each paid link will "
+    "be labeled as one where it appears, and this page will say so."
+)
+
+
+def render_terms(*, base_url: str, ga4_id: str | None = None, paid_links: bool = False) -> str:
+    """dist/terms/index.html, linked from every page's footer: plain-language
+    terms of use. Not reviewed by an attorney. Its affiliate paragraph follows
+    the same switch as the footer, so it says "affiliate" exactly when a link
+    can be one."""
+    affiliate = TERMS_AFFILIATE_ACTIVE if _any_paid(paid_links) else TERMS_AFFILIATE_INACTIVE
+    contact = "chelsea@chelseakr.com"
+    mail = f'<a href="mailto:{e(contact)}">{e(contact)}</a>'
+    body = f"""<nav aria-label="breadcrumb"><a href="/">All leagues</a></nav>
+<h1>Terms of use</h1>
+<p class="lede">These terms cover the {SITE_NAME} website and its calendar
+feeds. By using them you accept these terms. They are short on purpose. If
+anything here is unclear, email {mail}.</p>
+<h2>Who runs this site</h2>
+<p>{SITE_NAME} is run by one person, Chelsea Kelly-Reif, in California. You
+can reach me at {mail}.</p>
+<h2>What this site is, and is not</h2>
+<p>{SITE_NAME} is a free calendar of home games for women&rsquo;s professional
+and college teams. It is independent. It is not affiliated with or endorsed by
+any league, team, school, Ticketmaster or any ticket seller. It does not sell
+tickets and does not show ticket prices.</p>
+<h2>The schedules can be wrong or late</h2>
+<p>Game dates, times and venues come from the Ticketmaster Discovery API, not
+from the leagues. Games are added, moved, postponed and canceled, sometimes
+after they are listed, and the source can contain mistakes. This site reads
+it on a schedule, so it can be behind, and the copying can add errors of its
+own. A calendar event&rsquo;s end time is an estimate. Before you travel or
+buy, check the game with the team or the ticket seller.</p>
+<h2>Ticket links</h2>
+<p>A &ldquo;Buy tickets&rdquo; link takes you to another company&rsquo;s site.
+Anything you buy there is between you and that seller, under its own terms,
+prices, fees and refund rules. I am not responsible for the seller, its site
+or your purchase.</p>
+<h2>Affiliate links</h2>
+<p>{affiliate}</p>
+<h2>No warranty</h2>
+<p>The site and its feeds are provided &ldquo;as is&rdquo; and &ldquo;as
+available,&rdquo; without any warranty, express or implied, including any
+warranty of accuracy, completeness or fitness for a particular purpose. They
+may be unavailable, slow or wrong at any time.</p>
+<h2>Limit of liability</h2>
+<p>To the fullest extent the law allows, I am not liable for any loss or
+damage that comes from using or relying on this site or its feeds, including
+a missed game, travel costs, ticket costs, or any indirect or consequential
+loss. Where the law does not allow that, my total liability is limited to
+US$50.</p>
+<h2>Names and trademarks</h2>
+<p>League, team and school names, Ticketmaster and the names of other ticket
+sellers and stores are the names and trademarks of their owners. They appear
+here only to say which game a listing is or where a link goes. Their owners do
+not sponsor or endorse this site.</p>
+<h2>Using the site</h2>
+<p>You are welcome to read the site, link to it, share it and subscribe to its
+calendar feeds. Please do not use it in a way that harms it or other people,
+such as automated requests heavy enough to slow it down. To ask for a game to
+be removed or to report a mistake, email {mail}.</p>
+<h2>Changes to these terms</h2>
+<p>I may update these terms. When I do, the date below changes. If you keep
+using the site after that, the new version applies.</p>
+<h2>Governing law</h2>
+<p>These terms are governed by the laws of the State of California, USA. If
+something goes wrong, please email me first, and I will try to fix it.</p>
+<p>Updated {e(display_date(TERMS_UPDATED))}.</p>
+"""
+    return _base(
+        title=f"Terms of use | {SITE_NAME}",
+        description=(
+            "Who runs Next Home Game, where its schedules come from, why they can be wrong "
+            "or late, and how its ticket links work."
+        ),
+        canonical_url=f"{base_url}{TERMS_PATH}",
         base_url=base_url,
         body=body,
         ga4_id=ga4_id,
