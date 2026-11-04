@@ -8,11 +8,14 @@ timezone}, _embedded.attractions[].name, and top-level id/name/url.
 
 from __future__ import annotations
 
+import shutil
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
 from wsc_pipeline import guard, sellers, site, sitemap
+from wsc_pipeline.site_data import records_dir
 
 # A build's fetch time, pinned: what tests hand the calendar builders as
 # `dtstamp` (ics.build_calendar never reads the clock). Before the games in
@@ -156,3 +159,12 @@ def event_date_tbd():
         local_time=None,
         date_tbd=True,
     )
+
+
+def copy_built_site(src: Path, dst: Path) -> Path:
+    """A copy of a built site together with the build's records beside it
+    (site_data.records_dir), which the validators read and which are never
+    deployed. A control test sabotages the copy, never the original."""
+    shutil.copytree(src, dst)
+    shutil.copytree(records_dir(src), records_dir(dst))
+    return dst

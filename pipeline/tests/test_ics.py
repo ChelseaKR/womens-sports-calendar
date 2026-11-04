@@ -81,24 +81,24 @@ def test_date_tbd_game_excluded_from_ics_but_not_erased():
     assert str(events[0]["uid"]) == make_uid("EVT-NORMAL")
 
 
-def test_no_price_description_says_not_available():
-    raw = make_raw_event(event_id="EVT-NOPRICE2", price_ranges=None)
+@pytest.mark.parametrize(
+    "price_ranges",
+    [None, [{"type": "standard", "currency": "USD", "min": 10.0, "max": 20.0}]],
+    ids=["no-price", "priced"],
+)
+def test_no_event_description_mentions_a_price_or_its_absence(price_ranges):
+    """DECISIONS 0013 and 0024: the feeds carry no price. The old line,
+    "Tickets: price not available from Ticketmaster" on every event, was
+    absence printed as a value, and a price Ticketmaster does send is not
+    the all-in price."""
+    raw = make_raw_event(event_id="EVT-PRICE2", price_ranges=price_ranges)
     game = normalize_event(raw, league_slug="wnba", tracked_team_slug="t", tracked_team_name="T")
     cal = build_calendar([game], cal_name="Test", dtstamp=BUILD_TIME)
     desc = str(cal.walk("VEVENT")[0]["description"])
-    assert "price not available" in desc
-    assert "$" not in desc
-
-
-def test_price_shown_when_present():
-    raw = make_raw_event(
-        event_id="EVT-PRICE2",
-        price_ranges=[{"type": "standard", "currency": "USD", "min": 10.0, "max": 20.0}],
-    )
-    game = normalize_event(raw, league_slug="wnba", tracked_team_slug="t", tracked_team_name="T")
-    cal = build_calendar([game], cal_name="Test", dtstamp=BUILD_TIME)
-    desc = str(cal.walk("VEVENT")[0]["description"])
-    assert "USD 10.00-20.00" in desc
+    assert "price" not in desc.lower()
+    assert "not available" not in desc.lower()
+    assert "Tickets:" not in desc
+    assert "USD" not in desc and "$" not in desc
 
 
 def test_timezone_component_included_for_events_with_tzid():

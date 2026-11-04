@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -19,7 +18,7 @@ import pytest
 from wsc_pipeline import build as build_module
 from wsc_pipeline import config, official_tickets, sitemap, validate_seo
 
-from .conftest import make_raw_event
+from .conftest import copy_built_site, make_raw_event
 from .fixture_site import BASE_URL, RAW_EVENTS_BY_TEAM, build_fixture_site
 
 LOC_RE = re.compile(r"<loc>([^<]+)</loc>")
@@ -67,7 +66,7 @@ def _listed_paths(root: Path) -> set[str]:
 
 
 def _copy(src: Path, dst: Path) -> Path:
-    shutil.copytree(src, dst)
+    copy_built_site(src, dst)
     return dst
 
 

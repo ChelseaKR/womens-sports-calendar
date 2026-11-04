@@ -28,6 +28,7 @@ from wsc_pipeline import build as build_module
 from wsc_pipeline import config, feeds, normalize, official_tickets, site_data
 from wsc_pipeline.config import league_by_slug
 from wsc_pipeline.normalize import normalize_event, team_is_participant, team_is_participant_as_any
+from wsc_pipeline.site_data import records_dir
 
 from .conftest import make_raw_event
 from .test_build import _FakeDiscoveryClient
@@ -216,7 +217,7 @@ def test_the_team_page_feed_and_data(built: Path):
     assert "utsports.com" in page and "the school&#x27;s official ticket page" in page
     cal = Calendar.from_ical((built / "ics" / "ncaaw-sec" / f"{TENNESSEE_SLUG}.ics").read_bytes())
     assert [str(e["uid"]) for e in cal.walk("VEVENT")] == ["tm-SEC-TN-1@womens-sports-calendar.invalid"]
-    data = json.loads((built / "data" / "ncaaw-sec" / f"{TENNESSEE_SLUG}.json").read_text())
+    data = json.loads((records_dir(built) / "ncaaw-sec" / f"{TENNESSEE_SLUG}.json").read_text())
     assert data["next_home_event_id"] == "SEC-TN-1"
 
 

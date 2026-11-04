@@ -6,6 +6,13 @@ pipeline/dist.tmp/
 pipeline/dist-fixture/
 pipeline/dist-fixture.tmp/
 pipeline/dist-fixture-first/
+# Page records beside each build (site_data.records_dir), never deployed.
+pipeline/dist-records/
+pipeline/dist-records.tmp/
+pipeline/dist-fixture-records/
+pipeline/dist-fixture-records.tmp/
+pipeline/dist-fixture-first-records/
+pipeline/dist-fixture-first-records.tmp/
 pipeline/.pytest_cache/
 pipeline/**/__pycache__/
 pipeline/*.egg-info/

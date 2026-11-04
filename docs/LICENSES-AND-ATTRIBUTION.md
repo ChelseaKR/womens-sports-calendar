@@ -646,6 +646,12 @@ re-reading the league's terms.
     periods in order to provide the service you are providing."* A nightly
     rebuild (DECISIONS 0001) that replaces yesterday's data is "reasonable
     periods... to provide the service."
+  - Sublicensing: the license is *"non-sublicenseable"*, and Event Content
+    is *"owned by the organizers and/or Ticketmaster"*. Since 2026-11-03
+    (DECISIONS 0024) the site no longer publishes the per-league and
+    per-team JSON files, which were a bulk copy of every listed event; the
+    pages and feeds are the service. Only `data/site.json` (counts, no
+    event) is published.
   - Obligation: *"Remove from your application within 24 hours any Event
     Content or other information or tickets that the owner asks you to
     remove."* Besides the nightly rebuild dropping anything Ticketmaster
@@ -707,9 +713,9 @@ re-reading the league's terms.
   domains, and reads the destination from its `u` parameter. On the pages,
   such a link gets `rel="sponsored noopener"` and a visible "Paid link"
   label, and the footer and `/privacy/` disclose it (the page's link is
-  also `buy.url` in `data/*.json`, which the page is rendered from). The
+  also `buy.url` in the page's record, which the page is rendered from). The
   `.ics` feeds never carry it: they carry the decoded destination, or no
-  ticket link when there is none, as does `ticket_url` in `data/*.json`,
+  ticket link when there is none, as does `ticket_url` in the page record,
   and `make validate-ics` refuses a feed with a tracking link.
 - **Revenue rule:** *"Our program rewards partners based on actual sales
   generated, not just traffic referrals."* *"Ticketmaster does not provide

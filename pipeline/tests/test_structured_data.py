@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
 from datetime import datetime
 from pathlib import Path
 
@@ -15,9 +14,9 @@ import pytest
 from wsc_pipeline import build as build_module
 from wsc_pipeline import config, structured_data, validate_seo
 from wsc_pipeline.normalize import normalize_event
-from wsc_pipeline.site_data import game_to_dict
+from wsc_pipeline.site_data import game_to_dict, records_dir
 
-from .conftest import make_raw_event
+from .conftest import copy_built_site, make_raw_event
 from .fixture_site import BASE_URL, build_fixture_site
 
 JSONLD_RE = re.compile(r'<script type="application/ld\+json">(.*?)</script>', re.DOTALL)
@@ -41,7 +40,7 @@ def _events(html: str) -> list[dict]:
 
 
 def _copy(src: Path, dst: Path) -> Path:
-    shutil.copytree(src, dst)
+    copy_built_site(src, dst)
     return dst
 
 
@@ -66,7 +65,7 @@ def test_only_games_with_a_known_date_and_time_are_events(fixture_dist: Path):
         "Phoenix Mercury vs Las Vegas Aces",  # "Aces at Mercury"
         "Seattle Storm vs Las Vegas Aces",
     ]
-    data = json.loads((fixture_dist / "data/wnba/las-vegas-aces.json").read_text())
+    data = json.loads((records_dir(fixture_dist) / "wnba/las-vegas-aces.json").read_text())
     by_id = {g["event_id"]: g for g in data["games"]}
     # Listed on the page, but never marked up: no time, no date, not a game,
     # or no known home side.
@@ -78,7 +77,7 @@ def test_only_games_with_a_known_date_and_time_are_events(fixture_dist: Path):
 
 
 def test_start_dates_carry_the_venue_offset_and_are_the_real_instant(fixture_dist: Path):
-    data = json.loads((fixture_dist / "data/wnba/las-vegas-aces.json").read_text())
+    data = json.loads((records_dir(fixture_dist) / "wnba/las-vegas-aces.json").read_text())
     for event in _events((fixture_dist / ACES_PAGE).read_text()):
         start = event["startDate"]
         assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}", start), start

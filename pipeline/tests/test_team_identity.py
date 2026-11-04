@@ -22,6 +22,7 @@ from wsc_pipeline import config, site, validate_ics, validate_seo
 from wsc_pipeline.config import League, Team, check_registry
 from wsc_pipeline.ics import make_uid
 from wsc_pipeline.normalize import team_is_participant_as_any
+from wsc_pipeline.site_data import records_dir
 from wsc_pipeline.ticketmaster import CrawlBudget, DiscoveryClient
 
 from .conftest import make_raw_event
@@ -197,7 +198,7 @@ def test_every_published_slug_still_gets_a_feed_a_page_and_a_data_file(tmp_path:
         assert (out / "ics" / f"{league_slug}.ics").is_file()
         for slug in slugs:
             assert (out / "ics" / league_slug / f"{slug}.ics").is_file(), f"feed {league_slug}/{slug}"
-            assert (out / "data" / league_slug / f"{slug}.json").is_file(), f"data {league_slug}/{slug}"
+            assert (records_dir(out) / league_slug / f"{slug}.json").is_file(), f"data {league_slug}/{slug}"
             assert (out / league_slug / slug / "index.html").is_file(), f"page {league_slug}/{slug}"
 
 
@@ -342,7 +343,7 @@ def test_the_old_page_points_to_the_new_one_and_stays_out_of_the_sitemap(tmp_pat
     assert "old-name" not in sitemap_xml
     assert "old-name" not in (out / "lastmod.json").read_text()
     # No data file at the old slug: the data path is not a subscribed URL.
-    assert not (out / "data" / "demo" / "old-name.json").exists()
+    assert not (records_dir(out) / "demo" / "old-name.json").exists()
 
 
 def test_the_validators_accept_a_site_with_a_former_slug_and_reject_a_diverged_feed(tmp_path: Path, monkeypatch):
@@ -409,9 +410,9 @@ def test_a_display_name_is_shown_everywhere_but_the_keyword_is_unchanged(tmp_pat
     assert "the New Name FC schedule" in page
     league_page = (out / "demo" / "index.html").read_text()
     assert ">New Name FC</a>" in league_page
-    team_json = json.loads((out / "data" / "demo" / "old-name.json").read_text())
+    team_json = json.loads((records_dir(out) / "demo" / "old-name.json").read_text())
     assert team_json["team_name"] == "New Name FC" and team_json["team_slug"] == "old-name"
-    league_json = json.loads((out / "data" / "demo.json").read_text())
+    league_json = json.loads((records_dir(out) / "demo.json").read_text())
     assert league_json["team_names"] == {"old-name": "New Name FC"}
     feed = Calendar.from_ical((out / "ics" / "demo" / "old-name.ics").read_bytes())
     assert str(feed["x-wr-calname"]) == "New Name FC (Next Home Game)"
@@ -479,6 +480,6 @@ def test_the_home_flag_recognizes_the_former_name(tmp_path: Path, monkeypatch):
     game (site_data.tracked_team_is_home uses every name)."""
     out = tmp_path / "dist"
     _build(out, monkeypatch, _league(_renamed_team()), RENAME_EVENTS)
-    games = {g["event_id"]: g for g in json.loads((out / "data" / "demo" / "old-name.json").read_text())["games"]}
+    games = {g["event_id"]: g for g in json.loads((records_dir(out) / "demo" / "old-name.json").read_text())["games"]}
     assert games["E1"]["tracked_team_is_home"] is True
     assert games["E2"]["tracked_team_is_home"] is True  # "Old Name vs Rival Two": the former name is the home side

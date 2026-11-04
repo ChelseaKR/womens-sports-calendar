@@ -15,7 +15,7 @@ build before deploy. Exits non-zero on the first site that would publish:
    description over 155.
 4. A JSON-LD block that is not JSON, or that could close its own <script>.
 5. Structured data that says more than the page's data does. Each
-   SportsEvent is checked against the game in the page's data/*.json it
+   SportsEvent is checked against the game in the page's payload it
    describes, from that game's raw fields rather than the code that built
    the event: the game must be listed in the calendar feed, with neither
    date nor time TBD, startDate must carry a UTC offset and be the same
@@ -54,6 +54,7 @@ from defusedxml import DefusedXmlException
 from defusedxml import ElementTree as SafeElementTree
 
 from . import config, sitemap, structured_data
+from .site_data import records_dir
 
 SITEMAP_NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
 # ISO 8601 with a UTC offset (or Z), whole seconds: what Google's Event
@@ -306,12 +307,13 @@ def _check_event(page: Path, node: dict[str, Any], games: list[dict[str, Any]]) 
 
 
 def _schedule_data(dist: Path, site_path: str) -> dict[str, Any] | None:
-    """The data/*.json a league or team page renders from, or None for a
-    page with no schedule."""
+    """The payload a league or team page renders from (in the build's
+    records beside dist, site_data.records_dir), or None for a page with no
+    schedule."""
     parts = site_path.strip("/").split("/")
     if site_path == "/" or len(parts) not in (1, 2) or parts[0] not in {lg.slug for lg in config.LEAGUES}:
         return None
-    data: dict[str, Any] = json.loads((dist / "data" / f"{'/'.join(parts)}.json").read_text(encoding="utf-8"))
+    data: dict[str, Any] = json.loads((records_dir(dist) / f"{'/'.join(parts)}.json").read_text(encoding="utf-8"))
     return data
 
 

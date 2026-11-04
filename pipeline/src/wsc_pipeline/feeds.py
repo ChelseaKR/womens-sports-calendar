@@ -37,6 +37,10 @@ FEED_MEDIA_TYPE = "application/atom+xml"
 FEEDS_DIR = "feeds"
 ALL_KEY = "all"
 SOURCE_LINE = "Game listings: Ticketmaster Discovery API."
+# Said in the Atom feeds' <rights> and in every page's footer (site._footer):
+# team and league names describe the games, and no one of them, nor
+# Ticketmaster, sponsors this site.
+INDEPENDENCE_LINE = "Next Home Game is independent and is not affiliated with any league, team or Ticketmaster."
 
 ET.register_namespace("", ATOM_NS)
 
@@ -91,9 +95,7 @@ def _render(*, entries: list[dict[str, Any]], base_url: str, path: str, title: s
     author = ET.SubElement(feed, _q("author"))
     ET.SubElement(author, _q("name")).text = "Next Home Game"
     ET.SubElement(author, _q("uri")).text = f"{base_url}/"
-    ET.SubElement(
-        feed, _q("rights")
-    ).text = f"{SOURCE_LINE} Next Home Game is independent and is not affiliated with any league, team or Ticketmaster."
+    ET.SubElement(feed, _q("rights")).text = f"{SOURCE_LINE} {INDEPENDENCE_LINE}"
     ET.SubElement(feed, _q("generator")).text = "Next Home Game"
     for e in entries:
         d, team, league = e["game"], e["team"], e["league"]

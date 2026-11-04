@@ -8,7 +8,6 @@ and data files are unchanged."""
 from __future__ import annotations
 
 import re
-import shutil
 from datetime import UTC, datetime
 from html import unescape
 from pathlib import Path
@@ -20,7 +19,7 @@ from wsc_pipeline import config, site, validate_seo
 from wsc_pipeline.normalize import normalize_event
 from wsc_pipeline.site_data import team_data
 
-from .conftest import make_raw_event
+from .conftest import copy_built_site, make_raw_event
 from .fixture_site import BASE_URL, build_fixture_site
 
 TITLE_MAX = 60
@@ -236,7 +235,7 @@ def test_no_url_changed(dist: Path):
 
 
 def _corrupt(src: Path, dst: Path, rel: str, old: str, new: str) -> Path:
-    shutil.copytree(src, dst)
+    copy_built_site(src, dst)
     path = dst / rel
     text = path.read_text()
     assert old in text, f"sabotage target not found: {old!r}"

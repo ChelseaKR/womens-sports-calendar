@@ -17,7 +17,8 @@ publish a broken or inconsistent feed:
    subscriber's calendar).
 4. Each feed carries exactly the games its page shows as in the calendar
    feed: the set of UIDs equals the set of make_uid(event_id) for the
-   games in the matching data/*.json with in_calendar_feed true. A feed
+   games in the matching page payload (the build's records beside dist,
+   site_data.records_dir) with in_calendar_feed true. A feed
    that silently drops a game the page lists -- or carries one the page
    does not -- fails here.
 5. A game the page marks Cancelled, Postponed or Rescheduled carries the
@@ -26,7 +27,7 @@ publish a broken or inconsistent feed:
    STATUS: a canceled game must never be an ordinary confirmed event in a
    subscriber's calendar.
 6. Every event's DTSTAMP is a UTC date-time that is not after the build's
-   fetch time (the data JSON's `fetched_at`): a DTSTAMP is when the calendar
+   fetch time (the page payload's `fetched_at`): a DTSTAMP is when the calendar
    copy was made, so one in the future (the game's own start time was written
    there before) is wrong, and a build with events but no fetch time to check
    them against is refused.
@@ -50,6 +51,13 @@ publish a broken or inconsistent feed:
    (docs/LICENSES-AND-ATTRIBUTION.md §3), and the feeds carry the unwrapped
    address instead (normalize.feed_ticket_url); this refuses a build where
    that ever slips.
+11. No event description mentions a ticket price, or says a price is
+   missing (DECISIONS 0013, 0024): the site shows no prices, and a line on
+   every event saying none is available is absence printed as a value.
+12. The deployed data/ directory holds only site.json, which is counts and
+   no event (DECISIONS 0024). Each page's own payload stays in the build's
+   records beside dist and is never published as a bulk copy of the
+   Ticketmaster listings.
 
 Usage: python -m wsc_pipeline.validate_ics <dist-dir>
 """
@@ -68,6 +76,7 @@ from icalendar import Calendar, Component
 from . import config
 from .ics import COMBINED_FEED_PATH, END_ESTIMATE_NOTE, FEED_STATUS, TIME_TBA_NOTE, TIME_TBA_SUFFIX, make_uid
 from .impact import is_impact_link
+from .site_data import records_dir
 
 REQUIRED_VEVENT_PROPS = ("uid", "dtstamp", "dtstart", "summary")
 # Any absolute URL in a property's text, up to whitespace.
@@ -79,16 +88,18 @@ class FeedError(ValueError):
 
 
 def _expected_feeds(dist: Path) -> list[tuple[Path, Path, str]]:
-    """(feed path, matching data JSON path, its page's site path) for every
-    feed the site links."""
+    """(feed path, matching page payload path, its page's site path) for
+    every feed the site links. The payloads are the build's records beside
+    dist (site_data.records_dir), which are never deployed."""
+    records = records_dir(dist)
     triples = []
     for league in config.LEAGUES:
-        triples.append((dist / "ics" / f"{league.slug}.ics", dist / "data" / f"{league.slug}.json", f"/{league.slug}/"))
+        triples.append((dist / "ics" / f"{league.slug}.ics", records / f"{league.slug}.json", f"/{league.slug}/"))
         for team in league.teams:
             triples.append(
                 (
                     dist / "ics" / league.slug / f"{team.slug}.ics",
-                    dist / "data" / league.slug / f"{team.slug}.json",
+                    records / league.slug / f"{team.slug}.json",
                     f"/{league.slug}/{team.slug}/",
                 )
             )
@@ -98,7 +109,7 @@ def _expected_feeds(dist: Path) -> list[tuple[Path, Path, str]]:
                 triples.append(
                     (
                         dist / "ics" / league.slug / f"{former}.ics",
-                        dist / "data" / league.slug / f"{team.slug}.json",
+                        records / league.slug / f"{team.slug}.json",
                         f"/{league.slug}/{team.slug}/",
                     )
                 )
@@ -150,7 +161,7 @@ def _events(feed: Path, cal: Calendar) -> dict[str, Component]:
 
 
 def _page_data(feed: Path, data: Path) -> dict[str, Any]:
-    """The data JSON the feed's page renders from."""
+    """The payload the feed's page renders from."""
     if not data.is_file():
         raise FeedError(f"{data}: missing -- cannot check {feed} against its page's data")
     payload: dict[str, Any] = json.loads(data.read_text(encoding="utf-8"))
@@ -278,6 +289,7 @@ def validate_feed(feed: Path, data: Path, page_path: str) -> int:
     cal = _parse_calendar(feed)
     _check_links_back(feed, cal, page_path)
     events = _events(feed, cal)
+    check_no_price_text(feed, events)
     page = _page_data(feed, data)
     games = page["games"]
     _check_matches_page(feed, games, set(events))
@@ -327,7 +339,47 @@ def validate_dist(dist: Path) -> tuple[int, int]:
         if feed in league_feeds:
             league_events += n
     _check_former_feeds_match(dist)
+    check_no_bulk_event_data(dist)
     return feeds, league_events
+
+
+# The only file data/ may publish: per-league counts and the fetch time.
+PUBLISHED_DATA_FILES = frozenset({"site.json"})
+
+
+def check_no_bulk_event_data(dist: Path) -> None:
+    """dist/data holds nothing but site.json (check 12)."""
+    data_dir = dist / "data"
+    if not data_dir.is_dir():
+        return
+    extra = sorted(
+        str(p.relative_to(data_dir)) for p in data_dir.rglob("*") if p.is_file() and p.name not in PUBLISHED_DATA_FILES
+    )
+    nested = sorted(str(p.relative_to(data_dir)) for p in data_dir.rglob("site.json") if p.parent != data_dir)
+    if extra or nested:
+        raise FeedError(
+            f"{data_dir}: would publish {', '.join(extra + nested)}; only site.json (counts, no event) "
+            "may be deployed (DECISIONS 0024)"
+        )
+
+
+# Any wording that puts a price, or the lack of one, into an event (check 11).
+_PRICE_TEXT = re.compile(r"\bprices?\b|\btickets:", re.IGNORECASE)
+
+
+def check_no_price_text(feed: Path, events: dict[str, Component]) -> None:
+    """No event's description, outside its links, mentions a price (check
+    11); raises FeedError otherwise."""
+    for uid, vevent in events.items():
+        _check_description_has_no_price(feed, uid, str(vevent.get("description", "")))
+
+
+def _check_description_has_no_price(feed: Path, uid: str, description: str) -> None:
+    if _PRICE_TEXT.search(_URL_IN_TEXT.sub("", description)):
+        raise FeedError(
+            f"{feed}: {uid} description mentions a ticket price or its absence; "
+            "the feeds carry no prices (DECISIONS 0013, 0024)"
+        )
 
 
 def _check_former_feeds_match(dist: Path) -> None:

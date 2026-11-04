@@ -265,7 +265,8 @@ What ships (`pipeline/src/wsc_pipeline/analytics.py`):
   than the tracking host, and the event carries `affiliate: true`. While the
   Fanatics team-shop link exists (0018), a click on it sends `shop_click`
   with the same parameters. GA never wraps or rewrites a link.
-- **Feeds untracked.** The `.ics` feeds and `data/*.json` are written
+- **Feeds untracked.** The `.ics` feeds and `data/*.json` (since 0024,
+  `data/site.json` and the unpublished page records) are written
   without the ID and are byte-identical with or without it
   (`tests/test_analytics.py`); no tracking of any kind is added to a feed.
 
@@ -340,6 +341,9 @@ What changes:
 - **The `.ics` feeds do not change.** They still carry the Ticketmaster
   event URL and the existing description line. A build from the same data
   on `main` and on this change produced byte-identical feeds.
+
+  *Amended 2026-11-03 by 0024:* the feeds' "Tickets:" price line is gone,
+  including "price not available from Ticketmaster".
 
 Revisit if a price source passes 0003 with an all-in total price that
 allows nightly caching, indexed display, and `.ics` redistribution.
@@ -481,6 +485,10 @@ files). Whether the four PWHL working names ("PWHL Detroit", "PWHL Hamilton",
 
 ## 0018 — Affiliate links allowed: plain links only, a label on each, ids held by the owner (2026-10-13)
 
+*Amended 2026-11-03 by 0024: while Ticketmaster is the data source, both
+settings stay empty; the site earns only through Ticketmaster's own
+affiliate program.*
+
 **Decision (owner, 2026-10-13):** the site may carry affiliate links from two
 programs on Impact: SeatGeek, and Fanatics. Both are off until she has been
 approved and sets her own tracking link. This amends 0013's "Links are plain,
@@ -561,7 +569,7 @@ click events.*
 - **Feeds:** a feed carries the decoded destination instead, byte for byte
   what it carries for the plain URL, or no ticket link at all when a
   tracking link names no plain destination (`normalize.feed_ticket_url`;
-  never a guessed URL). `data/*.json`'s `ticket_url` is that same plain
+  never a guessed URL). `data/*.json`'s (since 0024, each page record's) `ticket_url` is that same plain
   address. `make validate-ics` now refuses any feed that carries a tracking
   link, so the nightly deploy cannot publish one.
 - **Pages:** a wrapped Ticketmaster link is a paid link like a SeatGeek
@@ -619,7 +627,7 @@ What ships (`pipeline/src/wsc_pipeline/official_tickets.py`):
   page stays the size it was (a URL list added about 3 KB per page and
   failed the page-weight budget). The privacy page now lists these links among the counted
   ones (`PRIVACY_UPDATED` moved to 2026-10-31).
-- **Feeds unchanged.** The `.ics` feeds and `data/*.json` never carry these
+- **Feeds unchanged.** The `.ics` feeds and the page data never carry these
   links (`tests/test_official_tickets.py`).
 
 Revisit: re-check the URLs at the start of each league's season; team sites
@@ -849,3 +857,76 @@ being indexed and shown.
 
 Revisit: re-check the ticket links at the start of next season, and Georgia's
 when its ticket page can be fetched.
+
+## 0024 — Earn only through Ticketmaster's own affiliate program; no bulk event JSON; no price line in feeds (2026-11-03)
+
+**Decision (owner rule, recorded 2026-11-03 from the data-license audit of
+that date):** while the Ticketmaster Discovery API is the site's data source,
+Next Home Game may earn money only through Ticketmaster's own affiliate
+program. The SeatGeek and Fanatics hooks that 0018 added stay empty.
+
+**Why.** Every game on the site comes from the Discovery API (0006). Its
+terms (https://developer.ticketmaster.com/support/terms-of-use/, "Last
+Updated: June 27, 2023", re-read 2026-11-03):
+
+- prohibit any use that would "derive revenues from the use or provision of
+  the Ticketmaster API", "except as set forth below", and nothing follows
+  below;
+- say "Ticketmaster may terminate the license at any time for any reason";
+- license the API on a "non-sublicenseable" basis, for Event Content
+  "owned by the organizers and/or Ticketmaster", which may be stored only
+  "for reasonable periods in order to provide the service".
+
+The FAQ (https://developer.ticketmaster.com/support/faq/) describes the
+sanctioned route: the Impact affiliate program, whose tracking is
+"automatically applied to your links" once a publisher id is on the
+developer account (`docs/LICENSES-AND-ATTRIBUTION.md` §3). A SeatGeek ticket
+link or a Fanatics shop link that pays this site, on pages built from
+Ticketmaster Event Content, is the case the revenue clause is most likely
+aimed at. Losing the key would end the product, because no league's own
+schedule passed licensing.
+
+**What this changes:**
+
+- **Affiliate links (amends 0018).** `sellers.SEATGEEK_IMPACT_LINK` and
+  `sellers.FANATICS_IMPACT_LINK` stay `""`, and `official_tickets.py`'s
+  `AFFILIATE_TEMPLATES` stays empty. A pull request that sets any of them
+  is out of bounds until Ticketmaster agrees in writing, or until no page
+  that carries the link shows Ticketmaster Event Content. A Ticketmaster
+  event URL that Ticketmaster itself wraps in Impact tracking (0018's
+  addendum) is the allowed case and is labeled as before.
+- **No bulk event JSON.** The build no longer publishes
+  `data/<league>.json` or `data/<league>/<team>.json`; together they were a
+  machine-readable copy of every listed event (id, name, teams, venue
+  street and postcode, times, URL), which is more than providing the
+  service. The pages, the `.ics` and Atom feeds are the service. Each
+  page's payload is still written, to `dist-records/` beside the site
+  (`site_data.records_dir`), for the validators and tests, and is never
+  deployed. `data/site.json` stays: per-league counts and the fetch time,
+  no event; the freshness alarm (ADR 0003) and `llms.txt` read it.
+  `make validate-ics` now refuses a build whose `data/` holds anything
+  else, so the nightly deploy cannot publish one again.
+  - Before the change, nothing on the site or in the repository read those
+    files except the publish guard (ADR 0006), which read the live team
+    files to compare a build with the last publish. It now reads the live
+    team calendar feeds (`ics/<league>/<team>.ics`) instead: the same
+    games, which `validate_ics` already holds equal to each page's list, by
+    UID, start, all-day date and STATUS. The first build after this change
+    compares against the feeds already live, so the guard has no gap.
+  - Not checked: who else fetched the files. GitHub Pages keeps no access
+    log, and GA4 runs only on HTML pages. The README never offered them as
+    an API, and no other repository in the portfolio reads them.
+- **No price line in the feeds (amends 0013's "The `.ics` feeds do not
+  change").** Every event said "Tickets: price not available from
+  Ticketmaster" (342 events in `ics/all.ics` on 2026-11-03): absence printed
+  as a value, against 0013's decision to stop promising prices. The line is
+  gone, and so is the priced form, which 0013's all-in price reasoning
+  rules out for the feeds as much as for the pages. `make validate-ics`
+  refuses an event description that mentions a price or its absence.
+- **"Not affiliated" on every page.** The footer now opens with the Atom
+  feeds' sentence, from one constant (`feeds.INDEPENDENCE_LINE`): "Next Home
+  Game is independent and is not affiliated with any league, team or
+  Ticketmaster."
+
+Revisit when Ticketmaster changes its terms, when a second data source
+passes 0003, or if Ticketmaster agrees in writing to other affiliate links.

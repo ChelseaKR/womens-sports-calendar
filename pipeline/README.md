@@ -5,8 +5,11 @@ only (see `../docs/LICENSES-AND-ATTRIBUTION.md` and `../docs/DECISIONS.md`
 0006 for why no league's own schedule feed is used — the short version:
 every league examined either explicitly forbids automated/commercial reuse
 of its site, or its terms could not be read at all), normalizes into `Game`
-records, and emits per-league and per-team `.ics` calendars, compact JSON,
-and the static site into `dist/`.
+records, and emits per-league and per-team `.ics` calendars and the static
+site into `dist/`. Each league and team page's JSON payload goes to
+`dist-records/`, beside the site and never deployed: the validators and
+tests read it, and the only published JSON is `data/site.json` (counts per
+league, no events; `../docs/DECISIONS.md` 0024).
 
 ## Run it
 
@@ -50,7 +53,7 @@ used (requests, bytes).
   contract — `build.py` lets it propagate rather than swallowing it into a
   silently-thinned result.
 - `guard.py` — the publish guard (`../docs/adr/0006-publish-guard-for-vanished-games.md`).
-  Reads the live site's `data/<league>/<team>.json` back and compares each
+  Reads the live site's team feeds (`ics/<league>/<team>.ics`) back and compares each
   league and team with what this build just fetched. A game has *vanished*
   when the last publish listed it in a feed (timed, or all-day by its date
   when no time is announced), it starts more than 24 hours after this
@@ -174,7 +177,7 @@ used (requests, bytes).
   team-shop link exists) without touching the links. An affiliate link is
   reported by its destination, decoded from its `u` parameter, with
   `affiliate: true`.
-  The `.ics` feeds and `data/*.json` never see the ID.
+  The `.ics` feeds, `data/site.json` and the page records never see the ID.
 - `site.py` — the static HTML generator. No executable `<script>` on any
   page except that GA4 loader (checked by `tests/test_site_html.py` and
   `tests/test_analytics.py`); the one other `<script>` is a JSON-LD data
@@ -255,7 +258,7 @@ with no ID emits no GA on any page; a build with an ID puts the same guarded
 loader in the `<head>` of every page the build writes (the index, the privacy,
 accessibility and 404 pages, one page per league and one per team); the `.ics`
 feeds are byte-identical with and without an ID (and
-`data/*.json` too, apart from `site.json`'s build timestamp); ticket links
+`data/site.json` and the page records too, apart from their timestamps); ticket links
 stay plain Ticketmaster URLs; a malformed ID fails the build before anything
 is written. The loader itself is executed in Node against stubbed
 `window`/`navigator`/`document` objects: under Global Privacy Control, any

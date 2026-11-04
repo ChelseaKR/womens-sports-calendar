@@ -19,7 +19,7 @@ from wsc_pipeline import build as build_module
 from wsc_pipeline import site, sitemap, validate_seo
 from wsc_pipeline.normalize import display_date
 
-from .conftest import REAL_FETCH_PREVIOUS_STATE
+from .conftest import REAL_FETCH_PREVIOUS_STATE, copy_built_site
 from .fixture_site import (
     BASE_URL,
     CHANGED_PAGE,
@@ -224,7 +224,7 @@ def history_dist(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 def _corrupt(src: Path, dst: Path, rel: str, old: str, new: str) -> Path:
-    shutil.copytree(src, dst)
+    copy_built_site(src, dst)
     path = dst / rel
     text = path.read_text()
     assert old in text, f"sabotage target not found: {old!r}"
@@ -264,7 +264,7 @@ def test_control_a_corrupted_sitemap_or_robots_fails(history_dist: Path, tmp_pat
 
 def test_control_a_404_in_the_sitemap_fails(history_dist: Path, tmp_path: Path):
     dist = tmp_path / "dist"
-    shutil.copytree(history_dist, dist)
+    copy_built_site(history_dist, dist)
     (dist / "gone").mkdir()
     shutil.copyfile(dist / "404.html", dist / "gone" / "index.html")
     sm = dist / "sitemap.xml"

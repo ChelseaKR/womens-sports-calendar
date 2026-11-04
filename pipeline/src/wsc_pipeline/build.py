@@ -164,8 +164,8 @@ def build(
     partial one -- the same "never publish a stale/broken build as current"
     rule the GitHub Actions workflow applies at the deploy step.
 
-    ga4_id reaches the HTML pages only (analytics.py): the .ics feeds and
-    data/*.json are written without it, so they are byte-identical whether
+    ga4_id reaches the HTML pages only (analytics.py): the .ics feeds,
+    data/site.json and the page records are written without it, so they are byte-identical whether
     or not an ID is set. None or "" emits no analytics at all; a malformed
     ID raises ValueError here, before anything is fetched or written.
 
@@ -202,9 +202,13 @@ def build(
                 raise guard.PublishRefused(guard_report)
 
     tmp_dir = out_dir.with_name(out_dir.name + ".tmp")
-    if tmp_dir.exists():
-        shutil.rmtree(tmp_dir)
-    tmp_dir.mkdir(parents=True)
+    # Each page's payload, kept beside the site and never deployed
+    # (site_data.records_dir, DECISIONS 0024). Written and swapped in with
+    # the site, so the two always come from one build.
+    records = site_data.records_dir(out_dir)
+    tmp_records = records.with_name(records.name + ".tmp")
+    _empty_dir(tmp_dir)
+    _empty_dir(tmp_records)
     (tmp_dir / "ics").mkdir()
     (tmp_dir / "data").mkdir()
 
@@ -229,11 +233,13 @@ def build(
 
     _write_ics(tmp_dir, base_url, games_by_league, api_key_present, dtstamp=fetched_at)
     _write_combined_ics(tmp_dir, base_url, games_by_league, api_key_present, dtstamp=fetched_at)
-    fingerprints = _write_data(tmp_dir, base_url, games_by_league, api_key_present, truncated, fetched_at=fetched_at)
+    fingerprints = _write_data(
+        tmp_dir, tmp_records, base_url, games_by_league, api_key_present, truncated, fetched_at=fetched_at
+    )
     # A Ticketmaster event URL can arrive already wrapped in Impact affiliate
     # tracking (docs/LICENSES-AND-ATTRIBUTION.md §3): the pages then label it
     # as a paid link and turn the disclosure on (DECISIONS 0018). The feeds
-    # and data/*.json's `ticket_url` carry the unwrapped address either way.
+    # and each page record's `ticket_url` carry the unwrapped address either way.
     paid_links = sellers.any_paid_buy_link(games)
     atom_feeds = feeds.build_feeds(games_by_league, base_url=base_url, fetched=api_key_present)
     feeds_dir = tmp_dir / feeds.FEEDS_DIR
@@ -260,10 +266,23 @@ def build(
 
     (tmp_dir / "COVERAGE.txt").write_text(render_report(coverage) + "\n", encoding="utf-8")
 
-    if out_dir.exists():
-        shutil.rmtree(out_dir)
-    tmp_dir.rename(out_dir)
+    _replace_dir(tmp_dir, out_dir)
+    _replace_dir(tmp_records, records)
     return coverage
+
+
+def _empty_dir(path: Path) -> None:
+    """A new, empty directory at path, removing whatever was there."""
+    if path.exists():
+        shutil.rmtree(path)
+    path.mkdir(parents=True)
+
+
+def _replace_dir(built: Path, final: Path) -> None:
+    """Moves a finished build directory into place over the previous one."""
+    if final.exists():
+        shutil.rmtree(final)
+    built.rename(final)
 
 
 def without_removed_events(games: list[Game], removals: tuple[config.EventRemoval, ...] | None = None) -> list[Game]:
@@ -336,6 +355,7 @@ def _write_combined_ics(
 
 def _write_data(
     out_dir: Path,
+    records_dir: Path,
     base_url: str,
     games_by_league: dict[str, list[Game]],
     api_key_present: bool,
@@ -343,10 +363,11 @@ def _write_data(
     *,
     fetched_at: datetime | None = None,
 ) -> dict[str, str]:
-    """Writes data/*.json and returns each schedule page's fingerprint
-    (sitemap.fingerprint), keyed by its site path: the league and team
-    pages render from exactly these payloads, and the home page from the
-    per-league counts in site.json."""
+    """Writes each league and team page's payload to records_dir (not
+    deployed), data/site.json (counts only) to the site, and returns each
+    schedule page's fingerprint (sitemap.fingerprint), keyed by its site
+    path: the league and team pages render from exactly these payloads, and
+    the home page from the per-league counts in site.json."""
     data_dir = out_dir / "data"
     provenance = site_data.provenance(fetched_at)
     fingerprints: dict[str, str] = {}
@@ -356,8 +377,8 @@ def _write_data(
         payload = site_data.league_data(lg, games, fetched=api_key_present, possibly_incomplete_teams=incomplete)
         fingerprints[f"/{lg.slug}/"] = sitemap.fingerprint(payload)
         payload.update(provenance)
-        (data_dir / f"{lg.slug}.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
-        team_dir = data_dir / lg.slug
+        (records_dir / f"{lg.slug}.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        team_dir = records_dir / lg.slug
         team_dir.mkdir(exist_ok=True)
         for team in lg.teams:
             team_payload = site_data.team_data(

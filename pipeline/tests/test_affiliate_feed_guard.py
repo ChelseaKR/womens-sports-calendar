@@ -32,7 +32,7 @@ from wsc_pipeline import ics, impact, sellers, site, validate_ics
 from wsc_pipeline.config import LEAGUES
 from wsc_pipeline.normalize import feed_ticket_url, normalize_event
 from wsc_pipeline.site import render_team
-from wsc_pipeline.site_data import game_to_dict, team_data
+from wsc_pipeline.site_data import game_to_dict, records_dir, team_data
 
 from . import fixture_site
 from .conftest import BUILD_TIME, make_raw_event
@@ -190,17 +190,20 @@ def test_no_generated_feed_carries_a_tracking_link_when_ticketmaster_wraps_every
     plain, wrapped = _files(tmp_path / "plain"), _files(tmp_path / "wrapped")
 
     # The build really was fed tracking links: the pages' buy links carry them.
-    aces = json.loads(wrapped["data/wnba/las-vegas-aces.json"])
+    plain_records = _files(records_dir(tmp_path / "plain"))
+    wrapped_records = _files(records_dir(tmp_path / "wrapped"))
+    aces = json.loads(wrapped_records["wnba/las-vegas-aces.json"])
     assert any(impact.is_impact_link((g["buy"] or {}).get("url")) for g in aces["games"])
 
     assert assert_no_tracking_link_in_feeds(wrapped) > 50
     # Every feed is what the plain URLs would have produced, byte for byte.
     assert _feeds(wrapped) == _feeds(plain)
-    # data/*.json's ticket_url is the plain address too.
-    for name in plain:
-        if name.startswith("data/") and name != "data/site.json":
-            plain_games = json.loads(plain[name]).get("games", [])
-            wrapped_games = json.loads(wrapped[name]).get("games", [])
+    # Each page payload's ticket_url is the plain address too.
+    assert plain_records.keys() == wrapped_records.keys() and plain_records
+    for name in plain_records:
+        if name.endswith(".json"):
+            plain_games = json.loads(plain_records[name]).get("games", [])
+            wrapped_games = json.loads(wrapped_records[name]).get("games", [])
             assert [g["ticket_url"] for g in wrapped_games] == [g["ticket_url"] for g in plain_games], name
     # And the real feed validator, the one pages.yml runs, passes.
     validate_ics.validate_dist(tmp_path / "wrapped")

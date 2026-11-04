@@ -357,10 +357,9 @@ def _description_lines(game: Game, status: FeedStatus | None, *, all_day: bool, 
         lines.append(TIME_TBA_NOTE)
     if estimated_end:
         lines.append(END_ESTIMATE_NOTE)
-    if game.price:
-        lines.append(f"Tickets: {game.price.currency} {game.price.min:.2f}-{game.price.max:.2f} (Ticketmaster)")
-    else:
-        lines.append("Tickets: price not available from Ticketmaster")
+    # No price line, priced or not (DECISIONS 0013, 0024): the site shows no
+    # prices, and "price not available" on every event was absence printed
+    # as a value. validate_ics refuses any feed whose events mention one.
     ticket_url = feed_ticket_url(game)
     if ticket_url:
         lines.append(f"Buy: {ticket_url}")
