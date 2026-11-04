@@ -9,6 +9,7 @@ null when there is nowhere to buy. It is never a guessed URL.
 from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -339,6 +340,17 @@ def site_summary(
 
 # The one data source (docs/data/ticketmaster-discovery-api.md).
 SOURCE_ID = "ticketmaster-discovery-api"
+
+
+def records_dir(out_dir: Path) -> Path:
+    """Where a build keeps each league and team page's payload: beside the
+    site directory, never inside it, so it is never deployed (DECISIONS
+    0024). Ticketmaster licenses Event Content to provide the service and
+    not to sublicense it; the pages and calendars are the service, and a
+    bulk JSON copy of every event is not. The validators (validate_ics,
+    validate_seo) and the tests read these files; only data/site.json, which
+    holds counts and no event, is published."""
+    return out_dir.with_name(out_dir.name + "-records")
 
 
 def provenance(fetched_at: datetime | None) -> dict[str, str | None]:

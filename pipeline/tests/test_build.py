@@ -8,6 +8,7 @@ import pytest
 
 from wsc_pipeline import build as build_module
 from wsc_pipeline.config import LEAGUES
+from wsc_pipeline.site_data import records_dir
 from wsc_pipeline.ticketmaster import TicketmasterFetchError
 
 from .conftest import make_raw_event
@@ -49,7 +50,7 @@ def test_degraded_build_with_no_api_key_succeeds_and_says_so(tmp_path: Path):
     site_json = json.loads((out_dir / "data" / "site.json").read_text())
     assert site_json["api_key_present"] is False
     assert all(lg["games_count"] is None for lg in site_json["leagues"])
-    team_json = json.loads((out_dir / "data" / LEAGUES[0].slug / f"{LEAGUES[0].teams[0].slug}.json").read_text())
+    team_json = json.loads((records_dir(out_dir) / LEAGUES[0].slug / f"{LEAGUES[0].teams[0].slug}.json").read_text())
     assert team_json["fetched"] is False
     assert len(site_json["leagues_examined_not_included"]) == 6
 
@@ -145,7 +146,7 @@ def test_possibly_incomplete_team_is_said_on_its_team_and_league_pages(tmp_path:
     assert "may be missing later" in team_html
     assert "may be missing later" in league_html
     assert "may be missing later" not in other_team_html
-    team_json = json.loads((out_dir / "data" / league.slug / f"{team.slug}.json").read_text())
+    team_json = json.loads((records_dir(out_dir) / league.slug / f"{team.slug}.json").read_text())
     assert team_json["possibly_incomplete"] is True and team_json["fetched"] is True
 
 
@@ -283,7 +284,7 @@ def test_head_to_head_game_is_listed_and_counted_once_per_league(tmp_path: Path,
         out_dir=out_dir, base_url="https://nexthomegame.com", api_key="fake-key", affiliate_id=None
     )
 
-    league_json = json.loads((out_dir / "data" / "wnba.json").read_text())
+    league_json = json.loads((records_dir(out_dir) / "wnba.json").read_text())
     assert [g["event_id"] for g in league_json["games"]] == ["EVT-H2H"]
     league_html = (out_dir / "wnba" / "index.html").read_text()
     assert league_html.count("Buy tickets for Atlanta Dream vs Connecticut Sun") == 1
@@ -297,7 +298,7 @@ def test_head_to_head_game_is_listed_and_counted_once_per_league(tmp_path: Path,
     assert len(league_cal.walk("VEVENT")) == 1
 
     for team_slug in ("atlanta-dream", "connecticut-sun"):
-        team_json = json.loads((out_dir / "data" / "wnba" / f"{team_slug}.json").read_text())
+        team_json = json.loads((records_dir(out_dir) / "wnba" / f"{team_slug}.json").read_text())
         assert [g["event_id"] for g in team_json["games"]] == ["EVT-H2H"]
         team_cal = Calendar.from_ical((out_dir / "ics" / "wnba" / f"{team_slug}.ics").read_bytes())
         assert len(team_cal.walk("VEVENT")) == 1

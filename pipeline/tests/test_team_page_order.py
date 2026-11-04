@@ -30,7 +30,7 @@ from wsc_pipeline import site
 from wsc_pipeline.config import LEAGUES
 from wsc_pipeline.normalize import normalize_event
 from wsc_pipeline.site import render_team
-from wsc_pipeline.site_data import team_data
+from wsc_pipeline.site_data import records_dir, team_data
 
 from .conftest import make_raw_event, set_affiliate_links
 from .fixture_site import build_fixture_site
@@ -212,16 +212,14 @@ def test_the_constant_does_not_reach_the_feeds_or_data(tmp_path: Path, monkeypat
     build_fixture_site(off_dir, now=built_at)
     monkeypatch.setattr(site, "TEAM_PAGE_NEXT_GAME_FIRST", True)
     build_fixture_site(on_dir, now=built_at)
-    for sub in ("ics", "data"):
-        off_files = sorted(p.relative_to(off_dir) for p in (off_dir / sub).rglob("*") if p.is_file())
-        on_files = sorted(p.relative_to(on_dir) for p in (on_dir / sub).rglob("*") if p.is_file())
+    for off_root, on_root in ((off_dir / "ics", on_dir / "ics"), (records_dir(off_dir), records_dir(on_dir))):
+        off_files = sorted(p.relative_to(off_root) for p in off_root.rglob("*") if p.is_file())
+        on_files = sorted(p.relative_to(on_root) for p in on_root.rglob("*") if p.is_file())
         assert off_files == on_files and off_files
         for rel in off_files:
-            if rel.name == "site.json":
-                continue  # carries build timing, if anything
-            assert _without_dtstamps((off_dir / rel).read_bytes()) == _without_dtstamps((on_dir / rel).read_bytes()), (
-                rel
-            )
+            assert _without_dtstamps((off_root / rel).read_bytes()) == _without_dtstamps(
+                (on_root / rel).read_bytes()
+            ), rel
     # ...while the pages really did change, so the comparison above had teeth.
     team = Path("wnba/las-vegas-aces/index.html")
     assert (off_dir / team).read_bytes() != (on_dir / team).read_bytes()

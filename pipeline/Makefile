@@ -150,7 +150,7 @@ validate-seo:
 # printed). scripts/build_fixture_site.py runs the real build over canned
 # Ticketmaster listings (tests/fixture_site.py) into dist-fixture/.
 validate-fixture-site: install
-	rm -rf dist-fixture
+	rm -rf dist-fixture dist-fixture-records
 	uv run python scripts/build_fixture_site.py dist-fixture
 	uv run html5validator --root dist-fixture
 	uv run python -m wsc_pipeline.validate_ics dist-fixture
@@ -231,4 +231,4 @@ a11y: install install-a11y build
 verify: install lint format-check typecheck markers test wheel build validate-html validate-ics validate-seo validate-fixture-site a11y audit
 
 clean:
-	rm -rf dist dist.tmp dist-fixture .pytest_cache .venv node_modules pa11y-ci-results.json a11y-browser-results.json
+	rm -rf dist dist.tmp dist-records dist-records.tmp dist-fixture dist-fixture-records .pytest_cache .venv node_modules pa11y-ci-results.json a11y-browser-results.json

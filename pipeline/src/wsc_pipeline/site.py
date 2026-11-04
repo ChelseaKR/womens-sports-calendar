@@ -297,6 +297,7 @@ def _footer(*, analytics_on: bool, paid_links: bool = False) -> str:
     affiliate_note = AFFILIATE_NOTE_ACTIVE if _any_paid(paid_links) else AFFILIATE_NOTE_INACTIVE
     return f"""<footer class="site-footer">
 <h2>Sources and terms</h2>
+<p>{e(feeds.INDEPENDENCE_LINE)}</p>
 <p>Game data, venues, and dates are read from the
 <a href="https://developer.ticketmaster.com/products-and-docs/apis/discovery-api/v2/">Ticketmaster Discovery API</a>,
 under its
@@ -384,7 +385,7 @@ def _buy_link(game: Mapping[str, Any], matchup: str, *, css_class: str = "") -> 
     # "Paid link" label right after it (the footer note is not enough on its
     # own). Derived here from the seller and the URL (a Ticketmaster URL
     # can arrive already wrapped in Impact tracking), never stored in
-    # data/*.json. The link text still names the seller, not the tracking
+    # the page records. The link text still names the seller, not the tracking
     # host it goes through. A plain link gets no rel attribute and no label
     # at all.
     if is_affiliate_link(buy["seller"], buy["url"]):

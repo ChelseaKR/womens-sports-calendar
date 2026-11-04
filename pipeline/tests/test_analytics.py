@@ -34,6 +34,7 @@ from wsc_pipeline import build as build_module
 from wsc_pipeline.analytics import ANALYTICS_DENIED_REGIONS, ga4_head_snippet
 from wsc_pipeline.config import LEAGUES
 from wsc_pipeline.normalize import normalize_event
+from wsc_pipeline.site_data import records_dir
 
 from .conftest import STANDARD_PRICE, make_raw_event, set_affiliate_links
 
@@ -177,12 +178,15 @@ def test_ga_never_reaches_the_ics_feeds_or_data_and_they_are_unchanged(tmp_path:
     build_module.build(out_dir=with_id, base_url=BASE_URL, api_key="fake-key", affiliate_id=None, ga4_id=TEST_ID)
 
     def payload_files(root: Path) -> dict[str, bytes]:
-        return {
+        files = {
             str(p.relative_to(root)): p.read_bytes()
             for sub in ("ics", "data")
             for p in sorted((root / sub).rglob("*"))
             if p.is_file()
         }
+        records = records_dir(root)
+        files.update({f"data/{p.relative_to(records)}": p.read_bytes() for p in sorted(records.rglob("*.json"))})
+        return files
 
     def comparable(name: str, data: bytes):
         # site.json stamps its own build time (site_data.site_summary), and

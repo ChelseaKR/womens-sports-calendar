@@ -53,7 +53,7 @@ What ga4_head_snippet() emits when an ID is set, on every HTML page:
   event, if the web stream has it on, also records these clicks under the
   name "click".)
 
-The .ics feeds and data/*.json never pass through this module: build.py
+The .ics feeds, data/site.json and the page records never pass through this module: build.py
 writes them before and independently of any HTML, and
 tests/test_analytics.py checks they are byte-identical with and without an
 ID.

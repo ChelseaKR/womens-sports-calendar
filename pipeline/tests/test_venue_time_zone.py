@@ -22,6 +22,7 @@ from wsc_pipeline import build as build_module
 from wsc_pipeline.coverage import MAX_NAMED_GAMES, BuildCoverage, compute_league_coverage, render_report
 from wsc_pipeline.ics import build_calendar, make_uid
 from wsc_pipeline.normalize import normalize_event, zone_for, zone_problem
+from wsc_pipeline.site_data import records_dir
 
 from .conftest import BUILD_TIME, make_raw_event
 from .test_build import _FakeDiscoveryClient
@@ -176,7 +177,7 @@ def test_a_full_build_survives_one_unknown_zone_and_says_so(tmp_path: Path, monk
         text = cal.to_ical().decode("utf-8")
         assert "DTSTART:20260615T230000Z" in text
         assert "DTSTART;TZID=America/Indiana/Indianapolis:20260617T190000" in text
-    team_json = json.loads((out_dir / "data" / "wnba" / "indiana-fever.json").read_text())
+    team_json = json.loads((records_dir(out_dir) / "wnba" / "indiana-fever.json").read_text())
     assert {g["event_id"] for g in team_json["games"]} == {"EVT-BAD", "EVT-GOOD"}
 
 

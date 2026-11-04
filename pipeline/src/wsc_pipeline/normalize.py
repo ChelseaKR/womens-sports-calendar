@@ -592,7 +592,7 @@ def safe_ticket_url(url: object) -> str | None:
 
 
 def feed_ticket_url(game: Game) -> str | None:
-    """The ticket URL a calendar feed (and data/*.json's `ticket_url`) may
+    """The ticket URL a calendar feed (and a page record's `ticket_url`) may
     carry: the game's own URL, or, when Ticketmaster has wrapped it in Impact
     affiliate tracking, the plain address it forwards to (impact.plain_url).
     None when there is no URL, or no plain address to give: never a

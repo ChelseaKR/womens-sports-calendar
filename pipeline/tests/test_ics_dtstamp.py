@@ -22,6 +22,7 @@ from wsc_pipeline import validate_ics
 from wsc_pipeline.config import LEAGUES
 from wsc_pipeline.ics import build_calendar, league_calendar, make_uid, team_calendar
 from wsc_pipeline.normalize import normalize_event
+from wsc_pipeline.site_data import records_dir
 
 from . import rfc5545
 from .conftest import BUILD_TIME, make_raw_event
@@ -207,7 +208,7 @@ def test_a_feed_with_a_dtstamp_that_is_not_utc_fails(tmp_path: Path, monkeypatch
 
 def test_a_feed_with_events_but_no_fetch_time_to_check_them_against_fails(tmp_path: Path, monkeypatch):
     dist = _built(tmp_path, monkeypatch)
-    data = dist / "data" / WNBA.slug / f"{TEAM_A.slug}.json"
+    data = records_dir(dist) / WNBA.slug / f"{TEAM_A.slug}.json"
     payload = json.loads(data.read_text())
     assert payload["fetched_at"]
     payload["fetched_at"] = None

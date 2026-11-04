@@ -10,7 +10,10 @@ subscriber's calendar app mirrored that at its next refresh.
 This module compares a build with what the live site published last, the way
 sitemap.py already does for <lastmod>: the site is stateless, so the only
 record of the previous publish is the live site itself, read team by team from
-data/<league>/<team>.json. The thresholds and the per-league override live in
+its calendar feed, ics/<league>/<team>.ics: exactly the games a subscriber of
+that team has (validate_ics holds every feed to its page's games). The
+per-team JSON files it used to read are no longer published (DECISIONS 0024).
+The thresholds and the per-league override live in
 config.py (PUBLISH_GUARD, PUBLISH_GUARD_OVERRIDES); the decision and its
 trade-offs are docs/adr/0006.
 
@@ -46,8 +49,10 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, time, timedelta
 
 import httpx
+from icalendar import Calendar
 
 from . import config
+from .ics import FEED_STATUS, NOT_FETCHED_CALDESC, TIME_TBA_SUFFIX, UID_DOMAIN
 from .normalize import Game, feed_start
 from .site_data import NOTABLE_STATUSES
 from .ticketmaster import USER_AGENT
@@ -75,8 +80,8 @@ class PublishRefused(RuntimeError):
 
 @dataclass(frozen=True)
 class PreviousGame:
-    """One game as the previous publish listed it (a game dict in
-    data/<league>/<team>.json)."""
+    """One game as the previous publish listed it (a VEVENT in
+    ics/<league>/<team>.ics)."""
 
     event_id: str
     name: str
@@ -106,7 +111,7 @@ class PreviousPublish:
     new_teams: set[TeamKey] = field(default_factory=set)
     # Teams whose previous file could not be read, and why. Not compared.
     unreadable: dict[TeamKey, str] = field(default_factory=dict)
-    fetched_at: str | None = None  # the oldest `fetched_at` among the files read
+    fetched_at: str | None = None  # the oldest DTSTAMP (the build's fetch time) among the feeds read
 
 
 @dataclass(frozen=True)
@@ -168,76 +173,85 @@ def not_compared(reason: str) -> GuardReport:
     return GuardReport(compared=False, note=reason)
 
 
-def _parse_previous_game(entry: object) -> PreviousGame | None:
-    """The game, or None when it is not in the previous calendar feed (a
-    date-TBD game: no subscriber has an event for it, so none can be lost).
-    A game with a date and no announced time is in the feed as an all-day
-    event, so it is read by its local date. Raises ValueError when the entry
-    is not a shape this module can read."""
-    if not isinstance(entry, dict) or not isinstance(entry.get("event_id"), str):
-        raise ValueError("a game entry without an event id")
-    if entry.get("in_calendar_feed") is not True:
-        return None
-    timed = _previous_instant(entry)
-    start = timed if timed is not None else _previous_date(entry)
-    if start is None:
-        return None
-    name, status = entry.get("event_name"), entry.get("status")
-    return PreviousGame(
-        event_id=entry["event_id"],
-        name=name if isinstance(name, str) and name else entry["event_id"],
-        start=start,
-        status=status if isinstance(status, str) else None,
-        date_only=timed is None,
+# The feed's STATUS for each page status word, read back (ics.FEED_STATUS).
+# "Rescheduled" writes no STATUS, and the guard needs only the two that mean
+# a game was going away.
+_STATUS_FROM_FEED = {fs.ics_status: word for word, fs in FEED_STATUS.items() if fs.ics_status}
+_UID_SUFFIX = f"@{UID_DOMAIN}"
+
+
+def _event_id_from_uid(uid: str) -> str:
+    """The Ticketmaster event id in an ics.make_uid UID; raises ValueError
+    for any other UID."""
+    if not (uid.startswith("tm-") and uid.endswith(_UID_SUFFIX)) or len(uid) <= len("tm-") + len(_UID_SUFFIX):
+        raise ValueError(f"not a UID this site writes: {uid!r}")
+    return uid[len("tm-") : -len(_UID_SUFFIX)]
+
+
+def _name_from_summary(summary: str, status: str | None) -> str:
+    """The event name without the feed's status prefix and time-TBA suffix."""
+    if status:
+        summary = summary.removeprefix(FEED_STATUS[status].summary_prefix)
+    return summary.removesuffix(TIME_TBA_SUFFIX)
+
+
+def _parse_previous_event(vevent: object) -> tuple[PreviousGame, datetime | None]:
+    """The game and its DTSTAMP. A game with a date and no announced time is
+    an all-day event, read by its local date at 00:00 UTC. Raises ValueError
+    when the event is not a shape this module can read."""
+    if not hasattr(vevent, "get") or not hasattr(vevent, "decoded"):
+        raise ValueError("not an event")
+    event_id = _event_id_from_uid(str(vevent.get("uid", "")))
+    if vevent.get("dtstart") is None:
+        raise ValueError("an event without DTSTART")
+    raw_start = vevent.decoded("dtstart")
+    if isinstance(raw_start, datetime):
+        if raw_start.tzinfo is None:
+            raise ValueError("an event start with no offset is not an instant")
+        start, date_only = raw_start.astimezone(UTC), False
+    elif isinstance(raw_start, date):
+        start, date_only = datetime.combine(raw_start, time(0), UTC), True
+    else:
+        raise ValueError("an event start that is not a date")
+    raw_status = vevent.get("status")
+    status = _STATUS_FROM_FEED.get(str(raw_status).upper()) if raw_status is not None else None
+    name = _name_from_summary(str(vevent.get("summary", "")), status)
+    stamp = vevent.decoded("dtstamp") if vevent.get("dtstamp") is not None else None
+    return (
+        PreviousGame(event_id=event_id, name=name or event_id, start=start, status=status, date_only=date_only),
+        stamp if isinstance(stamp, datetime) else None,
     )
 
 
-def _previous_instant(entry: dict[str, object]) -> datetime | None:
-    """The exact start of a timed game; None for a time-TBA game (any
-    dateTime Ticketmaster sent with one is a placeholder, never used)."""
-    raw_start = entry.get("start_utc")
-    if entry.get("time_tba") is True or not isinstance(raw_start, str):
-        return None
+def _parse_previous_team(feed: bytes) -> tuple[str | None, list[PreviousGame]] | None:
+    """(fetch time, calendar-feed games) from an ics/<league>/<team>.ics
+    body, or None when it is not a fetched team feed this module can read
+    -- never partly trusted. A degraded build's feed (it fetched nothing)
+    says so in its description, and is not read as an empty schedule."""
     try:
-        start = datetime.fromisoformat(raw_start)
-    except ValueError:
+        cal = Calendar.from_ical(feed)
+    except Exception:  # icalendar raises ValueError and others on bad input
         return None
-    return start if start.tzinfo is not None else None  # an instant with no offset is not an instant
-
-
-def _previous_date(entry: dict[str, object]) -> datetime | None:
-    """The start of an all-day game's local date, in UTC."""
-    raw_date = entry.get("start_local_date")
-    if not isinstance(raw_date, str):
+    if not isinstance(cal, Calendar) or str(cal.get("x-wr-caldesc", "")).startswith(NOT_FETCHED_CALDESC):
         return None
+    games: list[PreviousGame] = []
+    stamps: list[datetime] = []
     try:
-        return datetime.combine(date.fromisoformat(raw_date), time(0), UTC)
-    except ValueError:
+        for vevent in cal.walk("VEVENT"):
+            game, stamp = _parse_previous_event(vevent)
+            games.append(game)
+            if stamp is not None:
+                stamps.append(stamp)
+    except (ValueError, KeyError, TypeError):
         return None
-
-
-def _parse_previous_team(payload: object) -> tuple[str | None, list[PreviousGame]] | None:
-    """(fetched_at, calendar-feed games) from a data/<league>/<team>.json
-    body, or None when it is not a fetched team payload this module can
-    read -- never partly trusted."""
-    if not isinstance(payload, dict) or payload.get("fetched") is not True:
-        return None
-    raw_games = payload.get("games")
-    if not isinstance(raw_games, list):
-        return None
-    try:
-        parsed = [_parse_previous_game(entry) for entry in raw_games]
-    except ValueError:
-        return None
-    games = [g for g in parsed if g is not None]
-    fetched_at = payload.get("fetched_at")
-    return (fetched_at if isinstance(fetched_at, str) else None), games
+    fetched_at = min(stamps).astimezone(UTC).isoformat() if stamps else None
+    return fetched_at, games
 
 
 def fetch_previous_publish(base_url: str, *, client: httpx.Client | None = None) -> PreviousPublish:
-    """The live site's per-team data files. Never raises: whatever cannot be
-    read is recorded in `unreadable` and reported, and costs only that
-    team's comparison."""
+    """The live site's per-team calendar feeds. Never raises: whatever
+    cannot be read is recorded in `unreadable` and reported, and costs only
+    that team's comparison."""
     previous = PreviousPublish()
     owns_client = client is None
     http = client or httpx.Client(timeout=10.0, headers={"User-Agent": USER_AGENT}, follow_redirects=True)
@@ -249,7 +263,7 @@ def fetch_previous_publish(base_url: str, *, client: httpx.Client | None = None)
             if transport_failures >= _GIVE_UP_AFTER:
                 previous.unreadable[key] = "not tried: the site did not answer the requests before it"
                 continue
-            url = f"{base_url}/data/{league.slug}/{team.slug}.json"
+            url = f"{base_url}/ics/{league.slug}/{team.slug}.ics"
             try:
                 response = http.get(url)
             except httpx.HTTPError as exc:
@@ -264,12 +278,9 @@ def fetch_previous_publish(base_url: str, *, client: httpx.Client | None = None)
             if response.status_code != 200:
                 previous.unreadable[key] = f"HTTP {response.status_code}"
                 continue
-            try:
-                parsed = _parse_previous_team(response.json())
-            except ValueError:
-                parsed = None
+            parsed = _parse_previous_team(response.content)
             if parsed is None:
-                previous.unreadable[key] = "not a fetched team file this build can read"
+                previous.unreadable[key] = "not a fetched team feed this build can read"
                 continue
             fetched_at, games = parsed
             previous.games[key] = games

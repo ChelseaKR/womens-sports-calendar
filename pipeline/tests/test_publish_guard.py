@@ -8,7 +8,6 @@ on today's date.
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -21,7 +20,9 @@ from wsc_pipeline import config, guard
 from wsc_pipeline.config import GuardOverride, PublishGuard
 from wsc_pipeline.coverage import BuildCoverage, render_report
 from wsc_pipeline.guard import PreviousGame, PreviousPublish, PublishRefused, evaluate
+from wsc_pipeline.ics import build_calendar
 from wsc_pipeline.normalize import Game, normalize_event
+from wsc_pipeline.site_data import records_dir
 
 from .conftest import REAL_FETCH_PREVIOUS_PUBLISH, make_raw_event
 from .test_build import _FakeDiscoveryClient
@@ -250,19 +251,18 @@ def test_a_game_still_listed_but_now_date_tbd_is_still_present():
 
 
 def test_previously_date_tbd_games_are_not_counted_because_no_feed_ever_carried_them():
-    payload = {
-        "fetched": True,
-        "fetched_at": "2026-05-31T08:00:00+00:00",
-        "games": [
-            {"event_id": "TBD1", "in_calendar_feed": False, "start_utc": None, "status": None},
-            {"event_id": "OK1", "in_calendar_feed": True, "start_utc": "2026-06-20T18:00:00+00:00", "status": None},
-        ],
-    }
-    parsed = guard._parse_previous_team(payload)
+    tbd = normalize_event(
+        make_raw_event(event_id="TBD1", date_time=None, local_date="2026-06-20", date_tbd=True),
+        league_slug="wnba",
+        tracked_team_slug=FEVER,
+        tracked_team_name=FEVER,
+    )
+    timed = _fresh("OK1", "wnba", FEVER, 19)
+    parsed = guard._parse_previous_team(_feed_bytes([tbd, timed]))
     assert parsed is not None
     fetched_at, games = parsed
-    assert fetched_at == "2026-05-31T08:00:00+00:00"
-    assert [g.event_id for g in games] == ["OK1"]
+    assert fetched_at == PREVIOUS_STAMP.isoformat()
+    assert [(g.event_id, g.start, g.date_only) for g in games] == [("OK1", _start(19), False)]
 
 
 # --- possibly-incomplete fetches -------------------------------------------------------------------------
@@ -320,6 +320,14 @@ def test_an_override_is_still_active_on_its_last_day():
 # --- an unreadable previous publish is reported, not skipped ----------------------------------------------
 
 
+PREVIOUS_STAMP = datetime(2026, 5, 31, 8, 0, tzinfo=UTC)
+
+
+def _feed_bytes(games: list[Game], *, fetched: bool = True) -> bytes:
+    """A team feed as the live site serves it (ics.build_calendar)."""
+    return build_calendar(games, cal_name="Team", fetched=fetched, dtstamp=PREVIOUS_STAMP).to_ical()
+
+
 def _fetch_with(handler: Callable[[httpx.Request], httpx.Response]) -> PreviousPublish:
     with httpx.Client(transport=httpx.MockTransport(handler)) as client:
         return REAL_FETCH_PREVIOUS_PUBLISH(BASE_URL, client=client)
@@ -353,26 +361,33 @@ def test_a_site_that_stops_answering_is_given_up_on_after_a_few_requests():
 
 def test_a_missing_page_is_a_new_team_and_other_failures_are_unreadable():
     seen = {}
+    one_game = _feed_bytes([_fresh("A", "wnba", FEVER, 10)])
 
     def handler(request: httpx.Request) -> httpx.Response:
         path = request.url.path
         seen[path] = seen.get(path, 0) + 1
-        if path.endswith("/indiana-fever.json"):
+        assert path.startswith("/ics/") and path.endswith(".ics"), path  # never the old data/*.json
+        if path.endswith("/indiana-fever.ics"):
             return httpx.Response(404)
-        if path.endswith("/new-york-liberty.json"):
+        if path.endswith("/new-york-liberty.ics"):
             return httpx.Response(503)
-        if path.endswith("/seattle-storm.json"):
-            return httpx.Response(200, text="<html>not json</html>")
-        if path.endswith("/las-vegas-aces.json"):
-            return httpx.Response(200, json={"fetched": False, "games": []})  # a degraded build's file
-        return httpx.Response(200, json={"fetched": True, "fetched_at": "2026-05-31T08:00:00+00:00", "games": []})
+        if path.endswith("/seattle-storm.ics"):
+            return httpx.Response(200, text="<html>not a calendar</html>")
+        if path.endswith("/las-vegas-aces.ics"):
+            return httpx.Response(200, content=_feed_bytes([], fetched=False))  # a degraded build's feed
+        if path.endswith("/minnesota-lynx.ics"):
+            bad_uid = one_game.replace(b"UID:tm-A@", b"UID:someone-else-A@")
+            return httpx.Response(200, content=bad_uid)
+        return httpx.Response(200, content=one_game)
 
     previous = _fetch_with(handler)
     assert previous.games[("wnba", "indiana-fever")] == [] and ("wnba", "indiana-fever") in previous.new_teams
     assert previous.unreadable[("wnba", "new-york-liberty")] == "HTTP 503"
-    assert "not a fetched team file" in previous.unreadable[("wnba", "seattle-storm")]
-    assert "not a fetched team file" in previous.unreadable[("wnba", "las-vegas-aces")]
-    assert previous.fetched_at == "2026-05-31T08:00:00+00:00"
+    assert "not a fetched team feed" in previous.unreadable[("wnba", "seattle-storm")]
+    assert "not a fetched team feed" in previous.unreadable[("wnba", "las-vegas-aces")]
+    assert "not a fetched team feed" in previous.unreadable[("wnba", "minnesota-lynx")]
+    assert [g.event_id for g in previous.games[("wnba", "atlanta-dream")]] == ["A"]
+    assert previous.fetched_at == PREVIOUS_STAMP.isoformat()
 
 
 def test_teams_that_could_not_be_read_are_named_in_the_report_and_the_rest_are_still_compared():
@@ -563,16 +578,39 @@ def test_main_warns_when_the_previous_publish_could_not_be_read(tmp_path: Path, 
     assert "NOT COMPARED" in (out / "COVERAGE.txt").read_text()
 
 
-def test_the_data_files_this_guard_reads_carry_the_fields_it_relies_on(tmp_path: Path, monkeypatch):
-    """The guard parses the published team JSON; if site_data ever renames
-    one of these keys the guard would go blind, and this fails first."""
+def test_the_feeds_this_guard_reads_carry_the_fields_it_relies_on(tmp_path: Path, monkeypatch):
+    """The guard parses the published team feed; if ics.py ever changes the
+    UID, the status or the start, the guard would go blind, and this fails
+    first."""
     out = tmp_path / "dist"
     _build(out, {FEVER: _five_fever_games()}, monkeypatch, None)
-    team_json = json.loads((out / "data" / "wnba" / f"{FEVER}.json").read_text())
-    assert team_json["fetched"] is True and team_json["fetched_at"]
-    game = team_json["games"][0]
-    for key in ("event_id", "event_name", "start_utc", "in_calendar_feed", "status"):
-        assert key in game
+    parsed = guard._parse_previous_team((out / "ics" / "wnba" / f"{FEVER}.ics").read_bytes())
+    assert parsed is not None
+    fetched_at, games = parsed
+    assert fetched_at == NOW.isoformat()
+    assert len(games) == 5 and all(g.event_id and g.name and g.start.tzinfo is not None for g in games)
+
+
+def test_the_guard_reads_a_previous_status_and_name_back_from_the_feed():
+    cancelled = _fresh("C1", "wnba", FEVER, 10, status="cancelled")
+    postponed = _fresh("P1", "wnba", FEVER, 11, status="postponed")
+    rescheduled = _fresh("R1", "wnba", FEVER, 12, status="rescheduled")
+    parsed = guard._parse_previous_team(_feed_bytes([cancelled, postponed, rescheduled]))
+    assert parsed is not None
+    by_id = {g.event_id: g for g in parsed[1]}
+    assert by_id["C1"].status == "Cancelled" and by_id["C1"].name == "Event C1"
+    assert by_id["P1"].status == "Postponed" and by_id["P1"].name == "Event P1"
+    assert by_id["R1"].status is None  # the feed writes no STATUS for it, and the guard needs none
+    assert not by_id["C1"].counts_at(NOW) and by_id["R1"].counts_at(NOW)
+
+
+def test_the_site_publishes_no_team_json_for_the_guard_to_read(tmp_path: Path, monkeypatch):
+    """DECISIONS 0024: the per-team JSON is no longer deployed; the guard
+    reads the feeds instead, and the records beside dist are not served."""
+    out = tmp_path / "dist"
+    _build(out, {FEVER: _five_fever_games()}, monkeypatch, None)
+    assert sorted(p.name for p in (out / "data").rglob("*")) == ["site.json"]
+    assert (records_dir(out) / "wnba" / f"{FEVER}.json").is_file()
 
 
 # --- games with a date and no announced time (all-day in the feeds) ----------------------------------------
@@ -594,28 +632,26 @@ def _fresh_all_day(event_id: str, team: str, days: float, *, status: str | None 
 
 
 def test_an_all_day_game_is_read_by_its_date_and_a_placeholder_instant_is_ignored():
-    payload = {
-        "fetched": True,
-        "fetched_at": "2026-05-31T08:00:00+00:00",
-        "games": [
-            {
-                "event_id": "TBA1",
-                "in_calendar_feed": True,
-                "time_tba": True,
-                "start_utc": "2026-06-20T04:00:00+00:00",  # Ticketmaster's placeholder
-                "start_local_date": "2026-06-19",
-                "status": None,
-            },
-            {"event_id": "TBA2", "in_calendar_feed": True, "start_utc": None, "start_local_date": "2026-06-21"},
-            {"event_id": "BAD", "in_calendar_feed": True, "start_utc": None, "start_local_date": "June"},
-        ],
-    }
-    parsed = guard._parse_previous_team(payload)
+    tba = normalize_event(
+        make_raw_event(
+            event_id="TBA1",
+            name="Event TBA1",
+            date_time="2026-06-20T04:00:00Z",  # Ticketmaster's placeholder
+            local_date="2026-06-19",
+            local_time=None,
+            time_tba=True,
+        ),
+        league_slug="wnba",
+        tracked_team_slug=FEVER,
+        tracked_team_name=FEVER,
+    )
+    tba2 = _fresh_all_day("TBA2", FEVER, 20)
+    parsed = guard._parse_previous_team(_feed_bytes([tba, tba2]))
     assert parsed is not None
     _fetched_at, games = parsed
-    assert [(g.event_id, g.start, g.date_only) for g in games] == [
-        ("TBA1", datetime(2026, 6, 19, tzinfo=UTC), True),
-        ("TBA2", datetime(2026, 6, 21, tzinfo=UTC), True),
+    assert [(g.event_id, g.start, g.date_only, g.name) for g in games] == [
+        ("TBA1", datetime(2026, 6, 19, tzinfo=UTC), True, "Event TBA1"),
+        ("TBA2", datetime.combine(_start(20).date(), datetime.min.time(), UTC), True, "Event TBA2"),
     ]
 
 

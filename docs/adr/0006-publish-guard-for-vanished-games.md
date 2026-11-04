@@ -4,7 +4,9 @@ Status: Proposed
 Date: 2026-09-19 (revised 2026-10-02: all-day games, accepted event removals,
 the job summary, and why the team rule needs three games; revised 2026-10-17:
 an entry in `REMOVED_EVENTS` also withholds an event that is still listed,
-which is how a Ticketmaster removal request is honoured)
+which is how a Ticketmaster removal request is honoured; revised 2026-11-03:
+the previous publish is read from the live team calendar feeds, because the
+team JSON files are no longer published, DECISIONS 0024)
 Deciders: Chelsea Kelly-Reif
 
 ## Context
@@ -28,7 +30,8 @@ last is the live site. The same pattern already reads `lastmod.json` back.
 ## Decision
 
 Every build that fetched listings reads the live site's
-`data/<league>/<team>.json` files (one small request per tracked team) and
+`ics/<league>/<team>.ics` feeds (one small request per tracked team; until
+2026-11-03 the `data/<league>/<team>.json` files, see DECISIONS 0024) and
 compares them with what it just fetched. A game has **vanished** when all of
 these hold:
 

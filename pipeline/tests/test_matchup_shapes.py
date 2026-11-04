@@ -27,6 +27,7 @@ from wsc_pipeline.config import league_by_slug
 from wsc_pipeline.ics import make_uid
 from wsc_pipeline.normalize import Game, normalize_event, parse_event_name, parse_matchup, team_is_participant
 from wsc_pipeline.sellers import buy_link
+from wsc_pipeline.site_data import records_dir
 
 from .conftest import make_raw_event
 from .test_build import _FakeDiscoveryClient
@@ -305,5 +306,5 @@ def test_the_team_slug_the_feed_path_and_the_uids_do_not_change(tmp_path: Path, 
     assert uids == {make_uid("Z7r9jZ1AAvg1A"), make_uid("Z7r9jZ1AAvg1e")}
     # The calendar still says the full event name, sponsor and label included.
     assert {str(e["summary"]) for e in cal.walk("VEVENT")} == {BRAGGIN, EXHIBITION}
-    team_json = json.loads((out / "data" / "ncaaw-big-ten" / f"{ILLINOIS_SLUG}.json").read_text())
+    team_json = json.loads((records_dir(out) / "ncaaw-big-ten" / f"{ILLINOIS_SLUG}.json").read_text())
     assert team_json["team_slug"] == ILLINOIS_SLUG and team_json["team_name"] == ILLINOIS

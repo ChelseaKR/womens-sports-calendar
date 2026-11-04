@@ -43,7 +43,14 @@ def _fetched() -> tuple[list[Game], dict[str, set[str]], dict[str, set[str]], in
 
 
 def _data_files(root: Path) -> dict[str, dict[str, object]]:
-    return {str(p.relative_to(root)): json.loads(p.read_text()) for p in sorted((root / "data").rglob("*.json"))}
+    """data/site.json, the one published data file, and every page payload
+    in the build's records beside the site (site_data.records_dir)."""
+    records = site_data.records_dir(root)
+    files = {"data/site.json": json.loads((root / "data" / "site.json").read_text())}
+    files.update(
+        {f"records/{p.relative_to(records)}": json.loads(p.read_text()) for p in sorted(records.rglob("*.json"))}
+    )
+    return files
 
 
 def test_every_data_file_and_the_build_stamp_carry_source_and_fetch_time(

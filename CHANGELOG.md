@@ -12,6 +12,9 @@ archived and private.
 
 ### Added
 
+- Every page's footer says "Next Home Game is independent and is not
+  affiliated with any league, team or Ticketmaster.", the sentence the Atom
+  feeds already carry (DECISIONS 0024).
 - SEC women's basketball is the sixth league: a league page, 16 team pages,
   `.ics` feeds, the Atom home-game feed and sitemap entries. A Discovery API
   run on the branch found 243 upcoming games for all 16 teams. 15 teams
@@ -40,6 +43,17 @@ archived and private.
   secret is involved; the key file served at the site root is public by design.
 
 ### Changed
+
+- The site no longer publishes `data/<league>.json` or
+  `data/<league>/<team>.json`, a bulk copy of every Ticketmaster event. Only
+  `data/site.json` (counts per league, no events) is published; each page's
+  payload is written to `dist-records/`, which is never deployed, and
+  `make validate-ics` refuses a build that would publish anything else under
+  `data/`. The publish guard now reads the live team calendar feeds instead
+  of the team JSON files (DECISIONS 0024, ADR 0006).
+- The site earns money only through Ticketmaster's own affiliate program
+  while Ticketmaster is the data source; the SeatGeek and Fanatics settings
+  stay empty (DECISIONS 0024).
 
 - A team page that lists no game but links the team's official ticket page
   is indexed and in `sitemap.xml` again. #58 had made every empty page
@@ -103,6 +117,10 @@ archived and private.
 
 ### Fixed
 
+- Calendar events no longer say "Tickets: price not available from
+  Ticketmaster" (or any price): the site shows no prices, and the line on
+  every event was absence printed as a value. `make validate-ics` refuses an
+  event that mentions a price (DECISIONS 0013, 0024).
 - A game whose Ticketmaster name is a matchup ("A vs B") is now listed for a
   team only when that team is A or B. "Valley Suns vs San Diego Clippers:
   Phoenix Mercury Night", an NBA G League game, had been the only game on
