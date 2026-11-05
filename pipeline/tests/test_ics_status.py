@@ -250,7 +250,8 @@ def test_uids_across_the_fixture_site_are_the_ones_published_before_this_change_
     stamps, end times or all-day time-TBA entries (one `path<TAB>UID:` line per
     event per feed). Every one of those lines must still be written, byte for
     byte; the only lines added are the new all-day entry for the fixture's
-    time-TBA game (FX-TIME-TBA), in the two feeds that carry it."""
+    time-TBA game (FX-TIME-TBA), in the feeds that carry it, and each game on
+    its tracked opponent's feed (build.attribute_games)."""
     dist = tmp_path / "fixture"
     build_fixture_site(dist)
     lines = []
@@ -263,4 +264,17 @@ def test_uids_across_the_fixture_site_are_the_ones_published_before_this_change_
     assert not (Counter(golden) - Counter(lines)), "a UID line published before this change is gone or changed"
     added = sorted((Counter(lines) - Counter(golden)).elements())
     uid = "UID:tm-FX-TIME-TBA@womens-sports-calendar.invalid"
-    assert added == [f"ics/all.ics\t{uid}", f"ics/wnba.ics\t{uid}", f"ics/wnba/las-vegas-aces.ics\t{uid}"]
+    # Also added: each game on the feed of its tracked opponent, which every
+    # fetched event is now matched against (build.attribute_games).
+    opponents = [
+        "ics/nwsl/seattle-reign.ics\tUID:tm-FX-THORNS@womens-sports-calendar.invalid",
+        "ics/pwhl/ottawa-charge.ics\tUID:tm-FX-SCEPTRES@womens-sports-calendar.invalid",
+        f"ics/wnba/atlanta-dream.ics\t{uid}",
+        "ics/wnba/los-angeles-sparks.ics\tUID:tm-FX-CANCELLED@womens-sports-calendar.invalid",
+        "ics/wnba/phoenix-mercury.ics\tUID:tm-FX-AT@womens-sports-calendar.invalid",
+        "ics/wnba/phoenix-mercury.ics\tUID:tm-FX-ATTRACTIONS@womens-sports-calendar.invalid",
+        "ics/wnba/seattle-storm.ics\tUID:tm-FX-AWAY@womens-sports-calendar.invalid",
+    ]
+    assert added == sorted(
+        [f"ics/all.ics\t{uid}", f"ics/wnba.ics\t{uid}", f"ics/wnba/las-vegas-aces.ics\t{uid}", *opponents]
+    )

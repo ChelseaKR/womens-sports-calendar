@@ -146,6 +146,17 @@ archived and private.
   also under the 5:00 PM doubleheader. Season-ticket, parking, suite, pass
   and package listings, and matchups that name a men's team, are left out
   of every page and feed, and named in COVERAGE.txt (DECISIONS 0026).
+- 43 college games that were in the Big Ten and SEC calendars now also
+  reach the 14 teams' own pages and feeds that were missing them, and Penn
+  State and Oregon list their home games (0 before, 8 and 6 now).
+  Ticketmaster names a school differently at each host venue ("Penn State
+  Lady Lion Basketball", "Minnesota Gophers Womens Basketball", "LSU
+  Women's Basketball"), and a game was filed only under the team whose
+  search returned it. Every fetched event is now matched against every team
+  in its league, a college side is recognized by its school, mascot and the
+  words "University", "Lady", "Women's" and "Basketball" (never another
+  school, a men's team or another sport), and Penn State and Oregon are also
+  searched under the names their home games use (2 more requests a night).
 - The Montreal Victoire's page and calendar feed list its games again. The
   live build of 2026-11-04 had 23 Victoire games in the PWHL calendar and 1
   on the team's own page, which said no home game was listed: Ticketmaster

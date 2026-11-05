@@ -173,6 +173,42 @@ def test_only_games_drops_the_non_games_and_the_duplicate():
     ]
 
 
+def test_cross_team_matching_then_only_games_keeps_both_fixes():
+    """The build matches every fetched event against every team in its
+    league (build.attribute_games) and then drops non-games
+    (listings.only_games). Together: a Penn State home game only Rutgers'
+    search found stays on Penn State's page, the men's game and the season
+    tickets stay off, Vanderbilt's doubleheader duplicate is dropped, and the
+    MarketBeat Invitational's start is labeled for every team it names."""
+    tennessee_tickets = {
+        **SEASON_TICKETS,
+        "_embedded": {
+            **SEASON_TICKETS.get("_embedded", {}),
+            "attractions": [{"name": "Tennessee Lady Volunteers Womens Basketball"}],
+        },
+    }
+    psu_home = make_raw_event(event_id="PSU-RUT", name="Penn State Lady Lion Basketball vs. Rutgers")
+    raw_by_team: dict[tuple[str, str], list[dict]] = {}
+    for lg, team, raw in LIVE:
+        raw_by_team.setdefault((lg, team), []).append(tennessee_tickets if raw is SEASON_TICKETS else raw)
+    raw_by_team[("ncaaw-big-ten", "rutgers-scarlet-knights-womens-basketball")] = [psu_home]
+
+    games, _mismatched = build_module.attribute_games(LEAGUES, raw_by_team)
+    kept, dropped = listings.only_games(games)
+
+    assert sorted(_ids(kept, PENN_STATE)) == ["PSU-RUT", "Z7r9jZ1AA7kGp"]
+    assert _ids(kept, TENNESSEE) == ["G5viZ_58LMXYN"]
+    assert _ids(kept, VANDERBILT) == ["Z7r9jZ1A7Pvqv"]
+    assert {(d.team_slug, d.event_id) for d in dropped} >= {
+        (PENN_STATE, "Z7r9jZ1A7JFAp"),
+        (TENNESSEE, "G5viZ_KhLQpM1"),
+        (VANDERBILT, "G5viZ_58LMXYN"),
+    }
+    marketbeat = [g for g in kept if g.event_id == "vvG1bZ_C-7KX6i"]
+    assert NEBRASKA in {g.tracked_team_slug for g in marketbeat}
+    assert all(listings.event_start_only(g) for g in marketbeat)
+
+
 def test_the_event_listing_is_kept_when_the_team_has_no_listing_of_its_own():
     """Negative control: without Vanderbilt's own listing the doubleheader is
     not a duplicate, so it stays for Vanderbilt too (labeled as the event's
