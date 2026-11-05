@@ -261,6 +261,33 @@ def _game_key(home: object, away: object, start: str) -> tuple[str, str, datetim
     return structured_data.team_label(str(home)), structured_data.team_label(str(away)), datetime.fromisoformat(start)
 
 
+def _check_performer_and_offer(page: Path, node: dict[str, Any], known: list[dict[str, Any]]) -> None:
+    """performer is the event's two teams, and offers is only the url of a
+    listed game's own listing, exactly when the page links one (DECISIONS
+    0030)."""
+    name = node.get("name")
+    home = (node.get("homeTeam") or {}).get("name")
+    away = (node.get("awayTeam") or {}).get("name")
+    performers = node.get("performer")
+    if performers != [{"@type": "SportsTeam", "name": home}, {"@type": "SportsTeam", "name": away}]:
+        raise SeoError(f"{page}: SportsEvent {name!r} performer is not its home and away teams")
+    offers = node.get("offers")
+    offered = {structured_data.event_offer_url(g) for g in known}
+    if offers is None:
+        if None not in offered:
+            raise SeoError(f"{page}: SportsEvent {name!r} has no Offer, but the page links this game's listing")
+    elif (
+        not isinstance(offers, dict)
+        or set(offers) != {"@type", "url"}
+        or offers.get("@type") != "Offer"
+        or offers.get("url") not in offered
+    ):
+        # Only a url: a price, currency or availability the page never
+        # shows is invented, and so is an Offer for a game the page sends to
+        # a team's seller page or that Ticketmaster has cancelled.
+        raise SeoError(f"{page}: SportsEvent {name!r} offers is not just the url of this game's own listing")
+
+
 def _check_event(page: Path, node: dict[str, Any], games: list[dict[str, Any]]) -> tuple[str, str, datetime]:
     """Checks one SportsEvent against the listed games it describes (the same
     home team, away team and start instant; Ticketmaster may list one game
@@ -298,6 +325,7 @@ def _check_event(page: Path, node: dict[str, Any], games: list[dict[str, Any]]) 
         )
     ):
         raise SeoError(f"{page}: SportsEvent {name!r} location is not the listed venue with a postal address")
+    _check_performer_and_offer(page, node, known)
     stated = {structured_data.EVENT_STATUS.get(g.get("status") or "") for g in known}
     if node.get("eventStatus") not in stated:
         raise SeoError(

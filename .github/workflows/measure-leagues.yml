@@ -18,7 +18,7 @@ on:
   workflow_dispatch:
     inputs:
       candidates:
-        description: "'all', or comma-separated slugs: ncaaw-sec, ncaaw-big-ten, ncaaw-acc, ncaaw-big-12, ncaaw-big-east, mlv, unrivaled, lovb; named only: ncaaw-softball-sec, ncaaw-softball-big-ten"
+        description: "'all', or comma-separated slugs: ncaaw-sec, ncaaw-big-ten, ncaaw-acc, ncaaw-big-12, ncaaw-big-east, ncaaw-ncaa-tournament, mlv, unrivaled, lovb; named only: ncaaw-softball-sec, ncaaw-softball-big-ten"
         required: false
         default: all
         type: string

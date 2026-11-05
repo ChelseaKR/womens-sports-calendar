@@ -255,6 +255,7 @@ def test_candidate_registry_is_sound() -> None:
         "mlv",
         "unrivaled",
         "lovb",
+        "ncaaw-ncaa-tournament",
         "ncaaw-softball-sec",
         "ncaaw-softball-big-ten",
     }
@@ -268,6 +269,7 @@ def test_candidate_registry_is_sound() -> None:
         "mlv": 12,
         "unrivaled": 8,
         "lovb": 10,
+        "ncaaw-ncaa-tournament": 34,
         "ncaaw-softball-sec": 15,
         "ncaaw-softball-big-ten": 17,
     }
@@ -326,3 +328,87 @@ def test_probe_names_are_searched_and_their_home_games_counted() -> None:
 def test_a_probe_for_a_school_not_in_the_roster_is_refused() -> None:
     with pytest.raises(ValueError, match="Texas Tek"):
         measure_leagues._college_teams({"Texas Tech": "Lady Raiders"}, {"Texas Tek": measure_leagues._Probe(("x",))})
+
+
+BIG_TEN_TOURNAMENT = "Big Ten Women's Basketball Tournament"
+NCAA = "NCAA Women's Basketball Championship"
+RESPONSES[BIG_TEN_TOURNAMENT] = [
+    _event("T-S1", "Big Ten Women's Basketball Tournament - Session 1", day="2027-03-04"),
+    # a keyword search also returns team games; they are not sessions
+    _event("T-REG", "Kentucky Wildcats Womens Basketball vs Tennessee Lady Volunteers Womens Basketball"),
+]
+RESPONSES[NCAA] = [
+    _event("N-S1", "NCAA Women's Basketball Championship First/Second Rounds - Session 1", day="2027-03-19"),
+    _event(
+        "N-KY", "NCAA Women's Basketball Championship: Kentucky Wildcats Womens Basketball vs TBA", day="2027-03-19"
+    ),
+]
+
+
+def test_a_tournament_keyword_counts_sessions_apart_from_team_games() -> None:
+    """DECISIONS 0032: sessions name no team, so only the keyword finds them."""
+    client, _ = _client()
+    cand = _candidate("big-ten", _college(("Kentucky", "Wildcats")), league_keyword=BIG_TEN_TOURNAMENT)
+    result = measure_candidate(client, cand, TODAY)
+    assert result.league_keyword_events == 2
+    assert result.league_keyword_attributed == 1  # the regular-season game
+    assert result.league_keyword_tournament_named == 1  # the session
+    assert result.teams[0].attributed == 3  # the team's own search is unchanged
+    md = render_markdown(measure(client, (cand,), TODAY, generated_at=NOW))
+    assert "1 attributable to a listed team, 1 named as a tournament or championship" in md
+    assert "Teams measured: 1 of 1" in md and "| Team |" in md
+
+
+def test_keyword_only_candidate_searches_no_team_but_matches_them() -> None:
+    client, seen = _client()
+    cand = _candidate("ncaa", _college(("Kentucky", "Wildcats")), league_keyword=NCAA, search_teams=False)
+    report = measure(client, (cand,), TODAY, generated_at=NOW)
+    assert seen == [NCAA]  # one request: no team search
+    assert report["requests_made"] == 1
+    c = report["candidates"][0]
+    assert c["teams"] == [] and c["teams_searched"] is False
+    assert c["league_keyword_events"] == 2
+    # The session at Kentucky's arena would reach Kentucky's page (winter plan W3).
+    assert c["league_keyword_attributed"] == 1
+    assert c["league_keyword_tournament_named"] == 2
+    assert c["unique_attributed"] is None  # no team was searched: not 0
+    assert c["complete"] is True
+    md = render_markdown(report)
+    assert "Teams: not searched" in md
+    assert "Teams measured" not in md and "| Team |" not in md
+    assert f'"{NCAA}": 2 events returned, 1 attributable to a listed team, 2 named as a tournament' in md
+
+
+def test_keyword_only_control_searches_teams_when_switched_on() -> None:
+    """Negative control: search_teams=True runs the team search again."""
+    client, seen = _client()
+    cand = _candidate("ncaa", _college(("Kentucky", "Wildcats")), league_keyword=NCAA, search_teams=True)
+    measure_candidate(client, cand, TODAY)
+    assert seen == [KENTUCKY, NCAA]
+
+
+def test_keyword_only_candidate_failed_keyword_is_incomplete() -> None:
+    client, _ = _client(fail_on={NCAA})
+    cand = _candidate("ncaa", _college(("Kentucky", "Wildcats")), league_keyword=NCAA, search_teams=False)
+    result = measure_candidate(client, cand, TODAY)
+    assert result.league_keyword_status == FAILED
+    assert result.league_keyword_events is None and result.league_keyword_tournament_named is None
+    assert result.complete is False
+
+
+def test_tournament_keywords_are_registered() -> None:
+    by_slug = {c.league.slug: c for c in CANDIDATES}
+    assert {s: by_slug[s].league_keyword for s in by_slug if s.startswith("ncaaw-") and "softball" not in s} == {
+        "ncaaw-sec": "SEC Women's Basketball Tournament",
+        "ncaaw-big-ten": BIG_TEN_TOURNAMENT,
+        "ncaaw-acc": "ACC Women's Basketball Tournament",
+        "ncaaw-big-12": "Big 12 Women's Basketball Championship",
+        "ncaaw-big-east": "Big East Women's Basketball Tournament",
+        "ncaaw-ncaa-tournament": NCAA,
+    }
+    ncaa = by_slug["ncaaw-ncaa-tournament"]
+    assert ncaa.search_teams is False
+    assert ncaa.league.teams == config.league_by_slug("ncaaw-big-ten").teams + config.league_by_slug("ncaaw-sec").teams
+    assert all(c.search_teams for c in CANDIDATES if c is not ncaa)
+    # Tracked conferences still ship unchanged: the keyword lives on the candidate.
+    assert by_slug["ncaaw-big-ten"].league is config.league_by_slug("ncaaw-big-ten")

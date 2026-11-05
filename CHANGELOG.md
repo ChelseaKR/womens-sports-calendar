@@ -12,6 +12,11 @@ archived and private.
 
 ### Added
 
+- Each game's `SportsEvent` markup names its two teams as `performer`, and,
+  when the page's "Buy tickets" link goes to the game's own Ticketmaster
+  listing, an `offers` holding only that listing's URL. No price,
+  currency or availability is ever stated. A game sold through a team's
+  seller page, or cancelled, has no offer (DECISIONS 0030).
 - Every page's footer says "Next Home Game is independent and is not
   affiliated with any league, team or Ticketmaster.", the sentence the Atom
   feeds already carry (DECISIONS 0024).
@@ -30,6 +35,11 @@ archived and private.
   The participant check now treats "Women's" and "Womens" as the same word,
   and SEC teams ignore other schools named "<direction> <School>"
   (DECISIONS 0023).
+- The `measure-leagues` workflow also counts Ticketmaster listings for the
+  Big Ten, SEC, ACC, Big 12 and Big East women's tournaments and for NCAA
+  tournament sessions, by keyword, including how many name a tournament and
+  how many would match a tracked school. Counts only; the nightly build is
+  unchanged (DECISIONS 0032).
 - A manual `measure-leagues` workflow counts, with the site's own search and
   attribution code, how many upcoming Ticketmaster events SEC, ACC, Big 12 and
   Big East women's basketball, Major League Volleyball, Unrivaled and LOVB

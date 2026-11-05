@@ -1144,12 +1144,57 @@ or published):
 - SEC and Big Ten softball candidates (15 and 17 schools, keyword
   "<School> <Mascot> Softball"). They run only when named, never under
   "all", and not before about 2027-01-15.
-- One run of `ncaaw-big-12,ncaaw-acc,ncaaw-big-east,mlv` makes at least 68
-  requests (one per name searched, more when a search pages, at most 5 pages
-  each); "all" makes at least 124; the two softball candidates at least 32.
+- One run of `ncaaw-big-12,ncaaw-acc,ncaaw-big-east,mlv` makes at least 71
+  requests (one per name searched and one per league keyword of 0032, more
+  when a search pages, at most 5 pages each); "all" makes at least 130; the
+  two softball candidates at least 32.
 
 Revisit after the next run: keep the names that attribute games, drop the
 rest, and copy the kept ones into config if that conference is added.
+
+## 0030 — A game's SportsEvent names its teams as performers and its own Ticketmaster listing as the offer (2026-11-05)
+
+**Why:** Google's Event structured data recommends `performer` and `offers`.
+The markup had neither, so every SportsEvent drew those two warnings in the
+Rich Results Test. Both facts are already on the page: the matchup line
+names the two teams, and the "Buy tickets" link goes to the game's listing.
+
+**What changes (`structured_data.py`, checked by `validate_seo.py`):**
+
+- `performer` is the home and away teams, by the same names as `homeTeam`
+  and `awayTeam`.
+- `offers` is one `Offer` with only a `url`: the plain Ticketmaster event
+  address (`ticket_url`, never an affiliate tracking link). It is there
+  only when the page's "Buy tickets" link goes to that same listing.
+- No `price`, `priceCurrency`, `availability` or `validFrom`. The page
+  shows none of them (0013, 0024), so the markup cannot either.
+  `validate_seo` rejects an Offer with any key besides `@type` and `url`.
+- No Offer when the link goes to a home team's seller page (AXS,
+  SeatGeek, a school box office, per `sellers.PRIMARY_SELLERS`). That page
+  is the team's, not this game's.
+- No Offer for a game Ticketmaster has cancelled. The page still links
+  the listing, but there is nothing to buy, and the markup should not say
+  there is.
+- Nothing else moves. A game with no venue name, city and region still
+  gets no SportsEvent at all, because Google requires `location`, and the
+  site never fills a venue in. `eventStatus` still appears only when
+  Ticketmaster says cancelled, postponed or rescheduled.
+
+Not added: `endDate` (the feeds' end time is an estimate, 0015, and the
+page shows none), `image`, `description` and `organizer` (the page has no
+such fact). Google's event rich result is for pages about one event, so
+these league and team schedule pages are still not expected to earn it.
+This makes the markup more complete and keeps it true. It does not unlock
+a new result.
+
+**Enforced by** `tests/test_event_schema_offers.py`: required properties on
+every emitted event, the Offer only on a game's own listing, controls for a
+game with no venue, each Ticketmaster status code and a game with no URL,
+and planted price, availability, wrong-game Offer, dropped Offer, swapped
+performer and guessed status that `validate_seo` must reject.
+
+Revisit if a page ever shows a price or an on-sale date, or if the site
+gets one page per game.
 
 ## 0031 — Another sport's listing is not a team's game; a mislabeled opponent loses only the wrong word (2026-11-05)
 
@@ -1193,3 +1238,47 @@ NWSL and WNBA kept, and a sabotage control that turns the fix off and finds
 Revisit if a tracked team's own name ever contains a sport word that is not
 its sport, or if Ticketmaster's `classifications` are read from a live
 response and can say the sport directly.
+
+## 0032 — Measure tournament sessions by keyword before building for them (2026-11-05)
+
+**Why:** the published Big Ten and SEC feeds end on 2027-02-28 and hold no
+conference-tournament or NCAA-tournament listing. Tournament sessions name
+no home team, so the nightly build's team search never finds them, and
+`normalize.parse_event_name` and 0026 keep them off team pages. Whether
+Ticketmaster lists the sessions at all is unknown. The winter content plan
+(2026-11-05, decision D1, approved) says to measure first and build a
+league-page section only if the sessions are listed.
+
+**What changes (measurement only; the nightly build, the site and the feeds
+are unchanged):**
+
+- `measure_leagues.py` sets the unused `league_keyword` on the five college
+  candidates: "SEC Women's Basketball Tournament", "Big Ten Women's
+  Basketball Tournament", "ACC Women's Basketball Tournament", "Big 12
+  Women's Basketball Championship" and "Big East Women's Basketball
+  Tournament". None was read from a Ticketmaster attraction page; they are
+  guesses for a run to confirm or rule out, and the strings the site later
+  uses come from a run's results, not from these.
+- A keyword-only candidate, `ncaaw-ncaa-tournament` ("NCAA Women's
+  Basketball Championship"), searches no team (`search_teams=False`). Its
+  events are only matched against the 34 tracked Big Ten and SEC schools, so
+  "attributable to a listed team" counts the sessions that could reach a
+  team page as a home game (the plan's W3 risk).
+- Each keyword's result also counts events whose name says "tournament" or
+  "championship", since a keyword search also returns teams' regular games.
+  Still counts only: no name, id, URL, venue or price leaves the module.
+- Requests: each keyword is one request per page, at most 5 pages. "all" now
+  makes at least 100 (94 before). `ncaaw-ncaa-tournament` alone makes 1 to
+  5. `ncaaw-big-ten,ncaaw-sec,ncaaw-ncaa-tournament` makes at least 39. The
+  1,500 cap and the 5,000-a-day limit are unchanged.
+
+**Enforced by** `tests/test_measure_leagues.py`: a session counted apart from
+a team game the same keyword returns, a keyword-only candidate that makes one
+request and still matches a session at a school's arena, a control that
+switches team search back on and sees the team searched, a failed keyword
+that leaves the counts empty instead of 0, and the registered keywords.
+
+Revisit after the runs planned for about 2026-12-15 and 2027-01-12: pass if
+each conference tournament has at least one dated session listing, and copy
+the attraction names that match into the build's plan; otherwise build
+nothing for tournaments this season.

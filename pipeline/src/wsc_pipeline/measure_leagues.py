@@ -20,6 +20,11 @@ follow the Big Ten pattern ("<School> <Mascot> Womens Basketball", with a
 "<School> women's basketball" title name, DECISIONS 0010). They were NOT
 checked against Ticketmaster's artist pages first, so a team with 0 events
 returned may mean a wrong keyword, not missing inventory.
+
+The college league keywords count tournament sessions, which name no home
+team, so a team search never finds them (DECISIONS 0032). The tournament
+names are guesses, not read from Ticketmaster; a run's counts show whether
+they match anything.
 """
 
 from __future__ import annotations
@@ -135,6 +140,10 @@ class Candidate:
     # Also searched as a keyword, to count events that name the league but
     # no team (a touring event, a tournament). None: not searched.
     league_keyword: str | None = None
+    # False: the teams are not searched; they are only matched against the
+    # league keyword's events (a tournament run that costs only its keyword's
+    # requests, DECISIONS 0032).
+    search_teams: bool = True
     # Teams that could not be measured, and why: {team: reason}.
     unmeasured_teams: dict[str, str] = field(default_factory=dict)
     source: str = ""
@@ -153,12 +162,14 @@ CANDIDATES: tuple[Candidate, ...] = (
     Candidate(
         league_by_slug("ncaaw-sec"),
         source="The SEC as tracked in config.LEAGUES (16 schools, 2026-27).",
+        league_keyword="SEC Women's Basketball Tournament",
     ),
     # The Big Ten as config.LEAGUES ships it, to re-measure a change to how
     # games are attributed to teams.
     Candidate(
         league_by_slug("ncaaw-big-ten"),
         source="The Big Ten as tracked in config.LEAGUES (18 schools, 2026-27).",
+        league_keyword="Big Ten Women's Basketball Tournament",
     ),
     Candidate(
         _league(
@@ -193,6 +204,7 @@ CANDIDATES: tuple[Candidate, ...] = (
             ),
         ),
         source="ACC membership for 2026-27 (18 schools).",
+        league_keyword="ACC Women's Basketball Tournament",
     ),
     Candidate(
         _league(
@@ -241,6 +253,7 @@ CANDIDATES: tuple[Candidate, ...] = (
             ),
         ),
         source="Big 12 membership for 2026-27 (16 schools).",
+        league_keyword="Big 12 Women's Basketball Championship",
     ),
     Candidate(
         _league(
@@ -269,6 +282,20 @@ CANDIDATES: tuple[Candidate, ...] = (
             ),
         ),
         source="Big East membership for 2026-27 (11 schools).",
+        league_keyword="Big East Women's Basketball Tournament",
+    ),
+    # NCAA tournament sessions (first and second rounds at campus arenas),
+    # matched against the tracked schools: an attributed session is one a
+    # team page could show as a home game (winter plan W3). Keyword only.
+    Candidate(
+        _league(
+            "ncaaw-ncaa-tournament",
+            "NCAA Women's Basketball Championship",
+            league_by_slug("ncaaw-big-ten").teams + league_by_slug("ncaaw-sec").teams,
+        ),
+        league_keyword="NCAA Women's Basketball Championship",
+        search_teams=False,
+        source="The tracked Big Ten and SEC schools (34), matched only; no team search.",
     ),
     Candidate(
         _league(
@@ -367,6 +394,8 @@ class CandidateCount:
     league_keyword: str | None
     league_keyword_events: int | None = None
     league_keyword_attributed: int | None = None
+    # Of those, events whose name says tournament or championship.
+    league_keyword_tournament_named: int | None = None
     league_keyword_status: str | None = None
     # Unique events across teams (a game between two candidate teams counts once).
     unique_attributed: int | None = None
@@ -374,6 +403,10 @@ class CandidateCount:
     teams_with_upcoming: int | None = None
     teams_total: int = 0
     complete: bool = False
+    teams_searched: bool = True
+
+
+_TOURNAMENT_WORD = re.compile(r"\b(tournament|championships?)\b", re.IGNORECASE)
 
 
 def _is_upcoming(game: Game, today: date) -> bool:
@@ -451,6 +484,9 @@ def _measure_league_keyword(client: DiscoveryClient, cand: Candidate, result: Ca
     result.league_keyword_attributed = sum(
         1 for raw in raw_events if any(_attribute(t, cand.league, [raw]) for t in cand.league.teams)
     )
+    result.league_keyword_tournament_named = sum(
+        1 for raw in raw_events if _TOURNAMENT_WORD.search(str(raw.get("name") or ""))
+    )
 
 
 def measure_candidate(client: DiscoveryClient, cand: Candidate, today: date) -> CandidateCount:
@@ -459,15 +495,14 @@ def measure_candidate(client: DiscoveryClient, cand: Candidate, today: date) -> 
     # Every team is searched first, then every event any search returned is
     # attributed to every team it names (build.attribute_games), as the
     # nightly build does.
-    fetched = [_fetch_team(client, cand.league, t) for t in cand.league.teams]
+    searched = cand.league.teams if cand.search_teams else ()
+    fetched = [_fetch_team(client, cand.league, t) for t in searched]
     raw_by_team = {
-        (cand.league.slug, t.slug): raw
-        for t, (_c, raw, _tr) in zip(cand.league.teams, fetched, strict=True)
-        if raw is not None
+        (cand.league.slug, t.slug): raw for t, (_c, raw, _tr) in zip(searched, fetched, strict=True) if raw is not None
     }
     league_games, _mismatched = attribute_games((cand.league,), raw_by_team)
     teams = []
-    for team, (count, raw, truncated) in zip(cand.league.teams, fetched, strict=True):
+    for team, (count, raw, truncated) in zip(searched, fetched, strict=True):
         if raw is not None:
             team_games = [g for g in league_games if g.tracked_team_slug == team.slug]
             _count_team(count, team, team_games, truncated, today, upcoming_ids, all_ids)
@@ -480,6 +515,7 @@ def measure_candidate(client: DiscoveryClient, cand: Candidate, today: date) -> 
         unmeasured_teams=dict(cand.unmeasured_teams),
         league_keyword=cand.league_keyword,
         teams_total=len(teams) + len(cand.unmeasured_teams),
+        teams_searched=cand.search_teams,
     )
     _measure_league_keyword(client, cand, result)
     measured = [t for t in teams if t.status == "measured"]
@@ -488,6 +524,8 @@ def measure_candidate(client: DiscoveryClient, cand: Candidate, today: date) -> 
         result.unique_attributed_upcoming = len(upcoming_ids)
         result.teams_with_upcoming = sum(1 for t in measured if t.attributed_upcoming)
     result.complete = len(measured) == len(teams) and not cand.unmeasured_teams
+    if not cand.search_teams:
+        result.complete = result.league_keyword_status == "measured"
     return result
 
 
@@ -516,24 +554,14 @@ def _cell(value: object) -> str:
 
 def _candidate_markdown(c: dict[str, Any]) -> list[str]:
     measured = sum(1 for t in c["teams"] if t["status"] == "measured")
-    lines = [
-        f"## {c['name']}",
-        "",
-        f"Source: {c['source']}",
-        "",
-        f"- Teams measured: {measured} of {c['teams_total']}"
-        + ("" if c["complete"] else " (incomplete: see the rows marked not measured)"),
-        f"- Teams with at least one upcoming attributed event: {_cell(c['teams_with_upcoming'])}",
-        f"- Unique attributed events: {_cell(c['unique_attributed'])},"
-        f" upcoming: {_cell(c['unique_attributed_upcoming'])}",
-    ]
-    if c["league_keyword"]:
-        status = c["league_keyword_status"]
-        suffix = "" if status == "measured" else f" ({status})"
-        lines.append(
-            f'- League keyword "{c["league_keyword"]}": {_cell(c["league_keyword_events"])} events returned,'
-            f" {_cell(c['league_keyword_attributed'])} attributable to a listed team{suffix}"
-        )
+    lines = [f"## {c['name']}", "", f"Source: {c['source']}", ""]
+    if not c["teams_searched"]:
+        lines.append("- Teams: not searched; only the league keyword was (its events are matched to the schools)")
+    else:
+        lines += _team_summary(c, measured)
+    lines += _keyword_line(c)
+    if not c["teams_searched"]:
+        return [*lines, ""]
     lines += [
         "",
         "| Team | Returned | Attributed | Upcoming | Home | Truncated | Status |",
@@ -548,6 +576,28 @@ def _candidate_markdown(c: dict[str, Any]) -> list[str]:
         lines.append(f"| {team} | – | – | – | – | – | not measured: {reason} |")
     lines.append("")
     return lines
+
+
+def _team_summary(c: dict[str, Any], measured: int) -> list[str]:
+    return [
+        f"- Teams measured: {measured} of {c['teams_total']}"
+        + ("" if c["complete"] else " (incomplete: see the rows marked not measured)"),
+        f"- Teams with at least one upcoming attributed event: {_cell(c['teams_with_upcoming'])}",
+        f"- Unique attributed events: {_cell(c['unique_attributed'])},"
+        f" upcoming: {_cell(c['unique_attributed_upcoming'])}",
+    ]
+
+
+def _keyword_line(c: dict[str, Any]) -> list[str]:
+    if not c["league_keyword"]:
+        return []
+    status = c["league_keyword_status"]
+    suffix = "" if status == "measured" else f" ({status})"
+    return [
+        f'- League keyword "{c["league_keyword"]}": {_cell(c["league_keyword_events"])} events returned,'
+        f" {_cell(c['league_keyword_attributed'])} attributable to a listed team,"
+        f" {_cell(c['league_keyword_tournament_named'])} named as a tournament or championship{suffix}"
+    ]
 
 
 def render_markdown(report: dict[str, Any]) -> str:
