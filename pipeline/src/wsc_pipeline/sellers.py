@@ -226,6 +226,14 @@ def seller_label_for_url(url: str) -> str:
     return host.removeprefix("www.") or "the seller"
 
 
+def team_primary_seller(league_slug: str, team_slug: str) -> Seller | None:
+    """The team's recorded primary seller when it is not Ticketmaster
+    (PRIMARY_SELLERS), else None. Team pages use this to say why a team
+    can have no Ticketmaster listings: this pipeline reads only Ticketmaster,
+    so it cannot promise that this team's next game will appear."""
+    return PRIMARY_SELLERS.get((league_slug, team_slug))
+
+
 def home_team_seller(game: Game) -> tuple[config.Team, Seller] | None:
     """The primary seller of this game's home team, if one is recorded.
     Only the home team counts: an Aces game at Seattle is sold by Seattle's

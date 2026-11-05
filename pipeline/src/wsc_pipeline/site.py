@@ -37,7 +37,13 @@ from .analytics import GA4_DATA_RETENTION, ga4_head_snippet, measurement_id
 from .config import league_names_for, title_name_for
 from .ics import COMBINED_FEED_PATH, TIME_TBA_NOTE, TIME_TBA_SUFFIX, calendar_name
 from .normalize import display_date
-from .sellers import AFFILIATE_LINK_TEMPLATES, affiliate_links_active, is_affiliate_link
+from .sellers import (
+    AFFILIATE_LINK_TEMPLATES,
+    affiliate_links_active,
+    is_affiliate_link,
+    team_primary_seller,
+    with_affiliate,
+)
 from .site_data import kept_out_of_search, schedule_window
 from .team_shops import shop_links_on, team_shop_url
 
@@ -495,6 +501,36 @@ def _home_away_tag(game: Mapping[str, Any]) -> str:
     return f' <span class="home-away home-away--{label.lower()}">{label}</span>'
 
 
+def _sells_elsewhere_msg(team: Mapping[str, Any]) -> str:
+    """The empty next-game message for a team whose primary ticket seller is
+    not Ticketmaster (sellers.PRIMARY_SELLERS), as HTML; "" for any other
+    team. This pipeline reads only Ticketmaster, so for these teams the usual
+    promise that the next game will reach the calendar on its own would be
+    false. It names where the team sells tickets and links the team's
+    official ticket page (official_tickets.py), or the seller's team page
+    when no official page was verified. It never says tickets are
+    unavailable."""
+    seller = team_primary_seller(team["league_slug"], team["team_slug"])
+    if seller is None:
+        return ""
+    owner = "the school's" if team["league_slug"].startswith("ncaaw-") else "the team's"
+    official = official_tickets.link_for(official_tickets.team_page(team["league_slug"], team["team_slug"]))
+    if official is not None:
+        href, paid = official
+        text = f"{e(owner)} official ticket page"
+        link = _paid_link(href, text) if paid else f'<a href="{e(href)}">{text}</a>'
+    else:
+        url = with_affiliate(seller.team_page_url, seller.name)
+        text = f"{e(owner)} page at {e(seller.name)}"
+        link = _paid_link(url, text) if is_affiliate_link(seller.name, url) else f'<a href="{e(url)}">{text}</a>'
+    owner_cap = owner[0].upper() + owner[1:]
+    return (
+        f"No {e(team['team_name'])} games are listed by Ticketmaster right now.\n"
+        f"{e(owner_cap)} main ticket seller is {e(seller.name)}, not Ticketmaster, so its\n"
+        f"home games may not show up here or in your calendar. Check {link} for home games."
+    )
+
+
 def _next_game_hero(team: Mapping[str, Any]) -> str:
     """The dominant visual moment on a team page, right under the subscribe
     buttons and above the fold on a phone: the soonest listed home game. When no listed game is known to be at
@@ -510,6 +546,13 @@ def _next_game_hero(team: Mapping[str, Any]) -> str:
 </section>
 """
     if not games:
+        elsewhere = _sells_elsewhere_msg(team)
+        if elsewhere:
+            return f"""<section class="next-game next-game--empty" aria-labelledby="next-game-heading">
+<h2 id="next-game-heading" class="next-game-label">Next home game</h2>
+<p class="next-game-empty-msg">{elsewhere}</p>
+</section>
+"""
         return f"""<section class="next-game next-game--empty" aria-labelledby="next-game-heading">
 <h2 id="next-game-heading" class="next-game-label">Next home game</h2>
 <p class="next-game-empty-msg">No {e(team_name)} games are listed by
