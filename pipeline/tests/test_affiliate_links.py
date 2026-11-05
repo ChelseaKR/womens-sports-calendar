@@ -208,7 +208,7 @@ def test_only_seatgeek_team_pages_can_carry_the_seatgeek_template():
     official seller on seatgeek.com, and no Ticketmaster-event label can
     take that name, so a resale or Ticketmaster link never gets it."""
     named = [s for s in sellers.PRIMARY_SELLERS.values() if s.name == sellers.SEATGEEK]
-    assert len(named) == 3
+    assert len(named) == 4
     for seller in named:
         assert urlparse(seller.team_page_url).hostname == sellers.SEATGEEK_HOST
     assert sellers.SEATGEEK not in sellers._HOST_LABELS.values()

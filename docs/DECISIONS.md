@@ -329,6 +329,33 @@ What changes:
   - Oakland Soul (SeatGeek) is not a tracked team (USL W League is not
     added). AUSL's primary seller is the league's own ticketing, with
     StubHub as its marketplace, so AUSL keeps the event link for now.
+
+  *Amended 2026-11-05 (owner decision):* 40 more teams whose main seller
+  is not Ticketmaster are in the table, each with evidence checked
+  2026-11-05:
+
+  - Paciolan: 24 Big Ten and SEC schools (Illinois, Indiana, Iowa,
+    Maryland, Michigan, Minnesota, Nebraska, Purdue, Rutgers, UCLA, USC,
+    Washington, Wisconsin, Alabama, Arkansas, Auburn, Georgia, LSU,
+    Mississippi State, Oklahoma, Ole Miss, Texas, Texas A&M, Vanderbilt);
+  - AUSL: all six teams, on the league's own ticketing (this reverses the
+    AUSL carve-out above);
+  - Jump: Minnesota Lynx, Denver Summit, North Carolina Courage;
+  - AXS: Dallas Wings, PWHL Las Vegas;
+  - Tixr: Bay FC, Houston Dash;
+  - SeatGeek: Racing Louisville;
+  - SI Tickets: Gotham FC (the link is the club's ticket page, since SI
+    Tickets has no Gotham team page);
+  - Ticket Leader: Vancouver Goldeneyes.
+
+  This changes link targets and team-page wording only. The pipeline still
+  reads only Ticketmaster, so games sold only by these sellers still do not
+  appear. Left out: Missouri and Connecticut Sun (ambiguous seller), and
+  Montréal Victoire, Penn State and Oregon (their gaps are name matching,
+  not sellers). Kansas City Current, Michigan State and Chicago Stars were
+  dropped because their seller page could not be confirmed on 2026-11-05.
+  The analytics matcher (`sellers.ticket_host_names()`) now names each
+  seller host by its domain ("evenue", "tixr"), not its first label.
 - **Links are plain, with no affiliate IDs.**
   `sellers.AFFILIATE_LINK_TEMPLATES` is the single place one would be added
   once [moved to private strategy notes]. The footer's disclosure is rendered from that same table,

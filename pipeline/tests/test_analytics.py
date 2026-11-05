@@ -29,7 +29,7 @@ from urllib.parse import quote, urlparse
 
 import pytest
 
-from wsc_pipeline import analytics, site
+from wsc_pipeline import analytics, sellers, site
 from wsc_pipeline import build as build_module
 from wsc_pipeline.analytics import ANALYTICS_DENIED_REGIONS, ga4_head_snippet
 from wsc_pipeline.config import LEAGUES
@@ -74,10 +74,15 @@ def _html_pages(out_dir: Path) -> dict[str, str]:
     return {str(p.relative_to(out_dir)): p.read_text(encoding="utf-8") for p in sorted(out_dir.rglob("*.html"))}
 
 
+# A team whose home games keep their Ticketmaster event link: one with no
+# entry in the seller table (sellers.PRIMARY_SELLERS, DECISIONS 0013).
+TM_TEAM = next(t for t in LEAGUES[0].teams if (LEAGUES[0].slug, t.slug) not in sellers.PRIMARY_SELLERS)
+
+
 def _fetched_games():
     """One priced WNBA game with a real Ticketmaster URL, so the ticket link,
     the .ics DESCRIPTION/URL, and the data JSON all have content to compare."""
-    league, team = LEAGUES[0], LEAGUES[0].teams[0]
+    league, team = LEAGUES[0], TM_TEAM
     raw = make_raw_event(
         event_id="EVT-GA",
         name=f"{team.name} vs Visiting Team",
@@ -229,7 +234,7 @@ def test_ticket_links_stay_plain_urls_when_ga_is_on(tmp_path: Path, monkeypatch)
     monkeypatch.setattr(build_module, "fetch_all_games", lambda api_key: _fetched_games())
     out_dir = tmp_path / "dist"
     build_module.build(out_dir=out_dir, base_url=BASE_URL, api_key="fake-key", affiliate_id=None, ga4_id=TEST_ID)
-    league, team = LEAGUES[0], LEAGUES[0].teams[0]
+    league, team = LEAGUES[0], TM_TEAM
     for page in (out_dir / league.slug / "index.html", out_dir / league.slug / team.slug / "index.html"):
         html = page.read_text()
         buy_hrefs = re.findall(r'<a [^>]*href="([^"]+)"[^>]*>Buy tickets', html)

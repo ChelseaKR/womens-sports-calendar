@@ -18,6 +18,7 @@ the checker then fails.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from urllib.parse import quote
 
@@ -119,7 +120,12 @@ def test_a_big_ten_page_names_the_school_and_uses_the_searched_name():
 def test_a_team_with_no_verified_page_gets_no_section_and_no_guess():
     html = _empty_team_page(BIG_TEN, RUTGERS)
     assert "official-tickets" not in html
-    assert "scarletknights" not in html
+    # No school-site URL is guessed. The only Rutgers link is the seller
+    # table's verified Paciolan page (sellers.PRIMARY_SELLERS).
+    assert "scarletknights.com" not in html
+    assert set(re.findall(r"https://[a-z.]*scarletknights[^\"]*", html)) == {
+        sellers.PRIMARY_SELLERS[("ncaaw-big-ten", RUTGERS.slug)].team_page_url
+    }
 
 
 def test_league_pages_link_the_leagues_own_ticket_page_and_the_big_ten_has_none():
