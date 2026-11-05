@@ -645,7 +645,12 @@ re-reading the league's terms.
   - Storage: *"Cache or store any Event Content other than for reasonable
     periods in order to provide the service you are providing."* A nightly
     rebuild (DECISIONS 0001) that replaces yesterday's data is "reasonable
-    periods... to provide the service."
+    periods... to provide the service." Since DECISIONS 0027 the calendar
+    feeds also keep a played game's published entry for 120 days after it
+    starts, so a subscriber's calendar keeps the season's games; the pages
+    still show only what Ticketmaster lists. That retention is the service
+    a season calendar provides, and is read as a "reasonable period". **This
+    is an interpretive judgment, not a verbatim permission.**
   - Sublicensing: the license is *"non-sublicenseable"*, and Event Content
     is *"owned by the organizers and/or Ticketmaster"*. Since 2026-11-03
     (DECISIONS 0024) the site no longer publishes the per-league and
@@ -655,11 +660,14 @@ re-reading the league's terms.
   - Obligation: *"Remove from your application within 24 hours any Event
     Content or other information or tickets that the owner asks you to
     remove."* Besides the nightly rebuild dropping anything Ticketmaster
-    itself stops returning, there is a per-event switch since 2026-10-17:
+    itself stops returning (from the pages at once, and from the feeds
+    120 days after the game starts, DECISIONS 0027), there is a per-event
+    switch since 2026-10-17:
     an event id added to `REMOVED_EVENTS` in
     `pipeline/src/wsc_pipeline/config.py` is left out of every page, feed
-    and data file even while Ticketmaster still lists it, and a manual
-    re-run of the pages workflow publishes the removal (ADR 0006). **Still
+    and data file even while Ticketmaster still lists it, a played game the
+    feeds keep included, and a manual re-run of the pages workflow
+    publishes the removal (ADR 0006). **Still
     an open item**: Chelsea needs a reachable contact channel (e.g. an email
     in the site footer) so such a request has somewhere to land; see §6.
   - Rate limiting: *"we reserve the right to rate limit or block
