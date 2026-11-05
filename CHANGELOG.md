@@ -136,6 +136,13 @@ archived and private.
 
 ### Fixed
 
+- Played games no longer vanish from subscribed calendars. Once Ticketmaster
+  drops a game that has started, every feed keeps its published entry (same
+  UID, canceled games still marked canceled) for 120 days after the start.
+  A game whose start, end or status changes gets a higher SEQUENCE, and any
+  change sets LAST-MODIFIED. The pages still show only listed games
+  (DECISIONS 0027).
+
 - 43 college games that were in the Big Ten and SEC calendars now also
   reach the 14 teams' own pages and feeds that were missing them, and Penn
   State and Oregon list their home games (0 before, 8 and 6 now).

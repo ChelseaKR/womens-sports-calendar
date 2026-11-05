@@ -24,10 +24,11 @@ plain destination; validate_ics refuses a feed that carries one anyway.
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 
-from icalendar import Calendar, Event, Timezone, vText
+from icalendar import Calendar, Component, Event, Timezone, vText
 
 from .normalize import Game, feed_start, feed_ticket_url, unique_by_event_id, zone_for
 from .site_data import NOTABLE_STATUSES
@@ -114,6 +115,11 @@ class DuplicateUIDError(ValueError):
     pass
 
 
+# Called on each new VEVENT before it is added (history.Revisions): sets its
+# SEQUENCE and LAST-MODIFIED against the previous publish.
+Revise = Callable[[Event], None]
+
+
 def make_uid(event_id: str) -> str:
     return f"tm-{event_id}@{UID_DOMAIN}"
 
@@ -157,6 +163,8 @@ def build_calendar(
     page_url: str | None = None,
     dtstamp: datetime | None = None,
     game_duration: timedelta | None = None,
+    kept: Sequence[Component] = (),
+    revise: Revise | None = None,
 ) -> Calendar:
     """Games with no usable date were already dropped by normalize_event.
     Games with date_tbd=True (a real Ticketmaster date placeholder, not a
@@ -189,6 +197,11 @@ def build_calendar(
     (config.estimated_duration): each timed event gets a DTEND that long
     after its start and a description line saying the end is estimated. None
     (a sport with no estimate) writes no DTEND at all.
+
+    kept is the played games this feed carried last night and keeps
+    (history.kept_played): published VEVENTs, written as they are, in date
+    order among the rest. revise, when given, sets each new event's SEQUENCE
+    and LAST-MODIFIED (history.Revisions).
     """
     games = unique_by_event_id(games)
     check_no_duplicate_uids(games)
@@ -197,7 +210,13 @@ def build_calendar(
         cal_desc = "Ticketmaster-listed games; see the site for licensing notes." if fetched else NOT_FETCHED_CALDESC
     cal = _calendar_header(cal_name=cal_name, cal_desc=cal_desc, page_url=page_url)
 
-    _add_events(cal, [_FeedEntry(game, start, page_url, game_duration) for game, start in _in_feed(games)], dtstamp)
+    _add_events(
+        cal,
+        [_FeedEntry(game, start, page_url, game_duration) for game, start in _in_feed(games)],
+        dtstamp,
+        kept=kept,
+        revise=revise,
+    )
     return cal
 
 
@@ -218,22 +237,55 @@ def _in_feed(games: list[Game]) -> list[tuple[Game, datetime | date]]:
     return sorted(((g, s) for g, s in starts if s is not None), key=lambda gs: _sort_key(gs[1]))
 
 
-def _add_events(cal: Calendar, entries: list[_FeedEntry], dtstamp: datetime | None) -> None:
-    """Each entry's VEVENT, after the VTIMEZONE of the first event in each
-    venue zone. Every feed writes its events here, so one game is the same
-    VEVENT, byte for byte, in every feed that carries it."""
-    stamp = _as_dtstamp(dtstamp) if dtstamp is not None else None
-    tzids_seen: set[str] = set()
+def _add_events(
+    cal: Calendar,
+    entries: list[_FeedEntry],
+    dtstamp: datetime | None,
+    *,
+    kept: Sequence[Component] = (),
+    revise: Revise | None = None,
+) -> None:
+    """Each entry's VEVENT, and each kept one, in date order, after the
+    VTIMEZONE of the first event in each venue zone. Every feed writes its
+    events here, so one game is the same VEVENT, byte for byte, in every feed
+    that carries it."""
+    if not entries and not kept:
+        return
+    if dtstamp is None:
+        raise ValueError("build_calendar needs dtstamp (the build's time) to write an event")
+    stamp = _as_dtstamp(dtstamp)
+    ordered: list[tuple[datetime, int, Component, str | None]] = []
     for entry in entries:
-        if stamp is None:
-            raise ValueError("build_calendar needs dtstamp (the build's time) to write an event")
         game, start = entry.game, entry.start
-        if isinstance(start, datetime) and game.tzid and game.tzid not in tzids_seen:
-            tzids_seen.add(game.tzid)
-            vtz = _vtimezone(game.tzid)
+        event = _event(game, start, page_url=entry.page_url, dtstamp=stamp, duration=entry.duration)
+        if revise is not None:
+            revise(event)
+        tzid = game.tzid if isinstance(start, datetime) else None
+        ordered.append((_sort_key(start), len(ordered), event, tzid))
+    for vevent in kept:
+        ordered.append((_kept_sort_key(vevent), len(ordered), vevent, _kept_tzid(vevent)))
+    ordered.sort(key=lambda row: (row[0], row[1]))
+    tzids_seen: set[str] = set()
+    for _, _, component, tzid in ordered:
+        if tzid and tzid not in tzids_seen:
+            tzids_seen.add(tzid)
+            vtz = _vtimezone(tzid)
             if vtz is not None:
                 cal.add_component(vtz)
-        cal.add_component(_event(game, start, page_url=entry.page_url, dtstamp=stamp, duration=entry.duration))
+        cal.add_component(component)
+
+
+def _kept_sort_key(vevent: Component) -> datetime:
+    """A kept event's place in date order (ics._sort_key for its start)."""
+    start = vevent.decoded("dtstart")
+    return _sort_key(start if isinstance(start, (datetime, date)) else date.min)
+
+
+def _kept_tzid(vevent: Component) -> str | None:
+    """The venue zone a kept event's start is written in, if any."""
+    start = vevent.get("dtstart")
+    tzid = start.params.get("TZID") if start is not None and hasattr(start, "params") else None
+    return str(tzid) if tzid else None
 
 
 def _vtimezone(tzid: str) -> Timezone | None:
@@ -304,10 +356,9 @@ def _event(
     (END_ESTIMATE_NOTE). It is added to the UTC instant and then shown in the
     venue's zone, so a game that spans a clock change still ends the
     estimated time later. An all-day event has no DTEND (RFC 5545: a date
-    start with no end lasts that one day) and no estimate. There is no
-    SEQUENCE or LAST-MODIFIED: either needs the previous published data to
-    compare against, and a value derived without it would change on every
-    build for every event.
+    start with no end lasts that one day) and no estimate. SEQUENCE and
+    LAST-MODIFIED are not written here: they need the previous publish to
+    compare against, and the caller's `revise` (history.Revisions) adds them.
     """
     event = Event()
     event.add("uid", make_uid(game.event_id))
@@ -375,6 +426,8 @@ def league_calendar(
     base_url: str | None = None,
     dtstamp: datetime | None = None,
     game_duration: timedelta | None = None,
+    kept: Sequence[Component] = (),
+    revise: Revise | None = None,
 ) -> Calendar:
     page_url = f"{base_url}/{league_slug}/" if base_url else None
     return build_calendar(
@@ -385,6 +438,8 @@ def league_calendar(
         page_url=page_url,
         dtstamp=dtstamp,
         game_duration=game_duration,
+        kept=kept,
+        revise=revise,
     )
 
 
@@ -398,6 +453,8 @@ def team_calendar(
     league_slug: str | None = None,
     dtstamp: datetime | None = None,
     game_duration: timedelta | None = None,
+    kept: Sequence[Component] = (),
+    revise: Revise | None = None,
 ) -> Calendar:
     team_games = [g for g in games if g.tracked_team_slug == team_slug]
     page_url = f"{base_url}/{league_slug}/{team_slug}/" if base_url and league_slug else None
@@ -409,6 +466,8 @@ def team_calendar(
         page_url=page_url,
         dtstamp=dtstamp,
         game_duration=game_duration,
+        kept=kept,
+        revise=revise,
     )
 
 
@@ -421,6 +480,8 @@ def combined_calendar(
     fetched: bool = True,
     base_url: str | None = None,
     dtstamp: datetime | None = None,
+    kept: Sequence[tuple[str, Sequence[Component]]] = (),
+    revise: Revise | None = None,
 ) -> Calendar:
     """Every tracked league's games in one calendar (COMBINED_FEED_PATH).
 
@@ -431,6 +492,10 @@ def combined_calendar(
     and team feeds' events, not new ones, and a subscriber who also has a
     league or team feed sees the same UID in both. A game listed under two
     leagues is written once, under the first.
+
+    kept is (league slug, the played games its league feed keeps), in the
+    same order: each is written as its league feed writes it, and a game kept
+    by two league feeds once, under the first.
     """
     entries: list[_FeedEntry] = []
     seen: set[str] = set()
@@ -442,6 +507,14 @@ def combined_calendar(
                 entries.append(_FeedEntry(game, start, league_page, duration))
     check_no_duplicate_uids([e.game for e in entries])
     entries.sort(key=lambda e: _sort_key(e.start))  # stable: each league's own order is kept
+    kept_events: list[Component] = []
+    uids = {make_uid(event_id) for event_id in seen}
+    for _league_slug, league_kept in kept:
+        for vevent in league_kept:
+            uid = str(vevent.get("uid"))
+            if uid not in uids:
+                uids.add(uid)
+                kept_events.append(vevent)
 
     page_url = f"{base_url}/" if base_url else None
     cal = _calendar_header(
@@ -449,7 +522,7 @@ def combined_calendar(
         cal_desc=calendar_description("tracked league", page_url=page_url, fetched=fetched),
         page_url=page_url,
     )
-    _add_events(cal, entries, dtstamp)
+    _add_events(cal, entries, dtstamp, kept=kept_events, revise=revise)
     return cal
 
 

@@ -57,6 +57,12 @@ alarm: their previous games are in the past, so nothing vanishes, and no
 season calendar is needed. A game a few hours away that Ticketmaster has
 already delisted is the ordinary end of a listing and is not counted.
 
+Amended 2026-11-05 (DECISIONS 0027): a delisted game is no longer the end of
+its feed entry. Once it has started, the feeds keep the published event for
+120 days. The guard still never counts it (it has started), and the build
+copies it from the same live team feeds the guard reads, plus the league
+feeds.
+
 The build is **refused** (nothing is written to `--out`, so the last good
 deploy stays live) when, for a league with no active override:
 
@@ -171,7 +177,8 @@ and in `COVERAGE.txt`, never skipped silently.
 - An entry in `REMOVED_EVENTS` is not only an acceptance: it withholds that
   event from the site and the feeds for good, even if Ticketmaster lists it
   again. Removing the entry is what brings it back.
-- The build makes up to 67 small requests to its own site before fetching from
+- The build makes one small request per team feed, plus one per league feed
+  (DECISIONS 0027), to its own site before fetching from
   Ticketmaster (fewer if the site does not answer: it gives up after five
   consecutive failures). It sends no secret.
 - The check reads the live site, so like the freshness alarm it cannot run in

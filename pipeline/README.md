@@ -122,13 +122,19 @@ used (requests, bytes).
   `DTEND` is an estimate: the start plus the sport's usual game length
   (`config.GAME_DURATIONS`, overridable per league), with "End time
   estimated; not published by the ticket source." in its description
-  (`docs/DECISIONS.md` 0015); a sport with no entry gets no `DTEND`. No
-  `SEQUENCE` or `LAST-MODIFIED` is written: both need the previous
-  published data to compare against. A ticket URL that Ticketmaster has
+  (`docs/DECISIONS.md` 0015); a sport with no entry gets no `DTEND`.
+  `SEQUENCE` and `LAST-MODIFIED` come from comparing each event with the
+  previous publish (`history.py`, `../docs/DECISIONS.md` 0027). A ticket URL that Ticketmaster has
   wrapped in Impact affiliate tracking is never written to a feed: the
   event carries the decoded destination, or no ticket link when there is
   none (`normalize.feed_ticket_url`, `impact.py`), and `validate_ics.py`
   fails on any feed with a tracking link (`../docs/DECISIONS.md` 0018).
+- `history.py` — what a build carries over from the live feeds
+  (`../docs/DECISIONS.md` 0027): a played game Ticketmaster no longer lists
+  stays in each feed that had it, as published, for `KEEP_PLAYED_DAYS`
+  (120) days after it starts; a listed game whose start, end or status
+  changed gets a higher `SEQUENCE`, and any change sets `LAST-MODIFIED`.
+  The pages are not affected.
 - `impact.py` — recognises an Impact affiliate tracking link (the
   `/c/<n>/<n>/<n>` path on any host, or a host on an Impact shared domain)
   and reads its destination from the `u` parameter.

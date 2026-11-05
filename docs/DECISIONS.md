@@ -1006,3 +1006,61 @@ Revisit if Search Console shows the team pages losing position after
 Google recrawls them, or if a league adds teams whose `title_name` is not
 what fans search.
 
+
+## 0027 — Played games stay in the feeds for 120 days; changed events carry SEQUENCE and LAST-MODIFIED (2026-11-05)
+
+**Why:** The 2026-11-05 quality audit found no event before Nov 5 in any of
+the 90 live feeds: Ticketmaster drops a game from its listing once it starts,
+the feeds mirrored that, and a subscriber's calendar lost each game the night
+after it was played (Tennessee–Duquesne Nov 2, Michigan State–Valparaiso
+Nov 3, Oregon–Hawai'i Nov 2). Fans use the calendar as a record of the
+season. Chelsea approved keeping them (decision D9).
+
+**What changes (`history.py`, applied in `build.build`):**
+
+- **Kept, as published.** A feed writes again an event its previous publish
+  carried when Ticketmaster no longer lists the game at all, the game has
+  started (an all-day game: its date is over), it started no more than
+  `KEEP_PLAYED_DAYS` (120) days ago, and its event id is not in
+  `REMOVED_EVENTS`. The VEVENT is copied as it was, with only DTSTAMP set to
+  tonight's fetch: same UID, summary, times, location, ticket link,
+  description, STATUS, SEQUENCE and LAST-MODIFIED. No score or result is
+  added, and nothing is re-derived. A game Ticketmaster still lists but a
+  rule here leaves out is never kept: the test is Ticketmaster's listing.
+- **Canceled and postponed stay marked.** A game that was "Canceled: " with
+  STATUS:CANCELLED, or "Postponed: " with STATUS:TENTATIVE, when it was
+  last listed is kept exactly so. A delisted game that has not started is
+  not kept (it may be off); the publish guard (ADR 0006) still judges those.
+- **Every feed keeps its own.** Team feeds keep from the live team feeds,
+  league feeds from the live league feeds (six more small requests a
+  night), and `all.ics` keeps the league feeds' kept events, byte for byte,
+  first league first, as it does for listed games.
+- **Revisions.** A listed game is compared with its previous publish. A new
+  start, end or STATUS raises SEQUENCE by one (RFC 5545 3.8.7.4); any
+  change to those, SUMMARY, LOCATION or URL sets LAST-MODIFIED to the
+  fetch time; an unchanged event keeps both as published. A game first
+  published tonight gets LAST-MODIFIED now, but only when every previous
+  feed was read: otherwise no LAST-MODIFIED is written for it, since a
+  guessed date would be absence shown as a value. SEQUENCE 0 is left off
+  (the RFC default). The UID never changes.
+- **The pages do not change.** Team and league pages still show only what
+  Ticketmaster lists now, with ticket links; a played game has neither a
+  ticket to sell nor a fresh listing to show. The record beside each page
+  names its feed's kept games (`kept_played_in_feed`, never deployed, and
+  outside the sitemap fingerprint, so lastmod does not move).
+- **Size.** On 2026-11-05 `all.ics` held 591 events in 400 KB (about 650
+  bytes an event; 36 KB gzipped), 557 of them starting within 120 days. A
+  feed now holds about one season's window: if all 557 are played and
+  kept, `all.ics` around 2027-03-05 carries them plus whatever is listed
+  then, about 360 KB more than an upcoming-only feed.
+
+**Enforced by** `validate_ics` check 13 (a kept event is named in its page
+record and not also listed, has started, is inside the window, is not a
+removed event, and still carries the marker and note of its STATUS) and
+`tests/test_keep_played_games.py` (two and three builds in a row over a mock
+transport, the window edges, canceled games, removals, and a control for
+each validate_ics refusal).
+
+Revisit if a subscriber asks for upcoming-only feeds (a separate feed, not
+a change to these), or if Ticketmaster's storage term is read more narrowly
+(docs/LICENSES-AND-ATTRIBUTION.md, Storage).

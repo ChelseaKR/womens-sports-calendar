@@ -49,7 +49,7 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, time, timedelta
 
 import httpx
-from icalendar import Calendar
+from icalendar import Calendar, Component
 
 from . import config
 from .ics import FEED_STATUS, NOT_FETCHED_CALDESC, TIME_TBA_SUFFIX, UID_DOMAIN
@@ -112,6 +112,19 @@ class PreviousPublish:
     # Teams whose previous file could not be read, and why. Not compared.
     unreadable: dict[TeamKey, str] = field(default_factory=dict)
     fetched_at: str | None = None  # the oldest DTSTAMP (the build's fetch time) among the feeds read
+    # Every VEVENT of each feed read, by its path ("ics/wnba.ics",
+    # "ics/wnba/indiana-fever.ics"): the team feeds above and the league
+    # feeds, for history.py (played games kept, SEQUENCE, LAST-MODIFIED).
+    # The guard's own rules read only `games`.
+    feeds: dict[str, list[Component]] = field(default_factory=dict)
+    # League feeds that could not be read, and why (a team's are in
+    # `unreadable`). Their played games cannot be kept tonight.
+    unreadable_feeds: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def fully_read(self) -> bool:
+        """Every team and league feed was read (a new team's 404 counts)."""
+        return bool(self.games) and not self.unreadable and not self.unreadable_feeds
 
 
 @dataclass(frozen=True)
@@ -248,10 +261,23 @@ def _parse_previous_team(feed: bytes) -> tuple[str | None, list[PreviousGame]] |
     return fetched_at, games
 
 
+def _feed_events(feed: bytes) -> list[Component] | None:
+    """Every VEVENT of a fetched feed, or None when it is not one (the same
+    test as _parse_previous_team)."""
+    try:
+        cal = Calendar.from_ical(feed)
+    except Exception:  # icalendar raises ValueError and others on bad input
+        return None
+    if not isinstance(cal, Calendar) or str(cal.get("x-wr-caldesc", "")).startswith(NOT_FETCHED_CALDESC):
+        return None
+    return list(cal.walk("VEVENT"))
+
+
 def fetch_previous_publish(base_url: str, *, client: httpx.Client | None = None) -> PreviousPublish:
-    """The live site's per-team calendar feeds. Never raises: whatever
-    cannot be read is recorded in `unreadable` and reported, and costs only
-    that team's comparison."""
+    """The live site's per-team calendar feeds, then its league feeds (for
+    history.py only). Never raises: whatever cannot be read is recorded in
+    `unreadable` (or `unreadable_feeds`) and reported, and costs only that
+    team's comparison."""
     previous = PreviousPublish()
     owns_client = client is None
     http = client or httpx.Client(timeout=10.0, headers={"User-Agent": USER_AGENT}, follow_redirects=True)
@@ -284,13 +310,41 @@ def fetch_previous_publish(base_url: str, *, client: httpx.Client | None = None)
                 continue
             fetched_at, games = parsed
             previous.games[key] = games
+            previous.feeds[f"ics/{league.slug}/{team.slug}.ics"] = _feed_events(response.content) or []
             if fetched_at:
                 fetched_times.append(fetched_at)
+        _fetch_league_feeds(http, base_url, previous, transport_failures)
     finally:
         if owns_client:
             http.close()
     previous.fetched_at = min(fetched_times) if fetched_times else None
     return previous
+
+
+def _fetch_league_feeds(http: httpx.Client, base_url: str, previous: PreviousPublish, transport_failures: int) -> None:
+    """Each league feed's events into previous.feeds, or why not into
+    previous.unreadable_feeds, giving up as the team loop does."""
+    for league in config.LEAGUES:
+        path = f"ics/{league.slug}.ics"
+        if transport_failures >= _GIVE_UP_AFTER:
+            previous.unreadable_feeds[path] = "not tried: the site did not answer the requests before it"
+            continue
+        try:
+            response = http.get(f"{base_url}/{path}")
+        except httpx.HTTPError as exc:
+            transport_failures += 1
+            previous.unreadable_feeds[path] = f"request failed ({type(exc).__name__})"
+            continue
+        transport_failures = 0
+        if response.status_code == 404:
+            previous.feeds[path] = []  # a new league: nothing to keep
+            continue
+        events = _feed_events(response.content) if response.status_code == 200 else None
+        if events is None:
+            why = f"HTTP {response.status_code}" if response.status_code != 200 else "not a fetched feed"
+            previous.unreadable_feeds[path] = why
+            continue
+        previous.feeds[path] = events
 
 
 def _active_overrides(
