@@ -136,6 +136,16 @@ archived and private.
 
 ### Fixed
 
+- Doubleheaders and showcases no longer pass off the event's start as a
+  team's tip-off. An event listing whose name names no single matchup keeps
+  its time, now labeled "(event start; game time not listed)" on the page
+  and in the calendar, and is dropped from a team that has its own listing
+  for that night at that venue: Nebraska's "MarketBeat Invitational" (1:00
+  PM CT, the first game's slot; Nebraska plays at 3:30) is labeled, and
+  Vanderbilt's Dec 18 is listed once, by its Belmont listing, instead of
+  also under the 5:00 PM doubleheader. Season-ticket, parking, suite, pass
+  and package listings, and matchups that name a men's team, are left out
+  of every page and feed, and named in COVERAGE.txt (DECISIONS 0026).
 - The Montreal Victoire's page and calendar feed list its games again. The
   live build of 2026-11-04 had 23 Victoire games in the PWHL calendar and 1
   on the team's own page, which said no home game was listed: Ticketmaster

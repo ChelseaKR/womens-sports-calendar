@@ -8,11 +8,13 @@ substitution is documented here and in the printed report, not hidden.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 
 from . import guard
 from .config import League
+from .listings import DroppedListing
 from .normalize import Game, feed_start, unique_by_event_id, zone_problem
 
 # How many games a report line names before it counts the rest.
@@ -46,6 +48,9 @@ class LeagueCoverage:
     teams_truncated: list[str] = field(default_factory=list)
     teams_with_mismatched_events: list[str] = field(default_factory=list)
     zone_fallbacks: list[ZoneFallback] = field(default_factory=list)
+    # Team listings left out because they are not one of the team's games
+    # (listings.only_games), described one per line.
+    dropped_listings: list[str] = field(default_factory=list)
 
     @property
     def team_hit_rate(self) -> float:
@@ -92,6 +97,7 @@ def compute_league_coverage(
     games: list[Game],
     truncated_team_slugs: set[str],
     mismatched_team_slugs: set[str] | None = None,
+    dropped: Sequence[DroppedListing] = (),
 ) -> LeagueCoverage:
     teams_with_games = {g.tracked_team_slug for g in games}
     # Games are counted once per event; teams_with_games above still uses
@@ -111,6 +117,7 @@ def compute_league_coverage(
         teams_truncated=sorted(truncated_team_slugs),
         teams_with_mismatched_events=sorted(mismatched_team_slugs or set()),
         zone_fallbacks=zone_fallbacks(unique_games),
+        dropped_listings=[d.describe() for d in dropped],
     )
 
 
@@ -179,6 +186,13 @@ def render_report(coverage: BuildCoverage) -> str:
                 f"that did not actually name the team (a false-positive "
                 f"match, e.g. wrong sport/wrong team at the same venue or "
                 f"city) for: {', '.join(lc.teams_with_mismatched_events)}"
+            )
+        if lc.dropped_listings:
+            shown = "; ".join(lc.dropped_listings[:MAX_NAMED_GAMES])
+            more = len(lc.dropped_listings) - MAX_NAMED_GAMES
+            lines.append(
+                f"  NOTE: left out {len(lc.dropped_listings)} team listing(s) that are not one of the team's "
+                f"games: {shown}" + (f"; and {more} more" if more > 0 else "")
             )
         if lc.zone_fallbacks:
             named = "; ".join(f"{z.event_id} ({z.event_name}): {z.reason}" for z in lc.zone_fallbacks[:MAX_NAMED_GAMES])

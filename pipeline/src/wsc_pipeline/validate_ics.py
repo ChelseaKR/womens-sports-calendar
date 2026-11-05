@@ -76,6 +76,7 @@ from icalendar import Calendar, Component
 from . import config
 from .ics import COMBINED_FEED_PATH, END_ESTIMATE_NOTE, FEED_STATUS, TIME_TBA_NOTE, TIME_TBA_SUFFIX, make_uid
 from .impact import is_impact_link
+from .listings import EVENT_START_NOTE, EVENT_START_SUFFIX
 from .site_data import records_dir
 
 REQUIRED_VEVENT_PROPS = ("uid", "dtstamp", "dtstart", "summary")
@@ -226,6 +227,7 @@ def _check_start_kinds(feed: Path, games: list[dict[str, Any]], events: dict[str
         if not all_day:
             if not isinstance(start, datetime):
                 raise FeedError(f"{feed}: {uid} has an exact start on its page but an all-day DTSTART in the feed")
+            _check_event_start_label(feed, uid, game, vevent)
             continue
         if isinstance(start, datetime) or start != date.fromisoformat(game["start_local_date"]):
             raise FeedError(
@@ -238,6 +240,20 @@ def _check_start_kinds(feed: Path, games: list[dict[str, Any]], events: dict[str
             raise FeedError(f"{feed}: {uid} is all-day but its DESCRIPTION lacks the time-TBA note")
         if vevent.get("dtend") is not None or vevent.get("duration") is not None:
             raise FeedError(f"{feed}: {uid} is all-day but has an end time; none is ever estimated for it")
+
+
+def _check_event_start_label(feed: Path, uid: str, game: dict[str, Any], vevent: Component) -> None:
+    """A timed game the page marks as an event's start (a doubleheader or
+    showcase, listings.event_start_only) says so in its SUMMARY and
+    DESCRIPTION, and no other game does; raises FeedError otherwise."""
+    labeled = str(vevent.get("summary")).endswith(EVENT_START_SUFFIX)
+    if game.get("event_start_only"):
+        if not labeled:
+            raise FeedError(f"{feed}: {uid} starts at its event's start but its SUMMARY does not say so")
+        if EVENT_START_NOTE not in str(vevent.get("description", "")):
+            raise FeedError(f"{feed}: {uid} starts at its event's start but its DESCRIPTION lacks the note")
+    elif labeled:
+        raise FeedError(f"{feed}: {uid} is labeled as an event's start but its page shows a game time")
 
 
 def _check_dtstamps(feed: Path, events: dict[str, Component], fetched_at: str | None) -> None:

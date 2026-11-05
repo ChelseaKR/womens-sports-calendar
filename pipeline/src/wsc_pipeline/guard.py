@@ -53,6 +53,7 @@ from icalendar import Calendar
 
 from . import config
 from .ics import FEED_STATUS, NOT_FETCHED_CALDESC, TIME_TBA_SUFFIX, UID_DOMAIN
+from .listings import EVENT_START_SUFFIX
 from .normalize import Game, feed_start
 from .site_data import NOTABLE_STATUSES
 from .ticketmaster import USER_AGENT
@@ -189,10 +190,11 @@ def _event_id_from_uid(uid: str) -> str:
 
 
 def _name_from_summary(summary: str, status: str | None) -> str:
-    """The event name without the feed's status prefix and time-TBA suffix."""
+    """The event name without the feed's status prefix and its time-TBA or
+    event-start suffix."""
     if status:
         summary = summary.removeprefix(FEED_STATUS[status].summary_prefix)
-    return summary.removesuffix(TIME_TBA_SUFFIX)
+    return summary.removesuffix(TIME_TBA_SUFFIX).removesuffix(EVENT_START_SUFFIX)
 
 
 def _parse_previous_event(vevent: object) -> tuple[PreviousGame, datetime | None]:
