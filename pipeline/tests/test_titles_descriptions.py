@@ -209,10 +209,12 @@ def test_big_ten_names_are_short_in_titles_descriptions_and_the_h1(dist: Path):
     assert description.startswith("Ohio State women's basketball (Big Ten) schedule 2026")
     assert "Buckeyes" not in title and "Womens" not in title
     assert "vs Rutgers." in description and "Scarlet Knights" not in description
-    # The heading uses the short name; the rest of the page, its feed and its
-    # address keep the full name.
+    # The heading and the lede use the short name (DECISIONS 0025); the games,
+    # the feed and the address keep the full name.
     assert "<h1>Ohio State women&#x27;s basketball 2026 schedule and home games</h1>" in html
-    assert "Every Ohio State Buckeyes Womens Basketball (" in html
+    assert '<p class="lede">The next Ohio State women&#x27;s basketball home game is against Rutgers ' in html
+    assert "Every Ohio State Buckeyes Womens Basketball (" not in html
+    assert "Ohio State Buckeyes Womens Basketball vs Rutgers Scarlet Knights Womens Basketball" in html
     assert team.slug == "ohio-state-buckeyes-womens-basketball"
     assert team.shown_name == "Ohio State Buckeyes Womens Basketball"
 

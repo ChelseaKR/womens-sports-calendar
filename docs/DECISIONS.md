@@ -930,3 +930,52 @@ schedule passed licensing.
 
 Revisit when Ticketmaster changes its terms, when a second data source
 passes 0003, or if Ticketmaster agrees in writing to other affiliate links.
+
+## 0025 — A team page opens with its next home game, in the name fans search (2026-11-04)
+
+**Why:** Search Console (2026-10-21 to 11-03) put the Big Ten team pages at
+an average position of about 9.5, and the USC page earned clicks. Their
+titles, descriptions and headings already use the name fans type ("USC
+women's basketball", `Team.title_name`, #59, #63, #65), but the body opened
+with the Ticketmaster keyword and the league's registry name: "Every USC
+Trojans Womens Basketball (NCAA Women's Basketball (Big Ten)) game
+Ticketmaster lists...". The next home game, which is what the page is
+searched for, came only after the subscribe block.
+
+**What changes (`site._team_lede`):**
+
+- The lede's first sentence is the next listed home game (the same game the
+  "Next home game" section shows): opponent, venue and city, date, and the
+  start in the venue's time zone. "The next USC women's basketball home
+  game is against Utah State Aggies at Galen Center in Los Angeles, CA, on
+  Sunday, November 8, 2026, at 5:00 PM PST."
+- **The name** is `title_name_for` (the team's `title_name`, else its shown
+  name), and the league link says the league's `short_name` ("Big Ten",
+  "SEC"; "WNBA" and the others are unchanged). The opponent is
+  `_opponent_label`, which the meta description already uses. No new names
+  or nicknames were written; a team with no `title_name` keeps the name it
+  had. The Ticketmaster keyword still names each game in the hero, the
+  table and the feeds.
+- **Absence is said, not filled in.** A part Ticketmaster did not publish
+  is left out (no opponent, no venue) or said in words ("start time not
+  announced yet", "its date is not announced yet"). With no home game
+  listed: "Ticketmaster lists no upcoming <team> home game as of <date>.",
+  and with no game at all, "...game, home or away, as of <date>.". The date
+  is the UTC date of the build's Ticketmaster read, the one the freshness
+  note gives; with no recorded read time it says "right now". A build that
+  did not fetch says what the page lists and nothing about games.
+- The second sentence keeps what the lede said before, in the same name:
+  every game listed for the season, with ticket links and the "Home" mark,
+  each only when the page backs it.
+- Nothing else moves: no title, description, heading, structured data,
+  feed or block order changes, and no price appears (0013). The team-order
+  goldens were re-rendered for the lede only.
+
+**Enforced by** `tests/test_team_lede.py`, including a control that the
+no-home-game check rejects a blank, "TBD", raw-keyword or undated
+sentence, and a check over every team page of the fixture-site build.
+
+Revisit if Search Console shows the team pages losing position after
+Google recrawls them, or if a league adds teams whose `title_name` is not
+what fans search.
+
