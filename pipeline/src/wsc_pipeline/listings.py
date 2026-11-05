@@ -52,7 +52,7 @@ import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from .normalize import Game, _normalize_for_match
+from .normalize import Game, _normalize_for_match, parse_event_name
 
 # What a ticket product's name says. Matched as whole words on the
 # normalized name (apostrophes dropped, punctuation a space).
@@ -123,6 +123,25 @@ def _names_mens_team(game: Game) -> bool:
         return any(_MENS.search(_normalize_for_match(s)) for s in sides)
     name = _normalize_for_match(game.raw_event_name or "")
     return bool(_MENS.search(name)) and not _WOMENS.search(name)
+
+
+def name_says_not_a_game(name: str) -> str | None:
+    """Why a listing's name alone says it is not a team's game (a ticket
+    product, or a matchup naming a men's team), else None: the name rules of
+    only_games for an event that is known only by its name, such as a played
+    game a feed keeps (history.py). The doubleheader rule needs the team's
+    other listings and is not applied."""
+    normalized = _normalize_for_match(name)
+    if NON_GAME_PRODUCT.search(normalized):
+        return "a ticket product, not a game"
+    matchup = parse_event_name(name, [])
+    if matchup.home_away_known:
+        sides = [s for s in (matchup.home, matchup.away) if s]
+        if any(_MENS.search(_normalize_for_match(s)) for s in sides):
+            return "names a men's team"
+    elif _MENS.search(normalized) and not _WOMENS.search(normalized):
+        return "names a men's team"
+    return None
 
 
 def _venue_key(game: Game) -> str | None:
