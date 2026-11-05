@@ -58,6 +58,13 @@ publish a broken or inconsistent feed:
    no event (DECISIONS 0024). Each page's own payload stays in the build's
    records beside dist and is never published as a bulk copy of the
    Ticketmaster listings.
+13. A played game a feed keeps (history.py, DECISIONS 0027) is named in its
+   page's record (`kept_played_in_feed`) and is not also one of the page's
+   games; it has started before the build's fetch time and no more than
+   history.KEEP_PLAYED_DAYS before it; its event id is not in
+   config.REMOVED_EVENTS; and its SUMMARY and DESCRIPTION carry the
+   marker and note of any STATUS it has, so a game that was canceled stays
+   marked canceled. Check 4 counts these games with the page's own.
 
 Usage: python -m wsc_pipeline.validate_ics <dist-dir>
 """
@@ -73,7 +80,7 @@ from typing import Any
 
 from icalendar import Calendar, Component
 
-from . import config
+from . import config, history
 from .ics import COMBINED_FEED_PATH, END_ESTIMATE_NOTE, FEED_STATUS, TIME_TBA_NOTE, TIME_TBA_SUFFIX, make_uid
 from .impact import is_impact_link
 from .listings import EVENT_START_NOTE, EVENT_START_SUFFIX
@@ -169,10 +176,15 @@ def _page_data(feed: Path, data: Path) -> dict[str, Any]:
     return payload
 
 
-def _check_matches_page(feed: Path, games: list[dict[str, Any]], uids: set[str]) -> None:
+def _check_matches_page(feed: Path, games: list[dict[str, Any]], uids: set[str], kept: set[str] | None = None) -> None:
     """The feed's UIDs equal the UIDs of the games its page lists as in the
-    calendar feed; raises FeedError otherwise."""
-    expected = {make_uid(g["event_id"]) for g in games if g["in_calendar_feed"]}
+    calendar feed, plus the played games it keeps (check 13); raises
+    FeedError otherwise."""
+    kept = kept or set()
+    listed = {make_uid(g["event_id"]) for g in games}
+    if kept & listed:
+        raise FeedError(f"{feed}: kept as played but also one of its page's games: {sorted(kept & listed)[:5]}")
+    expected = {make_uid(g["event_id"]) for g in games if g["in_calendar_feed"]} | kept
     if uids != expected:
         raise FeedError(
             f"{feed}: feed and page disagree -- in the page's data but not the feed: "
@@ -256,6 +268,39 @@ def _check_event_start_label(feed: Path, uid: str, game: dict[str, Any], vevent:
         raise FeedError(f"{feed}: {uid} is labeled as an event's start but its page shows a game time")
 
 
+def _check_kept_played(feed: Path, events: dict[str, Component], kept: set[str], fetched_at: str | None) -> None:
+    """Each kept played game (check 13): started before the fetch, within
+    the keep window, not a removed event, and marked as its STATUS says;
+    raises FeedError otherwise."""
+    if not kept:
+        return
+    if not fetched_at:
+        raise FeedError(f"{feed}: keeps played games but its page's data records no fetch time")
+    built = datetime.fromisoformat(fetched_at)
+    removed = {make_uid(r.event_id) for r in config.REMOVED_EVENTS}
+    for uid in sorted(kept):
+        vevent = events[uid]
+        if uid in removed:
+            raise FeedError(f"{feed}: {uid} was removed on request (REMOVED_EVENTS) and must not be kept")
+        if not history.has_been_played(vevent, built):
+            raise FeedError(f"{feed}: {uid} is kept as played but has not started by the fetch time")
+        if not history.within_keep_window(vevent, built):
+            raise FeedError(
+                f"{feed}: {uid} is kept as played but started more than {history.KEEP_PLAYED_DAYS} days ago"
+            )
+        raw_status = vevent.get("status")
+        if raw_status is None:
+            continue
+        rules = [fs for fs in FEED_STATUS.values() if fs.ics_status == str(raw_status)]
+        if not rules:
+            raise FeedError(f"{feed}: {uid} is kept with STATUS {raw_status!s}, which the feeds never write")
+        rule = rules[0]
+        if not str(vevent.get("summary")).startswith(rule.summary_prefix) or not str(
+            vevent.get("description", "")
+        ).startswith(rule.note):
+            raise FeedError(f"{feed}: {uid} is kept with STATUS {raw_status!s} but its SUMMARY or DESCRIPTION drops it")
+
+
 def _check_dtstamps(feed: Path, events: dict[str, Component], fetched_at: str | None) -> None:
     """Every DTSTAMP is a UTC date-time no later than the build's fetch time;
     raises FeedError otherwise."""
@@ -308,7 +353,9 @@ def validate_feed(feed: Path, data: Path, page_path: str) -> int:
     check_no_price_text(feed, events)
     page = _page_data(feed, data)
     games = page["games"]
-    _check_matches_page(feed, games, set(events))
+    kept = {make_uid(event_id) for event_id in page.get(history.KEPT_PLAYED_KEY, [])}
+    _check_matches_page(feed, games, set(events), kept)
+    _check_kept_played(feed, events, kept, page.get("fetched_at"))
     _check_status_matches_page(feed, games, events)
     _check_start_kinds(feed, games, events)
     _check_dtstamps(feed, events, page.get("fetched_at"))

@@ -31,6 +31,7 @@ from . import (
     config,
     feeds,
     guard,
+    history,
     ics,
     indexnow,
     listings,
@@ -242,6 +243,10 @@ def build(
         games, truncated, mismatched, requests_made, bytes_received = fetch_all_games(api_key)  # may raise
     else:
         games, truncated, mismatched, requests_made, bytes_received = [], {}, {}, 0, 0
+    # Every event Ticketmaster lists tonight, before this build's own rules
+    # leave any out: a played game is kept in the feeds only once Ticketmaster
+    # no longer lists it (history.py), never because a rule here dropped it.
+    listed_event_ids = frozenset(g.event_id for g in games)
     # An event named in config.REMOVED_EVENTS is withheld from every page,
     # feed and data file, even while Ticketmaster still lists it: the
     # Ticketmaster terms' removal within 24 hours on request (ADR 0006). The
@@ -267,6 +272,7 @@ def build(
             guard_report = guard.evaluate(previous_publish, games, truncated, now=fetched_at)
             if guard_report.refused:
                 raise guard.PublishRefused(guard_report)
+    feed_history = _feed_history(previous_publish, listed_event_ids, fetched_at)
 
     tmp_dir = out_dir.with_name(out_dir.name + ".tmp")
     # Each page's payload, kept beside the site and never deployed
@@ -302,10 +308,19 @@ def build(
         publish_guard=guard_report,
     )
 
-    _write_ics(tmp_dir, base_url, games_by_league, api_key_present, dtstamp=fetched_at)
-    _write_combined_ics(tmp_dir, base_url, games_by_league, api_key_present, dtstamp=fetched_at)
+    _write_ics(tmp_dir, base_url, games_by_league, api_key_present, dtstamp=fetched_at, feed_history=feed_history)
+    _write_combined_ics(
+        tmp_dir, base_url, games_by_league, api_key_present, dtstamp=fetched_at, feed_history=feed_history
+    )
     fingerprints = _write_data(
-        tmp_dir, tmp_records, base_url, games_by_league, api_key_present, truncated, fetched_at=fetched_at
+        tmp_dir,
+        tmp_records,
+        base_url,
+        games_by_league,
+        api_key_present,
+        truncated,
+        fetched_at=fetched_at,
+        feed_history=feed_history,
     )
     # A Ticketmaster event URL can arrive already wrapped in Impact affiliate
     # tracking (docs/LICENSES-AND-ATTRIBUTION.md §3): the pages then label it
@@ -356,6 +371,28 @@ def _replace_dir(built: Path, final: Path) -> None:
     built.rename(final)
 
 
+def _feed_history(
+    previous_publish: guard.PreviousPublish | None, listed_event_ids: frozenset[str], fetched_at: datetime | None
+) -> history.FeedHistory:
+    """What this build carries over from the previous publish's feeds
+    (history.py): nothing when it fetched nothing or did not read them."""
+    if fetched_at is None or previous_publish is None or not previous_publish.feeds:
+        return history.FeedHistory()
+    return history.from_previous(
+        previous_publish.feeds,
+        complete=previous_publish.fully_read,
+        listed_event_ids=listed_event_ids,
+        removed_event_ids=frozenset(r.event_id for r in config.REMOVED_EVENTS),
+        now=fetched_at,
+    )
+
+
+def _kept_ids(feed_history: history.FeedHistory, feed_path: str) -> list[str]:
+    """The event ids of the played games a feed keeps, for its page record
+    (validate_ics checks the feed against it)."""
+    return [event_id for e in feed_history.kept_in(feed_path) if (event_id := history.event_id_of(e))]
+
+
 def without_removed_events(games: list[Game], removals: tuple[config.EventRemoval, ...] | None = None) -> list[Game]:
     """`games` without any event config.REMOVED_EVENTS names (or `removals`,
     for a test). An event id is matched exactly; nothing else is dropped."""
@@ -370,15 +407,26 @@ def _write_ics(
     fetched: bool,
     *,
     dtstamp: datetime | None,
+    feed_history: history.FeedHistory | None = None,
 ) -> None:
     """dtstamp is the build's fetch time (None only when nothing was fetched,
     so no event is written to stamp): every event's DTSTAMP, the same in
-    every feed of one build."""
+    every feed of one build. feed_history is the played games each feed
+    keeps and the revision numbering (history.py)."""
+    feed_history = feed_history or history.FeedHistory()
     for lg in config.LEAGUES:
         games = games_by_league[lg.slug]
         duration = config.estimated_duration(lg)
         cal = ics.league_calendar(
-            lg.slug, lg.name, games, fetched=fetched, base_url=base_url, dtstamp=dtstamp, game_duration=duration
+            lg.slug,
+            lg.name,
+            games,
+            fetched=fetched,
+            base_url=base_url,
+            dtstamp=dtstamp,
+            game_duration=duration,
+            kept=feed_history.kept_in(f"ics/{lg.slug}.ics"),
+            revise=feed_history.revisions,
         )
         (out_dir / "ics" / f"{lg.slug}.ics").write_bytes(cal.to_ical())
         team_dir = out_dir / "ics" / lg.slug
@@ -393,6 +441,8 @@ def _write_ics(
                 league_slug=lg.slug,
                 dtstamp=dtstamp,
                 game_duration=duration,
+                kept=feed_history.kept_in(f"ics/{lg.slug}/{team.slug}.ics"),
+                revise=feed_history.revisions,
             )
             feed = team_cal.to_ical()
             (team_dir / f"{team.slug}.ics").write_bytes(feed)
@@ -411,15 +461,19 @@ def _write_combined_ics(
     fetched: bool,
     *,
     dtstamp: datetime | None,
+    feed_history: history.FeedHistory | None = None,
 ) -> None:
     """ics/all.ics: every league's events in one feed, each exactly as its
     league feed has it (same UID), so a subscriber of both never gets a game
-    twice under two UIDs."""
+    twice under two UIDs. Its played games are the league feeds' kept ones."""
+    feed_history = feed_history or history.FeedHistory()
     combined = ics.combined_calendar(
         [(lg.slug, games_by_league[lg.slug], config.estimated_duration(lg)) for lg in config.LEAGUES],
         fetched=fetched,
         base_url=base_url,
         dtstamp=dtstamp,
+        kept=[(lg.slug, feed_history.kept_in(f"ics/{lg.slug}.ics")) for lg in config.LEAGUES],
+        revise=feed_history.revisions,
     )
     (out_dir / ics.COMBINED_FEED_PATH).write_bytes(combined.to_ical())
 
@@ -433,12 +487,17 @@ def _write_data(
     truncated: dict[str, set[str]],
     *,
     fetched_at: datetime | None = None,
+    feed_history: history.FeedHistory | None = None,
 ) -> dict[str, str]:
     """Writes each league and team page's payload to records_dir (not
     deployed), data/site.json (counts only) to the site, and returns each
     schedule page's fingerprint (sitemap.fingerprint), keyed by its site
     path: the league and team pages render from exactly these payloads, and
-    the home page from the per-league counts in site.json."""
+    the home page from the per-league counts in site.json. Each record also
+    names the played games its feed keeps (`kept_played_in_feed`, after the
+    fingerprint: the page does not show them, so they never move its
+    lastmod)."""
+    feed_history = feed_history or history.FeedHistory()
     data_dir = out_dir / "data"
     provenance = site_data.provenance(fetched_at)
     fingerprints: dict[str, str] = {}
@@ -448,6 +507,7 @@ def _write_data(
         payload = site_data.league_data(lg, games, fetched=api_key_present, possibly_incomplete_teams=incomplete)
         fingerprints[f"/{lg.slug}/"] = sitemap.fingerprint(payload)
         payload.update(provenance)
+        payload[history.KEPT_PLAYED_KEY] = _kept_ids(feed_history, f"ics/{lg.slug}.ics")
         (records_dir / f"{lg.slug}.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
         team_dir = records_dir / lg.slug
         team_dir.mkdir(exist_ok=True)
@@ -457,6 +517,7 @@ def _write_data(
             )
             fingerprints[f"/{lg.slug}/{team.slug}/"] = sitemap.fingerprint(team_payload)
             team_payload.update(provenance)
+            team_payload[history.KEPT_PLAYED_KEY] = _kept_ids(feed_history, f"ics/{lg.slug}/{team.slug}.ics")
             (team_dir / f"{team.slug}.json").write_text(json.dumps(team_payload, indent=2), encoding="utf-8")
 
     summary = site_data.site_summary(
