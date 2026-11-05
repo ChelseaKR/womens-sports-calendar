@@ -141,6 +141,12 @@ archived and private.
 
 ### Fixed
 
+- A women's basketball game whose opponent Ticketmaster named with another
+  sport's word no longer shows that word: Texas's Nov 7 home game was
+  "against Northern Colorado Bears Football" and is now against "Northern
+  Colorado Bears". A listing of another sport (football, baseball,
+  volleyball and so on) is left out of every page and feed and named in
+  COVERAGE.txt (DECISIONS 0031).
 - Doubleheaders and showcases no longer pass off the event's start as a
   team's tip-off. An event listing whose name names no single matchup keeps
   its time, now labeled "(event start; game time not listed)" on the page

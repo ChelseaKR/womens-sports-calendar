@@ -14,7 +14,7 @@ from datetime import datetime
 
 from . import guard
 from .config import League
-from .listings import DroppedListing
+from .listings import DroppedListing, RelabeledListing
 from .normalize import Game, feed_start, unique_by_event_id, zone_problem
 
 # How many games a report line names before it counts the rest.
@@ -51,6 +51,9 @@ class LeagueCoverage:
     # Team listings left out because they are not one of the team's games
     # (listings.only_games), described one per line.
     dropped_listings: list[str] = field(default_factory=list)
+    # Team listings kept with another sport's word taken off the opponent's
+    # name (listings.fix_opponent_sport), described one per line.
+    relabeled_listings: list[str] = field(default_factory=list)
 
     @property
     def team_hit_rate(self) -> float:
@@ -98,6 +101,7 @@ def compute_league_coverage(
     truncated_team_slugs: set[str],
     mismatched_team_slugs: set[str] | None = None,
     dropped: Sequence[DroppedListing] = (),
+    relabeled: Sequence[RelabeledListing] = (),
 ) -> LeagueCoverage:
     teams_with_games = {g.tracked_team_slug for g in games}
     # Games are counted once per event; teams_with_games above still uses
@@ -118,6 +122,7 @@ def compute_league_coverage(
         teams_with_mismatched_events=sorted(mismatched_team_slugs or set()),
         zone_fallbacks=zone_fallbacks(unique_games),
         dropped_listings=[d.describe() for d in dropped],
+        relabeled_listings=[r.describe() for r in relabeled],
     )
 
 
@@ -193,6 +198,13 @@ def render_report(coverage: BuildCoverage) -> str:
             lines.append(
                 f"  NOTE: left out {len(lc.dropped_listings)} team listing(s) that are not one of the team's "
                 f"games: {shown}" + (f"; and {more} more" if more > 0 else "")
+            )
+        if lc.relabeled_listings:
+            shown = "; ".join(lc.relabeled_listings[:MAX_NAMED_GAMES])
+            more = len(lc.relabeled_listings) - MAX_NAMED_GAMES
+            lines.append(
+                f"  NOTE: {len(lc.relabeled_listings)} listing(s) named the opponent with another sport's word, "
+                f"left off the page and feed: {shown}" + (f"; and {more} more" if more > 0 else "")
             )
         if lc.zone_fallbacks:
             named = "; ".join(f"{z.event_id} ({z.event_name}): {z.reason}" for z in lc.zone_fallbacks[:MAX_NAMED_GAMES])
