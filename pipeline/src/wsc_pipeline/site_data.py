@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfo
 
 from . import official_tickets
 from .config import League, Team
+from .listings import EVENT_START_SUFFIX, event_start_only
 from .normalize import (
     Game,
     display_start,
@@ -52,7 +53,9 @@ def game_to_dict(game: Game) -> dict[str, Any]:
         "venue_name": game.venue_name,
         "venue_city": game.venue_city,
         "venue_state": game.venue_state,
-        "start_display": display_start(game),
+        # A doubleheader's or showcase's start says it is the event's start
+        # (listings.event_start_only), never this team's game time.
+        "start_display": display_start(game) + (EVENT_START_SUFFIX if event_start_only(game) else ""),
         "start_utc": game.start_utc.isoformat() if game.start_utc else None,
         # ISO date only (no time), for rendering -- e.g. a big "JUN 15"
         # date-chip -- without the HTML layer re-parsing start_display's
@@ -96,6 +99,8 @@ def game_to_dict(game: Game) -> dict[str, Any]:
         data["event_title"] = game.event_title
     if game.game_type:
         data["game_type"] = game.game_type
+    if event_start_only(game):
+        data["event_start_only"] = True
     return data
 
 

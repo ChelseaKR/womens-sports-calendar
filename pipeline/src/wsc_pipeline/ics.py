@@ -30,6 +30,7 @@ from datetime import UTC, date, datetime, time, timedelta
 
 from icalendar import Calendar, Component, Event, Timezone, vText
 
+from .listings import EVENT_START_NOTE, EVENT_START_SUFFIX, event_start_only
 from .normalize import Game, feed_start, feed_ticket_url, unique_by_event_id, zone_for
 from .site_data import NOTABLE_STATUSES
 
@@ -373,6 +374,10 @@ def _event(
             event.add("status", status.ics_status)
     if all_day:
         summary += TIME_TBA_SUFFIX
+    elif event_start_only(game):
+        # A doubleheader or showcase: the start is the event's, not this
+        # team's game (listings.py).
+        summary += EVENT_START_SUFFIX
     event.add("summary", vText(summary))
     location_parts = [p for p in (game.venue_name, game.venue_city, game.venue_state) if p]
     if location_parts:
@@ -406,6 +411,8 @@ def _description_lines(game: Game, status: FeedStatus | None, *, all_day: bool, 
     lines.append(f"League: {game.league_slug.upper()}")
     if all_day:
         lines.append(TIME_TBA_NOTE)
+    elif event_start_only(game):
+        lines.append(EVENT_START_NOTE)
     if estimated_end:
         lines.append(END_ESTIMATE_NOTE)
     # No price line, priced or not (DECISIONS 0013, 0024): the site shows no

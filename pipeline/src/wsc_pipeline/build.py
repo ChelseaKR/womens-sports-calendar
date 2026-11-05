@@ -34,6 +34,7 @@ from . import (
     history,
     ics,
     indexnow,
+    listings,
     llms,
     sellers,
     site,
@@ -251,6 +252,11 @@ def build(
     # Ticketmaster terms' removal within 24 hours on request (ADR 0006). The
     # publish guard below then reports it as an accepted removal.
     games = without_removed_events(games)
+    # Listings that are not one of the team's games (a season-ticket product,
+    # a men's game, a doubleheader listed again beside the team's own game)
+    # are left out of every page, feed and data file, and named in
+    # COVERAGE.txt (listings.py).
+    games, dropped_listings = listings.only_games(games)
     # When the listings were read (DATA-GOVERNANCE-STANDARD DG-02). None when
     # nothing was fetched: a degraded build states no fetch time at all.
     # Whole seconds, everywhere it is published: the page's <time datetime>
@@ -286,7 +292,11 @@ def build(
     league_coverages = []
     for lg in config.LEAGUES:
         lc = compute_league_coverage(
-            lg, games_by_league[lg.slug], truncated.get(lg.slug, set()), mismatched.get(lg.slug, set())
+            lg,
+            games_by_league[lg.slug],
+            truncated.get(lg.slug, set()),
+            mismatched.get(lg.slug, set()),
+            dropped=[d for d in dropped_listings if d.league_slug == lg.slug],
         )
         league_coverages.append(lc)
 
