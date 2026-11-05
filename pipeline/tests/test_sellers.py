@@ -225,3 +225,53 @@ def test_negative_control_the_rel_check_fails_when_the_marking_is_removed(monkey
     assert not any("rel" in a for a in anchors)
     with pytest.raises(AssertionError, match="sponsored noopener"):
         _assert_affiliate_links_are_sponsored(html)
+
+
+# The empty "Next home game" message. This pipeline reads only Ticketmaster,
+# so for a team whose main seller is elsewhere (PRIMARY_SELLERS) the usual
+# "the next one will show up in your calendar automatically" would be false.
+TM_PROMISE = "the next one will show up in"
+SKY = next(t for t in WNBA.teams if t.slug == "chicago-sky")
+
+
+def _empty_msg(html: str) -> str:
+    start = html.index('<p class="next-game-empty-msg">')
+    return html[start : html.index("</p>", start)]
+
+
+def test_empty_page_for_a_team_that_sells_elsewhere_names_the_seller_not_the_promise():
+    msg = _empty_msg(render_team(team=team_data(ACES, WNBA, []), base_url="https://nexthomegame.com"))
+    assert "No Las Vegas Aces games are listed by Ticketmaster right now." in msg
+    assert "main ticket seller is AXS, not Ticketmaster" in msg
+    assert "may not show up here or in your calendar" in msg
+    assert '<a href="https://aces.wnba.com/tickets/">the team&#x27;s official ticket page</a>' in msg
+    assert TM_PROMISE not in msg
+    # Absence stays absence: no claim that tickets are unavailable, no price.
+    assert "unavailable" not in msg.lower() and "sold out" not in msg.lower() and "$" not in msg
+
+
+def test_every_team_that_sells_elsewhere_drops_the_promise():
+    for (league_slug, team_slug), seller in sellers.PRIMARY_SELLERS.items():
+        league = next(lg for lg in LEAGUES if lg.slug == league_slug)
+        team = next(t for t in league.teams if t.slug == team_slug)
+        msg = _empty_msg(render_team(team=team_data(team, league, []), base_url="https://nexthomegame.com"))
+        assert TM_PROMISE not in msg, team_slug
+        assert f"main ticket seller is {seller.name}, not Ticketmaster" in msg, team_slug
+
+
+def test_empty_page_falls_back_to_the_sellers_team_page_without_an_official_page(monkeypatch):
+    from wsc_pipeline import official_tickets
+
+    monkeypatch.delitem(official_tickets.OFFICIAL_TEAM_TICKETS, ("wnba", "las-vegas-aces"))
+    msg = _empty_msg(render_team(team=team_data(ACES, WNBA, []), base_url="https://nexthomegame.com"))
+    assert '<a href="https://www.axs.com/teams/1104736/las-vegas-aces-tickets">the team&#x27;s page at AXS</a>' in msg
+
+
+def test_empty_page_for_a_ticketmaster_team_is_unchanged():
+    msg = _empty_msg(render_team(team=team_data(SKY, WNBA, []), base_url="https://nexthomegame.com"))
+    assert msg == (
+        '<p class="next-game-empty-msg">No Chicago Sky games are listed by\n'
+        "Ticketmaster right now. Subscribe above and the next one will show up in\n"
+        "your calendar automatically &mdash; nothing to check back for."
+    )
+    assert sellers.team_primary_seller("wnba", "chicago-sky") is None
