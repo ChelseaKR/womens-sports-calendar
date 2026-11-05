@@ -7,7 +7,8 @@ one build-time constant (site.TEAM_PAGE_NEXT_GAME_FIRST), off by default.
   2026-10-29 for the team-page title, H1, lede and league-link copy, and on
   2026-10-30 for the title and meta description wording, and on 2026-10-31
   for the "Get tickets" section (official_tickets.py), which sits after both
-  ordered blocks; the block order they pin did not change.
+  ordered blocks, and on 2026-11-04 for the lede's next-home-game first
+  sentence (DECISIONS 0025); the block order they pin did not change.
 - On: the "Next home game" section comes before the subscribe section, and
   the page is otherwise the same text (same lines, same links, same rel
   attributes, same "Paid link" labels). Only a page with a next home game

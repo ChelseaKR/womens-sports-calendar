@@ -52,6 +52,17 @@ archived and private.
 
 ### Changed
 
+- A team page's first sentence now states the next home game in the name
+  fans search: "The next USC women's basketball home game is against Utah
+  State Aggies at Galen Center in Los Angeles, CA, on Sunday, November 8,
+  2026, at 5:00 PM PST." It used to open with the Ticketmaster keyword and
+  the league's long name ("Every USC Trojans Womens Basketball (NCAA
+  Women's Basketball (Big Ten)) game Ticketmaster lists..."). A page with
+  no listed home game says so, with the date Ticketmaster was checked, and
+  a build that did not check says nothing about games. No opponent, venue,
+  date or time is filled in when Ticketmaster did not publish it
+  (DECISIONS 0025).
+
 - The site no longer publishes `data/<league>.json` or
   `data/<league>/<team>.json`, a bulk copy of every Ticketmaster event. Only
   `data/site.json` (counts per league, no events) is published; each page's

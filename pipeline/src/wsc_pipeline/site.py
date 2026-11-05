@@ -1423,27 +1423,84 @@ def _this_week_block(team: Mapping[str, Any]) -> str:
 """
 
 
+def _full_date(iso_date: str) -> str:
+    """ "Sunday, November 8, 2026" from an ISO date, for a sentence."""
+    d = date.fromisoformat(iso_date)
+    return f"{d:%A}, {d:%B} {d.day}, {d.year}"
+
+
+def _checked_on(team: Mapping[str, Any]) -> str:
+    """When this build read Ticketmaster, as "as of <date>" (the UTC date the
+    freshness note also gives), or "right now" when no fetch time was
+    recorded. Never a date that was not the check's."""
+    fetched_at = team.get("fetched_at")
+    if not fetched_at:
+        return "right now"
+    when = datetime.fromisoformat(str(fetched_at)).astimezone(UTC)
+    return f'as of <time datetime="{e(when.date().isoformat())}">{e(_full_date(when.date().isoformat()))}</time>'
+
+
+def _next_home_sentence(name: str, league_slug: str, game: Mapping[str, Any]) -> str:
+    """ "The next USC women's basketball home game is against Utah State
+    Aggies at Galen Center in Los Angeles, CA, on Sunday, November 8, 2026,
+    at 5:00 PM PST." Each part is said only when Ticketmaster published it:
+    no opponent, venue, date or time is ever filled in. The time is the
+    venue's local time with its zone, as display_start wrote it."""
+    against = f" against {e(_opponent_label(league_slug, game['away_team']))}" if game.get("away_team") else ""
+    place = ", ".join(p for p in (game.get("venue_city"), game.get("venue_state")) if p)
+    if game.get("venue_name"):
+        where = f" at {e(game['venue_name'])}" + (f" in {e(place)}" if place else "")
+    else:
+        where = f" in {e(place)}" if place else ""
+    iso_date = None if game.get("date_tbd") else game.get("start_local_date")
+    if iso_date is None:
+        return f"The next {name} home game Ticketmaster lists is{against}{where}; its date is not announced yet."
+    day = display_date(date.fromisoformat(iso_date))
+    shown = str(game.get("start_display") or "")
+    clock = shown[len(day) + 2 :] if shown.startswith(f"{day}, ") else ""
+    machine = game.get("start_local_datetime") or iso_date
+    when = f'<time datetime="{e(machine)}">{e(_full_date(iso_date))}{f", at {e(clock)}" if clock else ""}</time>'
+    tail = "" if clock else ", start time not announced yet"
+    status = f" Ticketmaster lists it as {e(game['status'].lower())}." if game.get("status") else ""
+    comma = "," if against or where else ""
+    return f"The next {name} home game is{against}{where}{comma} on {when}{tail}.{status}"
+
+
 def _team_lede(team: Mapping[str, Any]) -> str:
-    """The team page's opening paragraph, in the words a fan searches with
-    ("schedule", "home games", "tickets"), each one said only when the page
-    backs it: the season when the listed games give one, "tickets" when a
-    game links to a seller, "home games" when a game is known to be at home.
-    It links the league's page (the hub), so the league is one click away
-    from the body text and not only from the breadcrumb."""
-    name = e(team["team_name"])
-    league_link = f'<a href="/{e(team["league_slug"])}/">{e(team["league_name"])}</a>'
+    """The team page's opening paragraph. Its first sentence answers the
+    question the page is searched for, in the name a fan searches ("USC
+    women's basketball", Team.title_name; the shown name where none is set):
+    the next home game with its opponent, venue, date and local time, or, when
+    none is listed, that none is, with the date Ticketmaster was checked
+    (DECISIONS 0025). The rest says what the page lists, each claim only when
+    the page backs it: the season when the listed games give one, "tickets"
+    when a game links to a seller, "home games" when a game is known to be at
+    home. It links the league's page (the hub), so the league is one click
+    away from the body text and not only from the breadcrumb."""
+    league_slug = team["league_slug"]
+    name = e(title_name_for(league_slug, team["team_name"]))
+    league_short = league_names_for(league_slug, team["league_name"])[1]
+    league_link = f'<a href="/{e(league_slug)}/">{e(league_short)}</a>'
     if not team.get("fetched", True):
+        # Not checked: says what the page is for and nothing about games.
         return (
             f'<p class="lede">Every {name} ({league_link}) game Ticketmaster\n'
             "lists, home and away, with its date, time and venue.</p>"
         )
     games = team["games"]
+    checked = _checked_on(team)
     if not games:
         return (
-            f'<p class="lede">Ticketmaster lists no {name} ({league_link}) game\n'
-            "right now. Add the schedule to your calendar below, and each game appears\n"
-            "in it once it is listed.</p>"
+            f'<p class="lede">Ticketmaster lists no upcoming {name} ({league_link}) game,\n'
+            f"home or away, {checked}. Add the schedule to your calendar below, and each\n"
+            "game appears in it once it is listed.</p>"
         )
+    home_game = next((g for g in games if g["event_id"] == team.get("next_home_event_id")), None)
+    first = (
+        _next_home_sentence(name, league_slug, home_game)
+        if home_game is not None
+        else f"Ticketmaster lists no upcoming {name} home game {checked}."
+    )
     season = team.get("season")
     for_season = f" for the {e(season)} season" if season else ""
     tickets = " and where to buy tickets" if any(g.get("buy") for g in games) else ""
@@ -1453,7 +1510,7 @@ def _team_lede(team: Mapping[str, Any]) -> str:
         else ""
     )
     return (
-        f'<p class="lede">Every {name} ({league_link}) game Ticketmaster\n'
+        f'<p class="lede">{first}\nThis page has every {name} ({league_link}) game Ticketmaster\n'
         f"lists{for_season}, home and away, with its date, time, venue{tickets}.{home}</p>"
     )
 
