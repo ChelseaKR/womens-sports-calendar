@@ -1006,3 +1006,47 @@ Revisit if Search Console shows the team pages losing position after
 Google recrawls them, or if a league adds teams whose `title_name` is not
 what fans search.
 
+
+## 0026 — Event listings, ticket products and men's games are not a team's games (2026-11-05)
+
+**Why:** The 2026-11-05 quality audit found three kinds of Ticketmaster
+listing shown as one of a team's games. "MarketBeat Invitational Women's
+Basketball" put Nebraska's tip-off at 1:00 PM CT, the event's start and
+another game's slot (Nebraska plays Kansas at 3:30). Vanderbilt's Dec 18
+was listed twice: under "The Bad Boys Mower Series: Women's College
+Basketball Doubleheader" at 5:00 PM CT, Tennessee and Baylor's slot, and
+under its own Belmont listing (time TBA). Tennessee's first "upcoming" row
+was "Tennessee Volunteers Women's Basketball Season Tickets", dated Sep 21,
+and Penn State's next game was "Pittsburgh Panthers Mens Basketball vs. Penn
+State Nittany Lions Womens Basketball".
+
+**What changes (`listings.py`, applied in `build.build` after the fetch):**
+
+- A listing whose name says it is a ticket product (season tickets, ticket
+  or flex plans, parking, suites, deposits, packages, passes, memberships,
+  gift cards; whole words) is left out.
+- A listing that names a men's team ("Men's"/"Mens" on a matchup side, or
+  in a name with no matchup and no women's word) is left out. Every tracked
+  league is a women's league.
+- An event listing (no "A vs B" in its own name) is left out of a team's
+  page and feed when the same team has its own matchup listing at the same
+  venue on the same local date. The matchup listing stays, with its own
+  time or "time TBA".
+- Any other timed event listing keeps the event's start, labeled on the page
+  and in the feed's SUMMARY as "(event start; game time not listed)", with a
+  DESCRIPTION note. `validate_ics` holds every feed to its page's label.
+- Each listing left out is named in COVERAGE.txt. Whole listings are dropped
+  and none is rewritten, so every game that stays keeps its UID.
+
+Ticketmaster's `classifications` were not used: their values for these
+listings have not been read from a live response (0009 declined to guess
+them for the same reason), and the event names carried every case measured.
+A team's own game time inside an event listing (its `info` text, say) is not
+parsed: no live sample of that text has been read.
+
+**Enforced by** `tests/test_listings.py`, built from the live listings of
+2026-11-05, with controls for a matchup on another day or venue, real games
+that look like products, and a feed that drops the label.
+
+Revisit if Ticketmaster lists a single game under a name with no matchup,
+or if a tracked team's own name ever contains one of the product words.
