@@ -16,7 +16,7 @@ import unicodedata
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date, datetime, time
-from typing import Any
+from typing import Any, Protocol
 from zoneinfo import ZoneInfo
 
 from .impact import plain_url
@@ -313,24 +313,83 @@ def team_is_participant(team_name: str, raw_event: dict[str, Any], not_this_team
     match while a real game against them ("Bay FC vs Monterey Bay FC")
     still does.
     """
-    embedded = raw_event.get("_embedded", {})
-    attractions = embedded.get("attractions") or []
-    name = raw_event.get("name", "")
-    # When the event's own name is a two-sided matchup, the team must be one
-    # of those two sides. The whole name and the attraction list do not
-    # count then: "Valley Suns vs San Diego Clippers: Phoenix Mercury Night"
-    # (an NBA G League game with a WNBA promotion, live on the Mercury page
-    # until 2026-10-30) names the Mercury without them playing.
-    named_home, named_away = parse_teams(name, [])
-    if named_home and named_away:
-        candidates = [named_home, named_away]
-    else:
-        home, away = parse_teams(name, attractions)
-        candidates = [c for c in (name, home, away) if c]
-        candidates.extend(a.get("name") for a in attractions if a.get("name"))
+    candidates = participant_names(raw_event)
     if not_this_team:
         candidates = [_without_phrases(c, not_this_team) for c in candidates]
     return any(_phrase_match(team_name, c) for c in candidates)
+
+
+def participant_names(raw_event: dict[str, Any]) -> list[str]:
+    """The texts that may name a participant of an event.
+
+    When the event's own name is a two-sided matchup, only those two sides
+    count. The whole name and the attraction list do not count then: "Valley
+    Suns vs San Diego Clippers: Phoenix Mercury Night" (an NBA G League game
+    with a WNBA promotion, live on the Mercury page until 2026-10-30) names
+    the Mercury without them playing. Otherwise the whole name, the sides
+    parsed from the attractions, and each attraction's name."""
+    embedded = raw_event.get("_embedded", {})
+    attractions = embedded.get("attractions") or []
+    name = raw_event.get("name", "")
+    named_home, named_away = parse_teams(name, [])
+    if named_home and named_away:
+        return [named_home, named_away]
+    home, away = parse_teams(name, attractions)
+    candidates = [c for c in (name, home, away) if c]
+    candidates.extend(a.get("name") for a in attractions if a.get("name"))
+    return candidates
+
+
+# Words that may follow a school's name in Ticketmaster's name for its
+# women's basketball team, besides the mascot's own words.
+# "Womans" is Ticketmaster's own misspelling ("University of Illinois
+# Fighting Illini Womans Basketball", at Ohio State and Northwestern).
+_COLLEGE_FILLER = frozenset({"university", "lady", "womens", "women", "womans", "basketball"})
+_WOMENS_MARKERS = frozenset({"womens", "women", "womans", "lady"})
+# What Ticketmaster sometimes puts in front of a school's name.
+_COLLEGE_LEADS = ("university of ", "univ of ", "the ")
+
+
+def side_names_college_team(school: str, mascots: Iterable[str], side: str) -> bool:
+    """True if a matchup side is this school's women's basketball team under
+    one of the spellings Ticketmaster uses at different venues.
+
+    Measured on the live league feeds of 2026-11-05, where one school went by
+    several names: "Penn State Lady Lion Basketball", "Minnesota Gophers
+    Womens Basketball", "University of Texas Women's Basketball", "Auburn
+    University Lady Tigers Basketball", "Michigan State University Spartans
+    Womens Basketball", "LSU Women's Basketball". None of them contains the
+    keyword ("Penn State Nittany Lions Womens Basketball") or the title name
+    ("Penn State women's basketball") as a phrase, so those games reached
+    only the opponent's page.
+
+    The rule: once normalized (and without a leading "University of"), the
+    side starts with the school's name, and every word after it is a word of
+    a mascot (singular or plural), "University", "Lady", "Women's" or
+    "Basketball"; "Basketball" and a women's word ("Women's" or "Lady") must
+    both be there. So "Texas Tech ...", "Texas A&M ..." and "Texas Southern
+    ..." are not Texas, "Michigan State ..." is not Michigan, "Indiana State
+    ..." is not Indiana, a men's game ("Penn State Nittany Lions Basketball",
+    "... Mens Basketball") is not the women's team, and neither is another
+    sport ("Purdue Boilermakers Women's Volleyball", a Ticketmaster mislabel
+    of a basketball game that stays off the page rather than be guessed)."""
+    norm = _normalize_for_match(side)
+    for lead in _COLLEGE_LEADS:
+        if norm.startswith(lead):
+            norm = norm[len(lead) :]
+            break
+    school_norm = _normalize_for_match(school)
+    if not school_norm or not norm.startswith(school_norm + " "):
+        return False
+    rest = norm[len(school_norm) :].split()
+    allowed = set(_COLLEGE_FILLER)
+    for mascot in mascots:
+        allowed.update(_normalize_for_match(mascot).split())
+    for word in rest:
+        if word not in allowed and word + "s" not in allowed:
+            return False
+    words = set(rest)
+    return "basketball" in words and bool(words & _WOMENS_MARKERS)
 
 
 def team_is_participant_as_any(
@@ -341,6 +400,50 @@ def team_is_participant_as_any(
     a previous name during a rename): True if the event names the team
     under any of them."""
     return any(team_is_participant(name, raw_event, not_this_team) for name in team_names)
+
+
+class _NamedTeam(Protocol):
+    """What the matchers read from a config.Team."""
+
+    @property
+    def all_names(self) -> tuple[str, ...]: ...
+    @property
+    def match_names(self) -> tuple[str, ...]: ...
+    @property
+    def not_this_team(self) -> tuple[str, ...]: ...
+    @property
+    def school(self) -> str | None: ...
+    @property
+    def mascots(self) -> tuple[str, ...]: ...
+
+
+def event_names_team(team: _NamedTeam, raw_event: dict[str, Any]) -> bool:
+    """The build's one test for "this event is one of this team's games": a
+    match by any of the team's names (team_is_participant_as_any), or, for a
+    college team, a side that is the school's women's basketball team under
+    any of Ticketmaster's spellings (side_names_college_team).
+
+    A college team's title name ("Washington women's basketball") is not
+    matched as a phrase: it sits inside another school's name ("George
+    Washington Womens Basketball", live 2026-11-05), and the college rule
+    already accepts the title name at the start of a side."""
+    if team.school is None:
+        return team_is_participant_as_any(team.match_names, raw_event, team.not_this_team)
+    if team_is_participant_as_any(team.all_names, raw_event, team.not_this_team):
+        return True
+    return event_names_college_team(team, raw_event)
+
+
+def event_names_college_team(team: _NamedTeam, raw_event: dict[str, Any]) -> bool:
+    """True if a side of the event is this college team's women's basketball
+    under any of Ticketmaster's spellings (side_names_college_team). The
+    strict half of event_names_team: it never accepts a bare opponent side
+    ("Penn State Lady Lion Basketball vs. Indiana"), which the phrase match
+    reads as any team whose name contains it, the Indiana Fever too."""
+    school = team.school
+    if school is None:
+        return False
+    return any(side_names_college_team(school, team.mascots, c) for c in participant_names(raw_event))
 
 
 def _parse_price(price_ranges: list[dict[str, Any]] | None) -> PriceRange | None:

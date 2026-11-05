@@ -20,6 +20,7 @@ import json
 import os
 import shutil
 import sys
+from collections.abc import Iterable
 from datetime import UTC, date, datetime
 from importlib.metadata import version as package_version
 from pathlib import Path
@@ -39,7 +40,7 @@ from . import (
     sitemap,
 )
 from .coverage import BuildCoverage, compute_league_coverage, render_report
-from .normalize import Game, normalize_event, team_is_participant_as_any, unique_by_event_id
+from .normalize import Game, event_names_college_team, event_names_team, normalize_event, unique_by_event_id
 from .ticketmaster import DiscoveryClient, TicketmasterFetchError
 
 DEFAULT_BASE_URL = "https://nexthomegame.com"
@@ -94,6 +95,78 @@ def _search_team(
     return events, truncated
 
 
+def attribute_games(
+    leagues: Iterable[config.League], raw_by_team: dict[tuple[str, str], list[dict[str, Any]]]
+) -> tuple[list[Game], dict[str, set[str]]]:
+    """(games, mismatched team slugs by league) from each team's raw search
+    results ({(league slug, team slug): raw events}).
+
+    Every event any of a league's searches returned is tested against every
+    team in that league (normalize.event_names_team), and becomes a Game for
+    each team it names. A game used to be filed only under the team whose search returned it, so
+    a game only the opponent's search found never reached the team's own
+    page: Ticketmaster names a school differently at each host venue ("Penn
+    State Lady Lion Basketball vs. Rutgers", "Northwestern ... vs. Indiana
+    University Womens Basketball"), and the live build of 2026-11-05 listed
+    43 such games in the league feeds but not on 14 college teams' own pages
+    and feeds. An event another league's search returned counts only
+    through the strict college rule (Vanderbilt, SEC, at Iowa, Big Ten, was
+    found only by Iowa's search). This costs no requests. A team's slug is
+    in `mismatched` when its own search returned an event that names none of
+    its names, as before."""
+    leagues = tuple(leagues)
+    pools, mismatched = _league_pools(leagues, raw_by_team)
+    games: list[Game] = []
+    for league in leagues:
+        for team in league.teams:
+            for raw in _events_naming(team, league, pools):
+                game = normalize_event(
+                    raw,
+                    league_slug=league.slug,
+                    tracked_team_slug=team.slug,
+                    tracked_team_name=team.name,
+                )
+                if game is not None:
+                    games.append(game)
+    return games, mismatched
+
+
+def _league_pools(
+    leagues: tuple[config.League, ...], raw_by_team: dict[tuple[str, str], list[dict[str, Any]]]
+) -> tuple[dict[str, dict[object, dict[str, Any]]], dict[str, set[str]]]:
+    """({league slug: every event its searches returned, once, by id},
+    {league slug: slugs of teams whose own search returned an event that
+    names none of their names})."""
+    pools: dict[str, dict[object, dict[str, Any]]] = {lg.slug: {} for lg in leagues}
+    mismatched: dict[str, set[str]] = {lg.slug: set() for lg in leagues}
+    for league in leagues:
+        for team in league.teams:
+            for raw in raw_by_team.get((league.slug, team.slug), []):
+                event_id = raw.get("id")
+                pools[league.slug].setdefault(event_id if event_id else object(), raw)
+                if not event_names_team(team, raw):
+                    mismatched[league.slug].add(team.slug)
+    return pools, mismatched
+
+
+def _events_naming(
+    team: config.Team, league: config.League, pools: dict[str, dict[object, dict[str, Any]]]
+) -> list[dict[str, Any]]:
+    """The events that are this team's games: any in its own league's pool
+    that names it (event_names_team), and any in another league's pool whose
+    side is this school's own women's team (event_names_college_team). A bare
+    "vs. Washington" from another league is not the Washington Mystics."""
+    matched = {key: raw for key, raw in pools[league.slug].items() if event_names_team(team, raw)}
+    if team.school is not None:
+        for slug, pool in pools.items():
+            if slug == league.slug:
+                continue
+            for key, raw in pool.items():
+                if key not in matched and event_names_college_team(team, raw):
+                    matched[key] = raw
+    return list(matched.values())
+
+
 def fetch_all_games(api_key: str) -> tuple[list[Game], dict[str, set[str]], dict[str, set[str]], int, int]:
     """Returns (games, truncated_team_slugs_by_league,
     mismatched_team_slugs_by_league, requests_made, bytes_received).
@@ -111,26 +184,14 @@ def fetch_all_games(api_key: str) -> tuple[list[Game], dict[str, set[str]], dict
     already applies to a missing id/date -- and counted per team so the
     coverage report makes the exclusion visible instead of silent.
     """
-    games: list[Game] = []
     truncated: dict[str, set[str]] = {lg.slug: set() for lg in config.LEAGUES}
-    mismatched: dict[str, set[str]] = {lg.slug: set() for lg in config.LEAGUES}
+    raw_by_team: dict[tuple[str, str], list[dict[str, Any]]] = {}
     with DiscoveryClient(api_key) as client:
         for league, team in config.all_teams():
-            raw_events, team_truncated = _search_team(client, league, team)
+            raw_by_team[(league.slug, team.slug)], team_truncated = _search_team(client, league, team)
             if team_truncated:
                 truncated[league.slug].add(team.slug)
-            for raw in raw_events:
-                if not team_is_participant_as_any(team.match_names, raw, team.not_this_team):
-                    mismatched[league.slug].add(team.slug)
-                    continue
-                game = normalize_event(
-                    raw,
-                    league_slug=league.slug,
-                    tracked_team_slug=team.slug,
-                    tracked_team_name=team.name,
-                )
-                if game is not None:
-                    games.append(game)
+        games, mismatched = attribute_games(config.LEAGUES, raw_by_team)
         budget = client.budget
     if not games:
         # Every tracked team across every league at once coming back empty

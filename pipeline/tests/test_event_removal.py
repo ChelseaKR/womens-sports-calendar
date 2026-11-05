@@ -82,7 +82,12 @@ def test_removing_a_published_event_is_accepted_by_the_publish_guard(tmp_path: P
     monkeypatch.setattr(config, "REMOVED_EVENTS", (REQUEST,))
     coverage = _build(tmp_path / "next", responses, monkeypatch, previous)
     assert coverage.publish_guard is not None and not coverage.publish_guard.refused
-    assert [r.split(" ")[:2] for r in coverage.publish_guard.accepted_removals] == [[f"wnba/{FEVER}:", "G2"]]
+    # G2 is the Fever against the Chicago Sky, so it was on both teams' pages
+    # (build.attribute_games) and comes off both.
+    assert sorted(r.split(" ")[:2] for r in coverage.publish_guard.accepted_removals) == [
+        ["wnba/chicago-sky:", "G2"],
+        [f"wnba/{FEVER}:", "G2"],
+    ]
     files = _files(tmp_path / "next")
     assert _mentions(files, "tm-G2@") == [] and _mentions(files, '"G2"') == []
     assert b"tm-G1@" in files[f"ics/wnba/{FEVER}.ics"]

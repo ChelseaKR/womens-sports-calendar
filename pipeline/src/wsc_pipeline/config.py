@@ -90,6 +90,15 @@ class Team:
     # Basketball"). Not part of any feed or data file, and the rest of the
     # page keeps `shown_name`. None: `shown_name`.
     title_name: str | None = None
+    # A college team's school ("Penn State") and its mascots ("Nittany
+    # Lions", plus any short form Ticketmaster uses, such as "Vols"). With a
+    # school set, an event side also names the team when it is that school's
+    # women's basketball under any spelling Ticketmaster uses
+    # (normalize.side_names_college_team): "Penn State Lady Lion Basketball",
+    # "University of Texas Women's Basketball", "Minnesota Gophers Womens
+    # Basketball". None: matched by names only.
+    school: str | None = None
+    mascots: tuple[str, ...] = ()
 
     @property
     def shown_name(self) -> str:
@@ -185,16 +194,6 @@ def _teams(*names: str) -> tuple[Team, ...]:
     return tuple(Team(slug=_slugify(n), name=n, not_this_team=KEYWORD_COLLISIONS.get(n, ())) for n in names)
 
 
-def _titled_teams(titles: dict[str, str]) -> tuple[Team, ...]:
-    """Teams whose long keyword name gets a shorter name for page titles and
-    meta descriptions: {keyword name: name for titles}. Nothing else about the
-    team changes (slug, feed, search keyword, page name)."""
-    return tuple(
-        Team(slug=_slugify(n), name=n, not_this_team=KEYWORD_COLLISIONS.get(n, ()), title_name=short)
-        for n, short in titles.items()
-    )
-
-
 def title_name_for(league_slug: str, shown_name: str) -> str:
     """The name page titles and descriptions use for a team: its
     `title_name`, else the name as shown. A team not in the registry (a
@@ -243,17 +242,32 @@ COLLEGE_DIRECTION_PREFIXES: tuple[str, ...] = (
 )
 
 
-def _college_team(slug: str, school: str, mascot: str) -> Team:
+def _college_team(
+    slug: str,
+    school: str,
+    mascot: str,
+    *,
+    search_names: tuple[str, ...] = (),
+    other_mascots: tuple[str, ...] = (),
+) -> Team:
     """One school, named the Big Ten way (DECISIONS 0010): the Ticketmaster
     keyword and shown name "<School> <Mascot> Womens Basketball", titled
     "<School> women's basketball", with the other schools whose names contain
     this one's excluded (COLLEGE_DIRECTION_PREFIXES). The slug is given, not
-    derived: "Texas A&M" has a character no slug may carry."""
+    derived: "Texas A&M" has a character no slug may carry.
+
+    search_names: more Ticketmaster names to search, for a school whose own
+    home games are listed under a name the keyword search does not return
+    ("Penn State Lady Lion Basketball"). other_mascots: a short form of the
+    mascot Ticketmaster uses ("Vols" for the Lady Volunteers)."""
     return Team(
         slug=slug,
         name=f"{school} {mascot} Womens Basketball",
         not_this_team=tuple(f"{d} {school} women's basketball" for d in COLLEGE_DIRECTION_PREFIXES),
         title_name=f"{school} women's basketball",
+        search_names=search_names,
+        school=school,
+        mascots=(mascot, *other_mascots),
     )
 
 
@@ -385,27 +399,38 @@ LEAGUES: tuple[League, ...] = (
         slug="ncaaw-big-ten",
         name="NCAA Women's Basketball (Big Ten)",
         country_codes=("US",),
-        teams=_titled_teams(
-            {
-                "Illinois Fighting Illini Womens Basketball": "Illinois women's basketball",
-                "Indiana Hoosiers Womens Basketball": "Indiana women's basketball",
-                "Iowa Hawkeyes Womens Basketball": "Iowa women's basketball",
-                "Maryland Terrapins Womens Basketball": "Maryland women's basketball",
-                "Michigan Wolverines Womens Basketball": "Michigan women's basketball",
-                "Michigan State Spartans Womens Basketball": "Michigan State women's basketball",
-                "Minnesota Golden Gophers Womens Basketball": "Minnesota women's basketball",
-                "Nebraska Cornhuskers Womens Basketball": "Nebraska women's basketball",
-                "Northwestern Wildcats Womens Basketball": "Northwestern women's basketball",
-                "Ohio State Buckeyes Womens Basketball": "Ohio State women's basketball",
-                "Oregon Ducks Womens Basketball": "Oregon women's basketball",
-                "Penn State Nittany Lions Womens Basketball": "Penn State women's basketball",
-                "Purdue Boilermakers Womens Basketball": "Purdue women's basketball",
-                "Rutgers Scarlet Knights Womens Basketball": "Rutgers women's basketball",
-                "UCLA Bruins Womens Basketball": "UCLA women's basketball",
-                "USC Trojans Womens Basketball": "USC women's basketball",
-                "Washington Huskies Womens Basketball": "Washington women's basketball",
-                "Wisconsin Badgers Womens Basketball": "Wisconsin women's basketball",
-            }
+        teams=(
+            _college_team("illinois-fighting-illini-womens-basketball", "Illinois", "Fighting Illini"),
+            _college_team("indiana-hoosiers-womens-basketball", "Indiana", "Hoosiers"),
+            _college_team("iowa-hawkeyes-womens-basketball", "Iowa", "Hawkeyes"),
+            _college_team("maryland-terrapins-womens-basketball", "Maryland", "Terrapins"),
+            _college_team("michigan-wolverines-womens-basketball", "Michigan", "Wolverines"),
+            _college_team("michigan-state-spartans-womens-basketball", "Michigan State", "Spartans"),
+            _college_team("minnesota-golden-gophers-womens-basketball", "Minnesota", "Golden Gophers"),
+            _college_team("nebraska-cornhuskers-womens-basketball", "Nebraska", "Cornhuskers"),
+            _college_team("northwestern-wildcats-womens-basketball", "Northwestern", "Wildcats"),
+            _college_team("ohio-state-buckeyes-womens-basketball", "Ohio State", "Buckeyes"),
+            # Oregon's own home games are listed as "Oregon Women's Basketball"
+            # (Ticketmaster artist 896741), which a search for the keyword does not
+            # return (live 2026-11-05).
+            _college_team(
+                "oregon-ducks-womens-basketball", "Oregon", "Ducks", search_names=("Oregon Women's Basketball",)
+            ),
+            # Penn State's own home games are listed as "Penn State Lady Lion
+            # Basketball" (Ticketmaster artist 849595, linked from gopsusports.com),
+            # which a search for the keyword does not return (live 2026-11-05).
+            _college_team(
+                "penn-state-nittany-lions-womens-basketball",
+                "Penn State",
+                "Nittany Lions",
+                search_names=("Penn State Lady Lion Basketball",),
+            ),
+            _college_team("purdue-boilermakers-womens-basketball", "Purdue", "Boilermakers"),
+            _college_team("rutgers-scarlet-knights-womens-basketball", "Rutgers", "Scarlet Knights"),
+            _college_team("ucla-bruins-womens-basketball", "UCLA", "Bruins"),
+            _college_team("usc-trojans-womens-basketball", "USC", "Trojans"),
+            _college_team("washington-huskies-womens-basketball", "Washington", "Huskies"),
+            _college_team("wisconsin-badgers-womens-basketball", "Wisconsin", "Badgers"),
         ),
         schedule_source_used=False,
         schedule_source_note=(
@@ -443,7 +468,11 @@ LEAGUES: tuple[League, ...] = (
             _college_team("oklahoma-sooners-womens-basketball", "Oklahoma", "Sooners"),
             _college_team("ole-miss-rebels-womens-basketball", "Ole Miss", "Rebels"),
             _college_team("south-carolina-gamecocks-womens-basketball", "South Carolina", "Gamecocks"),
-            _college_team("tennessee-lady-volunteers-womens-basketball", "Tennessee", "Lady Volunteers"),
+            # Ticketmaster names Tennessee's road games "Tennessee Vols Womens
+            # Basketball" (at Texas A&M, Texas, Mississippi State, Vanderbilt).
+            _college_team(
+                "tennessee-lady-volunteers-womens-basketball", "Tennessee", "Lady Volunteers", other_mascots=("Vols",)
+            ),
             _college_team("texas-longhorns-womens-basketball", "Texas", "Longhorns"),
             _college_team("texas-am-aggies-womens-basketball", "Texas A&M", "Aggies"),
             _college_team("vanderbilt-commodores-womens-basketball", "Vanderbilt", "Commodores"),

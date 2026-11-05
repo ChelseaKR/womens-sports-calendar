@@ -34,9 +34,9 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
-from .build import _search_team
+from .build import _search_team, attribute_games
 from .config import League, Team, league_by_slug
-from .normalize import Game, normalize_event, team_is_participant_as_any
+from .normalize import Game, event_names_team, normalize_event
 from .site_data import tracked_team_is_home
 from .ticketmaster import DiscoveryClient, TicketmasterFetchError
 
@@ -72,7 +72,14 @@ def _college_teams(schools: dict[str, str]) -> tuple[Team, ...]:
         not_this = tuple(f"{d} {school} women's basketball" for d in _DIRECTIONS) + _EXTRA_COLLISIONS.get(school, ())
         name = f"{school} {mascot} Womens Basketball"
         teams.append(
-            Team(slug=_slug(name), name=name, not_this_team=not_this, title_name=f"{school} women's basketball")
+            Team(
+                slug=_slug(name),
+                name=name,
+                not_this_team=not_this,
+                title_name=f"{school} women's basketball",
+                school=school,
+                mascots=(mascot,),
+            )
         )
     return tuple(teams)
 
@@ -105,6 +112,12 @@ CANDIDATES: tuple[Candidate, ...] = (
     Candidate(
         league_by_slug("ncaaw-sec"),
         source="The SEC as tracked in config.LEAGUES (16 schools, 2026-27).",
+    ),
+    # The Big Ten as config.LEAGUES ships it, to re-measure a change to how
+    # games are attributed to teams.
+    Candidate(
+        league_by_slug("ncaaw-big-ten"),
+        source="The Big Ten as tracked in config.LEAGUES (18 schools, 2026-27).",
     ),
     Candidate(
         _league(
@@ -283,10 +296,10 @@ def _is_upcoming(game: Game, today: date) -> bool:
 
 
 def _attribute(team: Team, league: League, raw_events: list[dict[str, Any]]) -> list[Game]:
-    """The games the site would list on this team's page."""
+    """The games among raw_events the site would list on this team's page."""
     games = []
     for raw in raw_events:
-        if not team_is_participant_as_any(team.match_names, raw, team.not_this_team):
+        if not event_names_team(team, raw):
             continue
         game = normalize_event(raw, league_slug=league.slug, tracked_team_slug=team.slug, tracked_team_name=team.name)
         if game is not None:
@@ -294,30 +307,42 @@ def _attribute(team: Team, league: League, raw_events: list[dict[str, Any]]) -> 
     return games
 
 
-def _measure_team(
-    client: DiscoveryClient, league: League, team: Team, today: date, upcoming_ids: set[str], all_ids: set[str]
-) -> TeamCount:
+def _fetch_team(
+    client: DiscoveryClient, league: League, team: Team
+) -> tuple[TeamCount, list[dict[str, Any]] | None, bool]:
+    """(count with its status set, the raw events or None when not fetched,
+    truncated)."""
     count = TeamCount(team=team.shown_name, keyword=team.name)
     if client.budget.requests_made >= MAX_REQUESTS:
         count.status = OVER_CAP
-        return count
+        return count, None, False
     try:
         raw_events, truncated = _search_team(client, league, team)
     except TicketmasterFetchError as exc:
         # The client has already redacted the key; GitHub also masks it.
         print(f"{league.slug}/{team.slug}: {exc}", file=sys.stderr)
         count.status = FAILED
-        return count
-    games = _attribute(team, league, raw_events)
-    upcoming = [g for g in games if _is_upcoming(g, today)]
+        return count, None, False
     count.events_returned = len(raw_events)
+    return count, raw_events, truncated
+
+
+def _count_team(
+    count: TeamCount,
+    team: Team,
+    games: list[Game],
+    truncated: bool,
+    today: date,
+    upcoming_ids: set[str],
+    all_ids: set[str],
+) -> None:
+    upcoming = [g for g in games if _is_upcoming(g, today)]
     count.attributed = len(games)
     count.attributed_upcoming = len(upcoming)
     count.home_games = sum(1 for g in upcoming if tracked_team_is_home(team, g) is True)
     count.truncated = truncated
     all_ids.update(g.event_id for g in games)
     upcoming_ids.update(g.event_id for g in upcoming)
-    return count
 
 
 def _measure_league_keyword(client: DiscoveryClient, cand: Candidate, result: CandidateCount) -> None:
@@ -342,7 +367,22 @@ def _measure_league_keyword(client: DiscoveryClient, cand: Candidate, result: Ca
 def measure_candidate(client: DiscoveryClient, cand: Candidate, today: date) -> CandidateCount:
     upcoming_ids: set[str] = set()
     all_ids: set[str] = set()
-    teams = [_measure_team(client, cand.league, t, today, upcoming_ids, all_ids) for t in cand.league.teams]
+    # Every team is searched first, then every event any search returned is
+    # attributed to every team it names (build.attribute_games), as the
+    # nightly build does.
+    fetched = [_fetch_team(client, cand.league, t) for t in cand.league.teams]
+    raw_by_team = {
+        (cand.league.slug, t.slug): raw
+        for t, (_c, raw, _tr) in zip(cand.league.teams, fetched, strict=True)
+        if raw is not None
+    }
+    league_games, _mismatched = attribute_games((cand.league,), raw_by_team)
+    teams = []
+    for team, (count, raw, truncated) in zip(cand.league.teams, fetched, strict=True):
+        if raw is not None:
+            team_games = [g for g in league_games if g.tracked_team_slug == team.slug]
+            _count_team(count, team, team_games, truncated, today, upcoming_ids, all_ids)
+        teams.append(count)
     result = CandidateCount(
         slug=cand.league.slug,
         name=cand.league.name,

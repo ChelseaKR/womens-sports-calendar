@@ -234,14 +234,25 @@ def test_candidate_registry_is_sound() -> None:
     tracked = {lg.slug for lg in config.LEAGUES}
     slugs = [c.league.slug for c in CANDIDATES]
     assert len(slugs) == len(set(slugs))
-    # The SEC is tracked now (DECISIONS 0023); it stays a candidate so the
-    # workflow can re-measure the roster the site ships, and it is that one.
-    assert tracked & set(slugs) == {"ncaaw-sec"}
-    assert next(c for c in CANDIDATES if c.league.slug == "ncaaw-sec").league is config.league_by_slug("ncaaw-sec")
-    assert set(slugs) == {"ncaaw-sec", "ncaaw-acc", "ncaaw-big-12", "ncaaw-big-east", "mlv", "unrivaled", "lovb"}
+    # The SEC and the Big Ten are tracked; they stay candidates so the
+    # workflow can re-measure the rosters the site ships, and they are those.
+    assert tracked & set(slugs) == {"ncaaw-sec", "ncaaw-big-ten"}
+    for slug in ("ncaaw-sec", "ncaaw-big-ten"):
+        assert next(c for c in CANDIDATES if c.league.slug == slug).league is config.league_by_slug(slug)
+    assert set(slugs) == {
+        "ncaaw-sec",
+        "ncaaw-big-ten",
+        "ncaaw-acc",
+        "ncaaw-big-12",
+        "ncaaw-big-east",
+        "mlv",
+        "unrivaled",
+        "lovb",
+    }
     sizes = {c.league.slug: len(c.league.teams) + len(c.unmeasured_teams) for c in CANDIDATES}
     assert sizes == {
         "ncaaw-sec": 16,
+        "ncaaw-big-ten": 18,
         "ncaaw-acc": 18,
         "ncaaw-big-12": 16,
         "ncaaw-big-east": 11,

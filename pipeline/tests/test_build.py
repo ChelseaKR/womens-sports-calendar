@@ -253,9 +253,13 @@ def test_fetch_all_games_drops_keyword_search_false_positives_and_reports_them(m
     assert "angel-city" in mismatched["nwsl"]
 
     # No other team's canned response was populated, so nothing else should
-    # have produced a game or a mismatch -- confirms the fake only affected
-    # the team under test.
-    assert all(g.tracked_team_slug == "angel-city" for g in games)
+    # have produced a mismatch, and the only other game is the real one on
+    # the opponent's page (every event is matched against every tracked team,
+    # build.attribute_games) -- never the hockey game.
+    assert sorted((g.tracked_team_slug, g.event_id) for g in games) == [
+        ("angel-city", "EVT-REAL"),
+        ("seattle-reign", "EVT-REAL"),
+    ]
     assert mismatched["nwsl"] == {"angel-city"}
     assert all(slugs == set() for lg_slug, slugs in mismatched.items() if lg_slug != "nwsl")
 
@@ -379,7 +383,12 @@ def test_fetch_all_games_drops_a_mens_game_billed_as_a_womens_team_night(monkeyp
 
     games, _truncated, mismatched, _requests, _bytes = build_module.fetch_all_games("fake-key")
 
-    assert [g.event_id for g in games] == ["EVT-MERCURY"]
+    # Kept for the Mercury and for its opponent, the Storm; the G League
+    # game for neither.
+    assert sorted((g.tracked_team_slug, g.event_id) for g in games) == [
+        ("phoenix-mercury", "EVT-MERCURY"),
+        ("seattle-storm", "EVT-MERCURY"),
+    ]
     assert mismatched["wnba"] == {"phoenix-mercury"}
 
 
