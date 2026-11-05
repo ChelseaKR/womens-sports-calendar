@@ -1050,3 +1050,36 @@ that look like products, and a feed that drops the label.
 
 Revisit if Ticketmaster lists a single game under a name with no matchup,
 or if a tracked team's own name ever contains one of the product words.
+
+## 0029 — An empty WNBA team page names the season it waits for; seller-table descriptions match the body (2026-11-05)
+
+**Why:** "phoenix mercury schedule 2027" was the site's top named query
+(Search Console, 2026-10-21 to 11-04, position about 8), while the same
+"<team> schedule" without a year ranked 60 to 95. The empty WNBA pages were
+titled just "<team> schedule". Separately, #77 fixed the page body of a team
+whose main seller is not Ticketmaster, but not its meta description: the
+Minnesota Frost's still said "every home and away game" while the page said
+Ticketmaster lists no Frost home game.
+
+The decision (`site.py`):
+
+- A WNBA team page with no listed game, in a build that fetched, is titled
+  "<team> 2027 schedule: add it to your calendar" (or "<team> 2027
+  schedule"), and its description says "Ticketmaster has not listed the
+  2027 schedule yet". The year is the build's year, or the next year from
+  October on (NEXT_SEASON_FROM_MONTH; the WNBA season is one calendar year
+  and ends in October, assumed from the league's usual calendar). No year
+  is shown for an unfetched build, for any other league, or once a game is
+  listed (the usual season label from real dates takes over).
+- A team in `sellers.PRIMARY_SELLERS` gets no year (its home games may never
+  be listed here). With no game listed, its description names the seller,
+  as the body does, and makes no calendar promise. With games listed but no
+  home game, it says "listed games" and "No home game is listed", never
+  "every home and away game".
+
+**Enforced by** `tests/test_empty_team_titles.py` and
+`tests/test_noindex_unlisted.py`; the Thorns goldens in
+`tests/golden/team_order_*.html` were re-rendered for the new descriptions.
+
+Revisit when the 2027 WNBA schedule is listed, or if the empty-page year is
+ever shown beside a body that does not say the schedule is unlisted.
