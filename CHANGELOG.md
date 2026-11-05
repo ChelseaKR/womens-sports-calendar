@@ -12,6 +12,11 @@ archived and private.
 
 ### Added
 
+- Each game's `SportsEvent` markup names its two teams as `performer`, and,
+  when the page's "Buy tickets" link goes to the game's own Ticketmaster
+  listing, an `offers` holding only that listing's URL. No price,
+  currency or availability is ever stated. A game sold through a team's
+  seller page, or cancelled, has no offer (DECISIONS 0030).
 - Every page's footer says "Next Home Game is independent and is not
   affiliated with any league, team or Ticketmaster.", the sentence the Atom
   feeds already carry (DECISIONS 0024).

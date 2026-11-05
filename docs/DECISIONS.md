@@ -1050,3 +1050,47 @@ that look like products, and a feed that drops the label.
 
 Revisit if Ticketmaster lists a single game under a name with no matchup,
 or if a tracked team's own name ever contains one of the product words.
+
+## 0030 — A game's SportsEvent names its teams as performers and its own Ticketmaster listing as the offer (2026-11-05)
+
+**Why:** Google's Event structured data recommends `performer` and `offers`.
+The markup had neither, so every SportsEvent drew those two warnings in the
+Rich Results Test. Both facts are already on the page: the matchup line
+names the two teams, and the "Buy tickets" link goes to the game's listing.
+
+**What changes (`structured_data.py`, checked by `validate_seo.py`):**
+
+- `performer` is the home and away teams, by the same names as `homeTeam`
+  and `awayTeam`.
+- `offers` is one `Offer` with only a `url`: the plain Ticketmaster event
+  address (`ticket_url`, never an affiliate tracking link). It is there
+  only when the page's "Buy tickets" link goes to that same listing.
+- No `price`, `priceCurrency`, `availability` or `validFrom`. The page
+  shows none of them (0013, 0024), so the markup cannot either.
+  `validate_seo` rejects an Offer with any key besides `@type` and `url`.
+- No Offer when the link goes to a home team's seller page (AXS,
+  SeatGeek, a school box office, per `sellers.PRIMARY_SELLERS`). That page
+  is the team's, not this game's.
+- No Offer for a game Ticketmaster has cancelled. The page still links
+  the listing, but there is nothing to buy, and the markup should not say
+  there is.
+- Nothing else moves. A game with no venue name, city and region still
+  gets no SportsEvent at all, because Google requires `location`, and the
+  site never fills a venue in. `eventStatus` still appears only when
+  Ticketmaster says cancelled, postponed or rescheduled.
+
+Not added: `endDate` (the feeds' end time is an estimate, 0015, and the
+page shows none), `image`, `description` and `organizer` (the page has no
+such fact). Google's event rich result is for pages about one event, so
+these league and team schedule pages are still not expected to earn it.
+This makes the markup more complete and keeps it true. It does not unlock
+a new result.
+
+**Enforced by** `tests/test_event_schema_offers.py`: required properties on
+every emitted event, the Offer only on a game's own listing, controls for a
+game with no venue, each Ticketmaster status code and a game with no URL,
+and planted price, availability, wrong-game Offer, dropped Offer, swapped
+performer and guessed status that `validate_seo` must reject.
+
+Revisit if a page ever shows a price or an on-sale date, or if the site
+gets one page per game.

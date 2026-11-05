@@ -206,7 +206,9 @@ used (requests, bytes).
   all published — never for a date-TBD or time-TBA game, never with a start
   time filled in, and none on a build that fetched nothing. `eventStatus`
   only when Ticketmaster says cancelled, postponed or rescheduled, which
-  the page then shows too.
+  the page then shows too. `performer` is the two teams, and `offers` is
+  only the url of the game's own Ticketmaster listing when the page's
+  "Buy tickets" link goes there, never a price (DECISIONS 0030).
 - `sitemap.py` — `sitemap.xml`, `robots.txt` and `lastmod.json`. A page's
   `<lastmod>` is when its schedule last changed, found by comparing this
   build's content fingerprints with the live site's own `lastmod.json`;
