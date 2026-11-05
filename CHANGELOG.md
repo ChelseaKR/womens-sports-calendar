@@ -35,6 +35,11 @@ archived and private.
   The participant check now treats "Women's" and "Womens" as the same word,
   and SEC teams ignore other schools named "<direction> <School>"
   (DECISIONS 0023).
+- The `measure-leagues` workflow also counts Ticketmaster listings for the
+  Big Ten, SEC, ACC, Big 12 and Big East women's tournaments and for NCAA
+  tournament sessions, by keyword, including how many name a tournament and
+  how many would match a tracked school. Counts only; the nightly build is
+  unchanged (DECISIONS 0032).
 - A manual `measure-leagues` workflow counts, with the site's own search and
   attribution code, how many upcoming Ticketmaster events SEC, ACC, Big 12 and
   Big East women's basketball, Major League Volleyball, Unrivaled and LOVB
