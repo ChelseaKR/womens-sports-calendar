@@ -10,8 +10,9 @@ one build-time constant (site.TEAM_PAGE_NEXT_GAME_FIRST), off by default.
   ordered blocks, and on 2026-11-04 for the lede's next-home-game first
   sentence (DECISIONS 0025), and on 2026-11-05 for the no-games message of
   a team whose main ticket seller is not Ticketmaster (the Thorns: SeatGeek),
-  and again on 2026-11-05 for the SportsEvent performer and offers in the
-  JSON-LD (DECISIONS 0030); the block order they pin did not change.
+  and again that day for the same teams' meta description (DECISIONS 0029)
+  and for the SportsEvent performer and offers in the JSON-LD (DECISIONS
+  0030); the block order they pin did not change.
 - On: the "Next home game" section comes before the subscribe section, and
   the page is otherwise the same text (same lines, same links, same rel
   attributes, same "Paid link" labels). Only a page with a next home game

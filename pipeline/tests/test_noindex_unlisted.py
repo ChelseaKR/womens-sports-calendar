@@ -145,18 +145,26 @@ def test_an_indexed_empty_page_reads_honestly(dist: Path):
     for path in (*EMPTY_WITH_TICKETS, *EMPTY):
         html = _page(dist, path)
         assert "No upcoming games found from Ticketmaster right now." in html, path
-        assert "No games are listed right now" in html, path  # the meta description
         assert '"SportsEvent"' not in html, path
         title = re.search(r"<title>([^<]*)</title>", html)
         assert title is not None
-        assert not re.search(r"\b20\d\d\b|home games|tickets", title.group(1), re.I), title.group(1)
+        assert not re.search(r"home games|tickets", title.group(1), re.I), title.group(1)
+        year = re.search(r"\b20\d\d\b", title.group(1))
+        if path.startswith("/wnba/"):
+            # The awaited WNBA season, and only beside a description that
+            # says Ticketmaster has not listed it (DECISIONS 0029).
+            assert year is not None, title.group(1)
+            assert f"Ticketmaster has not listed the {year.group(0)} schedule yet" in html, path
+        else:
+            assert year is None, title.group(1)
+            assert "No games are listed right now" in html, path  # the meta description
         assert "Buy tickets" not in html.split('<footer class="site-footer">')[0], path
     for path in EMPTY_TEAMS_WITH_TICKETS:
         html = _page(dist, path)
         assert "next-game--empty" in html, path
         title = re.search(r"<title>([^<]*)</title>", html)
         assert title is not None
-        assert title.group(1).endswith(" schedule"), title.group(1)
+        assert re.search(r" schedule(: add it to your calendar)? \| ", title.group(1) + " | "), title.group(1)
     assert "<title>AUSL schedule: add to your calendar | Next Home Game</title>" in _page(dist, AUSL)
     assert "<h1>AUSL schedule</h1>" in _page(dist, AUSL)
 
