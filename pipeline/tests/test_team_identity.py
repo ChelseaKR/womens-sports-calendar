@@ -155,7 +155,13 @@ GOLDEN_FEED_UIDS: dict[str, list[str]] = {
         "tm-FX-PACKAGE@womens-sports-calendar.invalid",
         "tm-FX-TIME-TBA@womens-sports-calendar.invalid",
     ],
-    "ics/wnba/seattle-storm.ics": ["tm-FX-H2H@womens-sports-calendar.invalid"],
+    # FX-AWAY is "Seattle Storm vs Las Vegas Aces": since every fetched event
+    # is matched against every tracked team (build.attribute_games),
+    # it is on the Storm's feed too, not only the Aces'.
+    "ics/wnba/seattle-storm.ics": [
+        "tm-FX-AWAY@womens-sports-calendar.invalid",
+        "tm-FX-H2H@womens-sports-calendar.invalid",
+    ],
     "ics/wnba.ics": [
         "tm-FX-AT@womens-sports-calendar.invalid",
         "tm-FX-ATTRACTIONS@womens-sports-calendar.invalid",

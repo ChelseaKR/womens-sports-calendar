@@ -74,7 +74,10 @@ def test_team_feeds_carry_the_same_events_too(fixture_dist: Path):
                 assert uid in combined
                 assert _without_page_link(vevent) == _without_page_link(combined[uid])
                 seen += 1
-    assert seen == 10  # FX-H2H is in two team feeds
+    # 10 on the Aces', Storm's, Thorns' and Sceptres' feeds (FX-H2H in two),
+    # plus 7 on the feeds of the Aces', Thorns' and Sceptres' tracked
+    # opponents (build.attribute_games).
+    assert seen == 17
 
 
 def test_the_combined_feed_links_to_the_home_page_and_validates(fixture_dist: Path):

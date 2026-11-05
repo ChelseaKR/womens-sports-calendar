@@ -192,8 +192,10 @@ def test_validator_passes_the_fixture_site_and_counts_its_events(fixture_dist: P
     # official link) are noindex and unlisted.
     assert pages == 5 + 3 + 1 + sum(len(lg.teams) for lg in config.LEAGUES) - 2
     # Aces 4 + Storm 1 + Thorns 1 + Sceptres 1 on team pages; WNBA 4, NWSL 1
-    # and PWHL 1 on league pages (the Aces/Storm game once).
-    assert events == 13
+    # and PWHL 1 on league pages (the Aces/Storm game once); and 5 more on the
+    # pages of tracked opponents, which every fetched event is matched against
+    # (build.attribute_games).
+    assert events == 18
     assert validate_seo.main([str(fixture_dist)]) == 0
 
 

@@ -22,8 +22,11 @@ from .fixture_site import BASE_URL, build_fixture_site
 
 NS = {"a": "http://www.w3.org/2005/Atom"}
 RFC3339_Z = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$")
-# Home-game entries the fixture holds: Aces (2, one cancelled), Thorns, Sceptres.
-EXPECTED = {"wnba": 2, "nwsl": 1, "pwhl": 1, "all": 4}
+# Home-game entries the fixture holds: Aces (2, one cancelled), Thorns,
+# Sceptres, and two of the Aces' road games, which are home games for the
+# Storm (FX-AWAY) and the Mercury (FX-AT): every fetched event is matched
+# against every tracked team (build.attribute_games).
+EXPECTED = {"wnba": 4, "nwsl": 1, "pwhl": 1, "all": 6}
 
 
 @pytest.fixture(scope="module")
@@ -80,15 +83,20 @@ def test_entries_are_home_games_with_exact_starts(two_builds):
     assert set(by_id) == {
         f"{BASE_URL}/wnba/las-vegas-aces/#game-FX-H2H",
         f"{BASE_URL}/wnba/las-vegas-aces/#game-FX-CANCELLED",
+        f"{BASE_URL}/wnba/seattle-storm/#game-FX-AWAY",
+        f"{BASE_URL}/wnba/phoenix-mercury/#game-FX-AT",
     }
     h2h = by_id[f"{BASE_URL}/wnba/las-vegas-aces/#game-FX-H2H"]
     assert h2h.findtext("a:updated", namespaces=NS) == "2026-09-20T01:00:00Z"
     assert h2h.findtext("a:title", namespaces=NS) == "Las Vegas Aces vs Seattle Storm, Sep 19"
     cancelled = by_id[f"{BASE_URL}/wnba/las-vegas-aces/#game-FX-CANCELLED"]
     assert "(Cancelled)" in cancelled.findtext("a:title", namespaces=NS)
-    # Never an away game, a time-TBA game, a date-TBD game, or an unknown-home listing.
+    # Never an away game (the Aces' road games are entries only for the home
+    # team), a time-TBA game, a date-TBD game, or an unknown-home listing.
     text = (built / feeds.feed_path("all")).read_text(encoding="utf-8")
-    for absent in ("FX-AWAY", "FX-AT", "FX-TIME-TBA", "FX-DATE-TBD", "FX-PACKAGE", "FX-ATTRACTIONS"):
+    for absent in ("las-vegas-aces/#game-FX-AWAY", "las-vegas-aces/#game-FX-AT"):
+        assert absent not in text
+    for absent in ("FX-TIME-TBA", "FX-DATE-TBD", "FX-PACKAGE", "FX-ATTRACTIONS"):
         assert absent not in text
 
 
