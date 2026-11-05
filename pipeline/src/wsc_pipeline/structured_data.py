@@ -22,6 +22,16 @@ validate_seo.py:
 - eventStatus appears only when Ticketmaster says the game is cancelled,
   postponed or rescheduled -- and the page shows that word next to the
   date. Otherwise it is left out, which Google reads as "scheduled".
+- performer is the two teams, the same names as homeTeam and awayTeam,
+  which the page's matchup line shows.
+- offers is one Offer holding only a url, and only when the page's "Buy
+  tickets" link for the game goes to this game's own listing (site_data's
+  `buy` with no home_team): the url is the plain event address
+  (`ticket_url`, never an affiliate tracking link). No price,
+  priceCurrency, availability or validFrom, because the page shows none
+  (DECISIONS 0013, 0024). A link to a home team's seller page (AXS,
+  SeatGeek, a school box office) is not this game's offer, so it gets no
+  Offer, and neither does a cancelled game (DECISIONS 0030).
 - A build that did not fetch (payload "fetched" false) emits no events.
 
 Google's event rich result currently supports only pages that focus on one
@@ -152,12 +162,28 @@ def sports_event(game: Mapping[str, Any], *, sport: str) -> dict[str, Any] | Non
         "homeTeam": {"@type": "SportsTeam", "name": team_label(game["home_team"])},
         "awayTeam": {"@type": "SportsTeam", "name": team_label(game["away_team"])},
     }
+    node["performer"] = [dict(node["homeTeam"]), dict(node["awayTeam"])]
     if sport:
         node["sport"] = sport
     status = EVENT_STATUS.get(game.get("status") or "")
     if status:
         node["eventStatus"] = status
+    offer_url = event_offer_url(game)
+    if offer_url:
+        node["offers"] = {"@type": "Offer", "url": offer_url}
     return node
+
+
+def event_offer_url(game: Mapping[str, Any]) -> str | None:
+    """The url of the game's Offer, or None when the page has no ticket
+    link for this game itself: the plain Ticketmaster event address, only
+    when the page's "Buy tickets" link goes to that same listing (not to a
+    home team's seller page) and the game is not cancelled."""
+    buy = game.get("buy")
+    url = game.get("ticket_url")
+    if not buy or buy.get("home_team") or not url or game.get("status") == "Cancelled":
+        return None
+    return str(url)
 
 
 def sports_events(games: list[Mapping[str, Any]], *, sport: str, fetched: bool) -> list[dict[str, Any]]:
