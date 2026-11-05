@@ -100,6 +100,301 @@ PRIMARY_SELLERS: dict[tuple[str, str], Seller] = {
             "says 'Official Ticketing Partner'. Checked 2026-09-17."
         ),
     ),
+    ("pwhl", "vancouver-goldeneyes"): Seller(
+        name="Ticket Leader",
+        team_page_url="https://ticketleader.evenue.net/events/PWHL26",
+        evidence=(
+            "thepwhl.com/en/teams/vancouver-goldeneyes/tickets links only "
+            "ticketleader.evenue.net (Ticket Leader on Paciolan), including "
+            "this page. Checked 2026-11-05."
+        ),
+    ),
+    ("nwsl", "gotham-fc"): Seller(
+        name="SI Tickets",
+        team_page_url="https://www.gothamfc.com/tickets",
+        evidence=(
+            "gothamfc.com/tickets sells through sitickets.com (playoff match, "
+            "2027 memberships); SI Tickets has no Gotham team page, so this is "
+            "the club's own ticket page. Checked 2026-11-05."
+        ),
+    ),
+    ("ncaaw-big-ten", "minnesota-golden-gophers-womens-basketball"): Seller(
+        name="Paciolan",
+        team_page_url="https://gophersports.evenue.net/list/WBB",
+        evidence=("gophersports.com/WBBTickets links this gophersports.evenue.net page. Checked 2026-11-05."),
+    ),
+    ("ncaaw-big-ten", "purdue-boilermakers-womens-basketball"): Seller(
+        name="Paciolan",
+        team_page_url="https://purduesports.evenue.net/list/WBB",
+        evidence=(
+            "purduesports.com/purdue-tickets-purdue-boilermakers links "
+            "purduesports.evenue.net (groupCode=WBB), which opens this page. "
+            "Checked 2026-11-05."
+        ),
+    ),
+    ("ncaaw-big-ten", "indiana-hoosiers-womens-basketball"): Seller(
+        name="Paciolan",
+        team_page_url="https://iuhoosiers.evenue.net/list/WBM",
+        evidence=("iuhoosiers.com/tickets links iuhoosiers.evenue.net (groupCode=WBM). Checked 2026-11-05."),
+    ),
+    ("ncaaw-sec", "arkansas-razorbacks-womens-basketball"): Seller(
+        name="Paciolan",
+        team_page_url="https://arkansasrazorbacks.evenue.net/list/WB",
+        evidence=(
+            "arkansasrazorbacks.com/sport/w-baskbl/tickets links this "
+            "arkansasrazorbacks.evenue.net page. Checked 2026-11-05."
+        ),
+    ),
+    ("wnba", "dallas-wings"): Seller(
+        name="AXS",
+        team_page_url="https://www.axs.com/artists/1109710/dallas-wings-tickets",
+        evidence=(
+            "wings.wnba.com/tickets links this axs.com artist page, including 2027 season tickets. Checked 2026-11-05."
+        ),
+    ),
+    ("wnba", "minnesota-lynx"): Seller(
+        name="Jump",
+        team_page_url="https://go.lynxbasketball.com/tickets/single",
+        evidence=(
+            "lynx.wnba.com/tickets links this page and "
+            "tickets.lynxbasketball.com; the team named Jump its exclusive "
+            "ticketing provider in July 2025, replacing AXS. Checked "
+            "2026-11-05."
+        ),
+    ),
+    ("nwsl", "racing-louisville"): Seller(
+        name="SeatGeek",
+        team_page_url="https://seatgeek.com/racing-louisville-fc-tickets",
+        evidence=("racingloufc.com/tickets links this seatgeek.com page. Checked 2026-11-05."),
+    ),
+    ("nwsl", "bay-fc"): Seller(
+        name="Tixr",
+        team_page_url="https://www.tixr.com/groups/bayfc",
+        evidence=("bayfc.com/tickets links this tixr.com group. Checked 2026-11-05."),
+    ),
+    ("nwsl", "houston-dash"): Seller(
+        name="Tixr",
+        team_page_url="https://www.tixr.com/groups/houstondash",
+        evidence=("houstondynamofc.com/houstondash/tickets links this tixr.com group. Checked 2026-11-05."),
+    ),
+    ("nwsl", "denver-summit"): Seller(
+        name="Jump",
+        team_page_url="https://tickets.denversummitfc.com",
+        evidence=(
+            "denversummitfc.com/season-tickets links "
+            "tickets.denversummitfc.com, a Jump store (judged from its page "
+            "assets, not a stated partnership). Checked 2026-11-05."
+        ),
+    ),
+    ("nwsl", "north-carolina-courage"): Seller(
+        name="Jump",
+        team_page_url="https://tickets.nccourage.com/?tab=single-match",
+        evidence=(
+            "nccourage.com/tickets links this page, a Jump store (judged from "
+            "its page assets, not a stated partnership). Checked 2026-11-05."
+        ),
+    ),
+    ("pwhl", "pwhl-las-vegas"): Seller(
+        name="AXS",
+        team_page_url="https://www.axs.com/events/1579186/pwhl-las-vegas-season-2026-27-tickets",
+        evidence=(
+            "thepwhl.com/en/teams/las-vegas/tickets links axs.com only, "
+            "including this season page (no AXS team page found). Checked "
+            "2026-11-05."
+        ),
+    ),
+    ("ausl", "chicago-bandits"): Seller(
+        name="AUSL",
+        team_page_url="https://theausl.com/bandits/tickets/",
+        evidence=(
+            "The AUSL sells its own tickets on theausl.com (SquadUP checkout on "
+            "this page); StubHub is its official marketplace. Checked "
+            "2026-11-05."
+        ),
+    ),
+    ("ausl", "carolina-blaze"): Seller(
+        name="AUSL",
+        team_page_url="https://theausl.com/blaze/tickets/",
+        evidence=(
+            "The AUSL sells its own tickets on theausl.com (SquadUP checkout on "
+            "this page); StubHub is its official marketplace. Checked "
+            "2026-11-05."
+        ),
+    ),
+    ("ausl", "portland-cascade"): Seller(
+        name="AUSL",
+        team_page_url="https://theausl.com/cascade/tickets/",
+        evidence=(
+            "The AUSL sells its own tickets on theausl.com (SquadUP checkout on "
+            "this page); StubHub is its official marketplace. Checked "
+            "2026-11-05."
+        ),
+    ),
+    ("ausl", "oklahoma-city-spark"): Seller(
+        name="AUSL",
+        team_page_url="https://theausl.com/spark/tickets/",
+        evidence=(
+            "The AUSL sells its own tickets on theausl.com (SquadUP checkout on "
+            "this page); StubHub is its official marketplace. Checked "
+            "2026-11-05."
+        ),
+    ),
+    ("ausl", "utah-talons"): Seller(
+        name="AUSL",
+        team_page_url="https://theausl.com/talons/tickets/",
+        evidence=(
+            "The AUSL sells its own tickets on theausl.com (SquadUP checkout on "
+            "this page); StubHub is its official marketplace. Checked "
+            "2026-11-05."
+        ),
+    ),
+    ("ausl", "texas-volts"): Seller(
+        name="AUSL",
+        team_page_url="https://theausl.com/volts/tickets/",
+        evidence=(
+            "The AUSL sells its own tickets on theausl.com (SquadUP checkout on "
+            "this page); StubHub is its official marketplace. Checked "
+            "2026-11-05."
+        ),
+    ),
+    ("ncaaw-big-ten", "illinois-fighting-illini-womens-basketball"): Seller(
+        name="Paciolan",
+        team_page_url="https://fightingillini.evenue.net/events/WBB",
+        evidence=(
+            "fightingillini.com's women's basketball ticket page links "
+            "fightingillini.evenue.net (groupCode=WBB), which opens this page. "
+            "Checked 2026-11-05."
+        ),
+    ),
+    ("ncaaw-big-ten", "iowa-hawkeyes-womens-basketball"): Seller(
+        name="Paciolan",
+        team_page_url="https://hawkeyesports.evenue.net/events/WBBSG",
+        evidence=(
+            "hawkeyesports.com/tickets/wbb links this hawkeyesports.evenue.net single-game page. Checked 2026-11-05."
+        ),
+    ),
+    ("ncaaw-big-ten", "maryland-terrapins-womens-basketball"): Seller(
+        name="Paciolan",
+        team_page_url="https://umterps.evenue.net/list/WB",
+        evidence=(
+            "umterps.com's women's basketball ticket page links this umterps.evenue.net page. Checked 2026-11-05."
+        ),
+    ),
+    ("ncaaw-big-ten", "michigan-wolverines-womens-basketball"): Seller(
+        name="Paciolan",
+        team_page_url="https://mgoblue.evenue.net/events/womens-basketball-single-game-tickets",
+        evidence=(
+            "mgoblue.com/feature/womens-basketball-tickets links this "
+            "mgoblue.evenue.net single-game page. Checked 2026-11-05."
+        ),
+    ),
+    ("ncaaw-big-ten", "nebraska-cornhuskers-womens-basketball"): Seller(
+        name="Paciolan",
+        team_page_url="https://huskers.evenue.net/events/2026-27-womens-basketball",
+        evidence=("huskers.com/tickets/wbb links this huskers.evenue.net page. Checked 2026-11-05."),
+    ),
+    ("ncaaw-big-ten", "rutgers-scarlet-knights-womens-basketball"): Seller(
+        name="Paciolan",
+        team_page_url="https://scarletknights.evenue.net/list/WBB",
+        evidence=("scarletknights.com/tickets sends buyers to scarletknights.evenue.net. Checked 2026-11-05."),
+    ),
+    ("ncaaw-big-ten", "ucla-bruins-womens-basketball"): Seller(
+        name="Paciolan",
+        team_page_url="https://ucla.evenue.net/list/WBB",
+        evidence=(
+            "uclabruins.com/tickets links ucla.evenue.net (groupCode=WBB), which opens this page. Checked 2026-11-05."
+        ),
+    ),
+    ("ncaaw-big-ten", "usc-trojans-womens-basketball"): Seller(
+        name="Paciolan",
+        team_page_url="https://usctrojans.evenue.net/events/WBBI",
+        evidence=(
+            "usctrojans.com's women's basketball ticket page links this usctrojans.evenue.net page. Checked 2026-11-05."
+        ),
+    ),
+    ("ncaaw-big-ten", "washington-huskies-womens-basketball"): Seller(
+        name="Paciolan",
+        team_page_url="https://gohuskies.evenue.net/list/WB",
+        evidence=("gohuskies.com/sports/2026/7/2/tickets links this gohuskies.evenue.net page. Checked 2026-11-05."),
+    ),
+    ("ncaaw-big-ten", "wisconsin-badgers-womens-basketball"): Seller(
+        name="Paciolan",
+        team_page_url="https://uwbadgers.evenue.net/cgi-bin/ncommerce3/SEGetGroupList?linkID=wisc",
+        evidence=(
+            "uwbadgers.com's ticket page links this uwbadgers.evenue.net page "
+            "(all sports; no women's-basketball-only page found). Checked "
+            "2026-11-05."
+        ),
+    ),
+    ("ncaaw-sec", "alabama-crimson-tide-womens-basketball"): Seller(
+        name="Paciolan",
+        team_page_url="https://rolltide.evenue.net/list/WBK",
+        evidence=(
+            "rolltide.com's women's basketball ticket page links this rolltide.evenue.net page. Checked 2026-11-05."
+        ),
+    ),
+    ("ncaaw-sec", "auburn-tigers-womens-basketball"): Seller(
+        name="Paciolan",
+        team_page_url="https://auburntigers.evenue.net/events/WBSG",
+        evidence=(
+            "auburntigers.com/tickets/wbb links this auburntigers.evenue.net single-game page. Checked 2026-11-05."
+        ),
+    ),
+    ("ncaaw-sec", "georgia-bulldogs-womens-basketball"): Seller(
+        name="Paciolan",
+        team_page_url="https://georgiadogs.evenue.net/events/WBBNEW",
+        evidence=(
+            "georgiadogs.com/buytickets sends buyers to georgiadogs.evenue.net; "
+            "this is its women's basketball page. Checked 2026-11-05."
+        ),
+    ),
+    ("ncaaw-sec", "lsu-tigers-womens-basketball"): Seller(
+        name="Paciolan",
+        team_page_url="https://lsusports.evenue.net/events/WBB",
+        evidence=("lsusports.net/tickets/wbball links this lsusports.evenue.net page. Checked 2026-11-05."),
+    ),
+    ("ncaaw-sec", "mississippi-state-bulldogs-womens-basketball"): Seller(
+        name="Paciolan",
+        team_page_url="https://hailstate.evenue.net/list/WBSING",
+        evidence=("hailstate.com's ticket page links this hailstate.evenue.net single-game page. Checked 2026-11-05."),
+    ),
+    ("ncaaw-sec", "oklahoma-sooners-womens-basketball"): Seller(
+        name="Paciolan",
+        team_page_url="https://soonersports.evenue.net/list/WB",
+        evidence=("soonersports.com's ticket page links this soonersports.evenue.net page. Checked 2026-11-05."),
+    ),
+    ("ncaaw-sec", "ole-miss-rebels-womens-basketball"): Seller(
+        name="Paciolan",
+        team_page_url="https://olemisssports.evenue.net/event/WB26/WBS",
+        evidence=(
+            "olemisssports.com's women's basketball schedule links this "
+            "olemisssports.evenue.net page. Checked 2026-11-05."
+        ),
+    ),
+    ("ncaaw-sec", "texas-longhorns-womens-basketball"): Seller(
+        name="Paciolan",
+        team_page_url="https://texaslonghorns.evenue.net/list/WB",
+        evidence=(
+            "texaslonghorns.com's women's basketball ticket page links this "
+            "texaslonghorns.evenue.net page. Checked 2026-11-05."
+        ),
+    ),
+    ("ncaaw-sec", "texas-am-aggies-womens-basketball"): Seller(
+        name="Paciolan",
+        team_page_url="https://12thmanfoundation.evenue.net/list/TAMU",
+        evidence=(
+            "12thmanfoundation.com/tickets links 12thmanfoundation.evenue.net "
+            "(groupCode=TAMU), which opens this page (all sports; no "
+            "women's-basketball-only page found). Checked 2026-11-05."
+        ),
+    ),
+    ("ncaaw-sec", "vanderbilt-commodores-womens-basketball"): Seller(
+        name="Paciolan",
+        team_page_url="https://vucommodores.evenue.net/events/WBSING",
+        evidence=(
+            "vucommodores.com/wbb-ticketing links this vucommodores.evenue.net single-game page. Checked 2026-11-05."
+        ),
+    ),
 }
 
 # The owner's Impact tracking links (DECISIONS 0018), one per programme,
@@ -175,7 +470,11 @@ def ticket_host_names() -> tuple[str, ...]:
     matcher from this, so a new seller is counted without a second edit."""
     hosts = [urlparse(s.team_page_url).hostname or "" for s in PRIMARY_SELLERS.values()]
     hosts += list(_HOST_LABELS)
-    names = {h.removeprefix("www.").split(".")[0] for h in hosts if h}
+    # The label just left of the top-level domain: "evenue" for every
+    # Paciolan school (gophersports.evenue.net), "nccourage" for a team-run
+    # store (tickets.nccourage.com). The first label would give a school's
+    # name or a generic "tickets"/"go" that matches unrelated hosts.
+    names = {h.split(".")[-2] for h in hosts if h.count(".") >= 1}
     return tuple(sorted(names))
 
 

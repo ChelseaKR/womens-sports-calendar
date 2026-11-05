@@ -3,6 +3,7 @@ config point (DECISIONS 0013)."""
 
 from __future__ import annotations
 
+import re
 from html.parser import HTMLParser
 
 import pytest
@@ -275,3 +276,27 @@ def test_empty_page_for_a_ticketmaster_team_is_unchanged():
         "your calendar automatically &mdash; nothing to check back for."
     )
     assert sellers.team_primary_seller("wnba", "chicago-sky") is None
+
+
+def test_every_seller_table_url_is_https_and_every_key_is_a_site_team():
+    """Every PRIMARY_SELLERS entry (DECISIONS 0013) is keyed by a team the
+    site actually lists, and links an https page with a real host."""
+    from urllib.parse import urlparse
+
+    site_teams = {(lg.slug, t.slug) for lg in LEAGUES for t in lg.teams}
+    assert len(sellers.PRIMARY_SELLERS) == 45
+    for key, seller in sellers.PRIMARY_SELLERS.items():
+        assert key in site_teams, key
+        parsed = urlparse(seller.team_page_url)
+        assert parsed.scheme == "https" and parsed.hostname and "." in parsed.hostname, (key, seller.team_page_url)
+        assert seller.name.strip() and "Ticketmaster" not in seller.name, key
+        assert re.search(r"20[0-9]{2}-[0-9]{2}-[0-9]{2}", seller.evidence), key
+
+
+def test_ticket_host_names_use_the_sellers_domain_not_a_subdomain():
+    """Paciolan schools and team-run stores sit on subdomains; the analytics
+    matcher must count them by their domain ("evenue", "nccourage"), never
+    by a school name or a generic "tickets"/"go" label."""
+    names = sellers.ticket_host_names()
+    assert {"evenue", "tixr", "axs", "seatgeek", "nccourage", "theausl", "ticketmaster"} <= set(names)
+    assert not {"tickets", "go", "www", "gophersports"} & set(names)
