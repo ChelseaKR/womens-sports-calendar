@@ -136,6 +136,12 @@ archived and private.
 
 ### Fixed
 
+- The Montreal Victoire's page and calendar feed list its games again. The
+  live build of 2026-11-04 had 23 Victoire games in the PWHL calendar and 1
+  on the team's own page, which said no home game was listed: Ticketmaster
+  names the team "Montréal Victoire", and "La Victoire De Montréal" for home
+  games, and the participant check turned the "é" into a space. Accents are
+  now folded before matching, and the French name is a second search name.
 - Calendar events no longer say "Tickets: price not available from
   Ticketmaster" (or any price): the site shows no prices, and the line on
   every event was absence printed as a value. `make validate-ics` refuses an
