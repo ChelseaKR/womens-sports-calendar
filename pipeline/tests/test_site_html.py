@@ -123,7 +123,8 @@ def test_buy_link_text_says_where_it_goes():
     """WCAG 2.4.4: link text must make sense out of context -- not bare
     'Buy' or 'click here'."""
     html = _pages()["league"]
-    assert re.search(r"Buy tickets for .* from Ticketmaster", html)
+    # A table row's visible text names the seller; the hidden rest names the game.
+    assert re.search(r'Tickets \(Ticketmaster\)<span class="sr-only"> for .+ vs .+ on [^<]+</span></a>', html)
     assert ">Buy</a>" not in html
     assert ">click here<" not in html.lower()
 
@@ -141,7 +142,8 @@ def test_footer_privacy_note_is_present_and_literal():
     does. (The with-ID wording is checked in tests/test_analytics.py.)"""
     for html in _pages().values():
         assert "This site runs no analytics, no scripts, and\nsets no cookies" in html
-        assert "the calendar feeds are never tracked" in html
+        assert "the calendar feeds carry no analytics either" in html
+        assert "never tracked" not in html
         assert '<a href="/privacy/">Privacy: what this site measures' in html
         assert "Google Analytics" not in html
 

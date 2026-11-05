@@ -254,8 +254,8 @@ def _corrupt(src: Path, dst: Path, rel: str, old: str, new: str) -> Path:
             f"<loc>{BASE_URL}/wnba/seattle-storm/</loc><lastmod>2026-09-01</lastmod>",
             "disagrees",
         ),
-        ("sitemap.xml", "<lastmod>2026-09-17</lastmod>", "<lastmod>17 Sep 2026</lastmod>", "not a W3C date"),
-        ("sitemap.xml", "<lastmod>2026-09-17</lastmod>", "<lastmod>2099-01-01</lastmod>", "in the future"),
+        ("sitemap.xml", "<lastmod>2026-11-05</lastmod>", "<lastmod>5 Nov 2026</lastmod>", "not a W3C date"),
+        ("sitemap.xml", "<lastmod>2026-11-05</lastmod>", "<lastmod>2099-01-01</lastmod>", "in the future"),
         ("sitemap.xml", "</urlset>", "<url>", "not well-formed"),
     ],
 )

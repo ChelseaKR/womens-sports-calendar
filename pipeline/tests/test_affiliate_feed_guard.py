@@ -250,7 +250,9 @@ def test_a_team_page_marks_the_wrapped_link_paid():
     assert len(paid) == 2  # the next-game hero and the table row
     for link in paid:
         assert link["attrs"]["rel"] == "sponsored noopener" and link["labelled"]
-        assert str(link["text"]).endswith(" from Ticketmaster") and "evyy" not in str(link["text"])
+        text = str(link["text"])
+        assert text.endswith(" from Ticketmaster") or text.startswith("Tickets (Ticketmaster)"), text
+        assert "evyy" not in text
     assert site.AFFILIATE_NOTE_ACTIVE in html
 
 
@@ -281,6 +283,6 @@ def test_a_whole_site_with_wrapped_urls_labels_them_and_discloses_it(tmp_path: P
             if impact.is_impact_link(href):
                 assert link["attrs"].get("rel") == "sponsored noopener", (name, href)
                 assert link["labelled"], (name, href)
-                assert "Buy tickets for " in str(link["text"]), (name, href)
+                assert str(link["text"]).startswith(("Buy tickets for ", "Tickets (")), (name, href)
     aces = files["wnba/las-vegas-aces/index.html"].decode()
     assert aces.count(site.PAID_LINK_LABEL) > 0

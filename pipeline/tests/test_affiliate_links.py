@@ -139,8 +139,13 @@ def assert_affiliate_links_are_exactly_the_intended_ones(html: str) -> int:
             destination = _destination(href)
             if href.startswith(SEATGEEK_LINK):
                 assert destination in seatgeek_pages, f"a SeatGeek tracking link goes to {destination}"
-                # The link text names the seller, not the tracking host.
-                assert " from SeatGeek, the official seller for " in str(link["text"]), link["text"]
+                # The link text names the seller, not the tracking host: the hero
+                # says "... from SeatGeek, the official seller for ...", a table row
+                # "Tickets (SeatGeek) ...; SeatGeek is the official seller for ...".
+                text = str(link["text"])
+                assert " from SeatGeek, the official seller for " in text or (
+                    text.startswith("Tickets (SeatGeek)") and "SeatGeek is the official seller for " in text
+                ), text
             else:
                 assert destination in shops, f"a Fanatics tracking link goes to {destination}"
             assert attrs.get("rel") == "sponsored noopener", f"affiliate link without rel: {href}"
@@ -253,7 +258,8 @@ def test_seatgeek_links_get_the_tracking_link_rel_and_label(monkeypatch):
     assert assert_affiliate_links_are_exactly_the_intended_ones(html) == 2
     # The label sits right after the link, in the hero and in the table.
     assert 'rel="sponsored noopener">Buy tickets for' in html
-    assert html.count(f"home games</a> {site.PAID_LINK_LABEL}") == 2
+    assert html.count(f"home games</a> {site.PAID_LINK_LABEL}") == 1  # the hero
+    assert html.count(f"home games</span></a> {site.PAID_LINK_LABEL}") == 1  # the table row
     assert site.AFFILIATE_NOTE_ACTIVE in html
 
 

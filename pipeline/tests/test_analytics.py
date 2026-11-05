@@ -178,7 +178,9 @@ def test_a_build_with_an_id_emits_the_guarded_tag_on_every_page(tmp_path: Path):
     privacy = pages["privacy/index.html"]
     assert "Web pages: Google Analytics" in privacy
     assert f"Kept for {analytics.GA4_DATA_RETENTION}" in privacy
-    assert "Calendar feeds: never tracked" in privacy
+    assert "Calendar feeds: what is and isn't measured" in privacy
+    assert "a click on a calendar-subscribe link is counted\nby Google Analytics" in privacy
+    assert "never tracked" not in privacy
 
 
 def test_ga_never_reaches_the_ics_feeds_or_data_and_they_are_unchanged(tmp_path: Path, monkeypatch):
@@ -237,7 +239,7 @@ def test_ticket_links_stay_plain_urls_when_ga_is_on(tmp_path: Path, monkeypatch)
     league, team = LEAGUES[0], TM_TEAM
     for page in (out_dir / league.slug / "index.html", out_dir / league.slug / team.slug / "index.html"):
         html = page.read_text()
-        buy_hrefs = re.findall(r'<a [^>]*href="([^"]+)"[^>]*>Buy tickets', html)
+        buy_hrefs = re.findall(r'<a [^>]*href="([^"]+)"[^>]*>(?:Buy tickets|Tickets \()', html)
         assert buy_hrefs, page
         assert set(buy_hrefs) == {"https://www.ticketmaster.com/event/EVT-GA"}, page
         assert "googleadservices" not in html and "google.com/url" not in html

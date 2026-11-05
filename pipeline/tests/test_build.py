@@ -291,7 +291,7 @@ def test_head_to_head_game_is_listed_and_counted_once_per_league(tmp_path: Path,
     league_json = json.loads((records_dir(out_dir) / "wnba.json").read_text())
     assert [g["event_id"] for g in league_json["games"]] == ["EVT-H2H"]
     league_html = (out_dir / "wnba" / "index.html").read_text()
-    assert league_html.count("Buy tickets for Atlanta Dream vs Connecticut Sun") == 1
+    assert league_html.count('<span class="sr-only"> for Atlanta Dream vs Connecticut Sun on') == 1
     assert "1 upcoming game<" in (out_dir / "index.html").read_text()
     site_json = json.loads((out_dir / "data" / "site.json").read_text())
     assert next(lg for lg in site_json["leagues"] if lg["slug"] == "wnba")["games_count"] == 1
