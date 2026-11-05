@@ -422,3 +422,97 @@ def test_the_guard_does_not_count_a_kept_game_as_upcoming(tmp_path: Path, monkey
     previous = _read_live(n2)
     report = guard.evaluate(previous, [], {}, now=NIGHT_2 + timedelta(days=200), overrides=())
     assert all(v.event_id != "P1" for v in report.vanished)
+
+
+# --- a previous feed that cannot be read never erases its kept games ------------------------------------------
+
+
+def _played_then_unreadable(tmp_path: Path, monkeypatch, broken: Callable[[httpx.Request], httpx.Response | None]):
+    """Night 1 lists P1; night 2 keeps it; night 3 reads night 2's site
+    through `broken` (None means serve normally)."""
+    played = _raw("P1", NIGHT_1 + timedelta(hours=12))
+    later = [_raw(f"G{i}", NIGHT_1 + timedelta(days=5 + i)) for i in range(3)]
+    n1, n2, n3 = tmp_path / "n1", tmp_path / "n2", tmp_path / "n3"
+    _build(n1, [played, *later], monkeypatch, now=NIGHT_1)
+    _build(n2, later, monkeypatch, now=NIGHT_2, previous_from=n1)
+    assert make_uid("P1") in _events(n2, FEVER_FEED)
+    serve = _serve(n2)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return broken(request) or serve(request)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        previous = REAL_FETCH_PREVIOUS_PUBLISH(BASE_URL, client=client)
+    responses = {FEVER: later, LIBERTY: _liberty()}
+    monkeypatch.setattr(build_module, "DiscoveryClient", lambda api_key: _FakeDiscoveryClient(responses))
+    build_module.build(
+        out_dir=n3, base_url=BASE_URL, api_key="fake-key", affiliate_id=None, previous_publish=previous, now=NIGHT_3
+    )
+    return n3
+
+
+@pytest.mark.parametrize(
+    ("path", "response"),
+    [
+        (f"/{FEVER_FEED}", httpx.Response(503)),
+        (f"/{FEVER_FEED}", httpx.Response(200, text="<html>maintenance</html>")),
+        (f"/{LEAGUE_FEED}", httpx.Response(500)),
+        (f"/{LEAGUE_FEED}", httpx.Response(200, content=b"BEGIN:VCALENDAR\r\nnot a calendar")),
+    ],
+    ids=["team-503", "team-not-a-feed", "league-500", "league-unparsable"],
+)
+def test_an_unreadable_previous_feed_refuses_the_build_and_keeps_the_live_site(
+    tmp_path: Path, monkeypatch, path: str, response: httpx.Response
+):
+    with pytest.raises(guard.PublishRefused) as raised:
+        _played_then_unreadable(tmp_path, monkeypatch, lambda r: response if r.url.path == path else None)
+    assert path.lstrip("/") in str(raised.value)
+    assert not (tmp_path / "n3").exists()  # nothing written: the live feeds, with P1, stay up
+
+
+def test_a_site_that_does_not_answer_refuses_the_build(tmp_path: Path, monkeypatch):
+    def down(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectTimeout("slow")
+
+    with pytest.raises(guard.PublishRefused, match="could not be read"):
+        _played_then_unreadable(tmp_path, monkeypatch, down)
+
+
+def test_control_a_readable_site_keeps_the_game_on_night_three(tmp_path: Path, monkeypatch):
+    """The same three nights with nothing broken: the refusal above is the
+    unreadable feed's doing, not the scenario's."""
+    n3 = _played_then_unreadable(tmp_path, monkeypatch, lambda r: None)
+    assert make_uid("P1") in _events(n3, FEVER_FEED)
+    assert make_uid("P1") in _events(n3, LEAGUE_FEED)
+
+
+def test_a_feed_that_never_existed_is_new_not_unreadable(tmp_path: Path, monkeypatch):
+    n3 = _played_then_unreadable(
+        tmp_path, monkeypatch, lambda r: httpx.Response(404) if r.url.path == "/ics/nwsl.ics" else None
+    )
+    assert make_uid("P1") in _events(n3, FEVER_FEED)
+
+
+def test_an_override_publishes_without_the_unread_feed_and_says_so(tmp_path: Path, monkeypatch):
+    override = config.GuardOverride("wnba", "test: the Fever feed is broken", date(2026, 6, 30))
+    monkeypatch.setattr(config, "PUBLISH_GUARD_OVERRIDES", (override,))
+    n3 = _played_then_unreadable(
+        tmp_path, monkeypatch, lambda r: httpx.Response(503) if r.url.path == f"/{FEVER_FEED}" else None
+    )
+    assert make_uid("P1") not in _events(n3, FEVER_FEED)  # the accepted loss
+    assert make_uid("P1") in _events(n3, LEAGUE_FEED)  # the league feed was read and keeps it
+    assert "ACCEPTED BY OVERRIDE" in (n3 / "COVERAGE.txt").read_text()
+
+
+# --- kept entries go through the listing name rules ----------------------------------------------------------
+
+
+def test_a_ticket_product_or_mens_game_published_before_the_listing_rules_is_not_kept():
+    past = NIGHT_2 - timedelta(days=30)
+    products = _vevent("T1", past)
+    products["SUMMARY"] = "Tennessee Volunteers Women's Basketball Season Tickets"
+    mens = _vevent("M1", past)
+    mens["SUMMARY"] = "Canceled: Pittsburgh Panthers Mens Basketball vs. Penn State Nittany Lions Womens Basketball"
+    game = _vevent("W1", past)
+    game["SUMMARY"] = "Tennessee Lady Volunteers vs. Duquesne Dukes (time TBA)"
+    assert _kept_ids([products, mens, game], NIGHT_2) == ["W1"]

@@ -10,7 +10,9 @@ last (guard.fetch_previous_publish keeps every feed's events) and:
   written into the same feed again when Ticketmaster no longer lists the game
   at all, the game has started (an all-day game: its date is over), it started
   no more than KEEP_PLAYED_DAYS ago, and its event id is not one the
-  maintainer removed (config.REMOVED_EVENTS). It is the published VEVENT as it
+  maintainer removed (config.REMOVED_EVENTS), and its name does not say it is
+  a ticket product or a men's game (listings.name_says_not_a_game, for
+  entries published before those were left out). It is the published VEVENT as it
   was, with only DTSTAMP set to this build's time: same UID, summary, status
   ("Canceled: " stays canceled), times, description, SEQUENCE and
   LAST-MODIFIED. Nothing about the game is re-derived or invented, and no
@@ -39,7 +41,8 @@ from datetime import UTC, date, datetime, timedelta
 from icalendar import Component, Event
 from icalendar.prop import vDDDTypes
 
-from .ics import UID_DOMAIN
+from .ics import FEED_STATUS, TIME_TBA_SUFFIX, UID_DOMAIN
+from .listings import EVENT_START_SUFFIX, name_says_not_a_game
 
 # How long a played game stays in the feeds after it starts. About a college
 # season, or a WNBA one, so a subscriber can look back over the season.
@@ -115,6 +118,8 @@ def kept_played(
             continue
         if not (has_been_played(vevent, now) and within_keep_window(vevent, now, keep_days)):
             continue
+        if name_says_not_a_game(listing_name(vevent)):
+            continue  # published before listings.py left such listings out
         copy = Event.from_ical(vevent.to_ical())
         if not isinstance(copy, Event):
             continue
@@ -122,6 +127,17 @@ def kept_played(
         copy["DTSTAMP"] = vDDDTypes(stamp)
         kept.append(copy)
     return kept
+
+
+def listing_name(vevent: Component) -> str:
+    """The Ticketmaster name in a feed SUMMARY, without the status prefix and
+    the time-TBA or event-start suffix the feeds add."""
+    summary = str(vevent.get("summary", ""))
+    for status in FEED_STATUS.values():
+        if status.summary_prefix and summary.startswith(status.summary_prefix):
+            summary = summary.removeprefix(status.summary_prefix)
+            break
+    return summary.removesuffix(TIME_TBA_SUFFIX).removesuffix(EVENT_START_SUFFIX)
 
 
 def _value(vevent: Component, prop: str) -> object:

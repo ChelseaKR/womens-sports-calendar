@@ -161,9 +161,13 @@ less of its games, in one night; games that Ticketmaster changes rather than
 removes (a wrong venue, a moved time); a slow decline across many nights
 (each night compared only with the last); an event id that changes while the
 game stays (that shows as vanished games, and refuses once it is large
-enough). A previous publish that cannot be read is not compared and never
-blocks (the same fail-open as the sitemap's), but it is named in the run log
-and in `COVERAGE.txt`, never skipped silently.
+enough). A previous publish that cannot be read is not compared, and it is
+named in the run log and in `COVERAGE.txt`, never skipped silently. Until
+2026-11-05 it never blocked (the same fail-open as the sitemap's). Since
+DECISIONS 0027 the live feeds are the only copy of the played games they
+keep, so a previous team or league feed that existed but could not be read
+refuses the build for its league (`previous-unreadable`); a 404 is a new
+feed and does not. A dated league override accepts it.
 
 ## Consequences
 

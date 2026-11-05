@@ -35,9 +35,17 @@ What counts as a vanished game (all must hold):
   vanished: it is reported as a change instead).
 
 A refusal raises PublishRefused and the build writes nothing, so the last good
-deploy stays live. An unreadable previous publish never blocks (the same
-fail-open as sitemap.fetch_previous_state), but it is reported, in the run log
-and in COVERAGE.txt, rather than skipped silently.
+deploy stays live.
+
+A previous feed that existed but could not be read (a request error, a status
+other than 200 or 404, or a body that is not a fetched feed) refuses the build
+too, for its league ("previous-unreadable"): the live feed is the only copy
+of the played games it keeps (history.py, DECISIONS 0027), so publishing
+without it would erase them for good. The live site keeps serving the last
+good feeds, and the next run that can read them publishes. A feed that never
+existed (404) is new and has nothing to lose. A dated league override in
+PUBLISH_GUARD_OVERRIDES accepts the loss, as for the other rules. Until
+2026-11-05 an unreadable previous publish never blocked.
 """
 
 from __future__ import annotations
@@ -278,8 +286,8 @@ def _feed_events(feed: bytes) -> list[Component] | None:
 def fetch_previous_publish(base_url: str, *, client: httpx.Client | None = None) -> PreviousPublish:
     """The live site's per-team calendar feeds, then its league feeds (for
     history.py only). Never raises: whatever cannot be read is recorded in
-    `unreadable` (or `unreadable_feeds`) and reported, and costs only that
-    team's comparison."""
+    `unreadable` (or `unreadable_feeds`), and evaluate() refuses the build
+    for that league (UNREADABLE_RULE)."""
     previous = PreviousPublish()
     owns_client = client is None
     http = client or httpx.Client(timeout=10.0, headers={"User-Agent": USER_AGENT}, follow_redirects=True)
@@ -543,6 +551,17 @@ def evaluate(
         expired_overrides=expired,
         unreadable=dict(previous.unreadable),
     )
+    for lg in leagues:
+        unread = _unreadable_violation(previous, lg)
+        if unread is None:
+            continue
+        override = active.get(lg.slug)
+        if override is None:
+            report.violations.append(unread)
+        else:
+            report.accepted.append(
+                replace(unread, override_reason=f"{override.reason} (until {override.until.isoformat()})")
+            )
     if not previous.games:
         report.note = _no_previous_note(previous, configured)
         return report
@@ -561,6 +580,33 @@ def evaluate(
     return report
 
 
+UNREADABLE_RULE = "previous-unreadable"
+
+
+def _unreadable_violation(previous: PreviousPublish, lg: config.League) -> Violation | None:
+    """The league's previous feeds that existed but could not be read, as one
+    violation, or None when every one was read (or was new)."""
+    unread = [
+        f"ics/{lg.slug}/{t.slug}.ics ({previous.unreadable[(lg.slug, t.slug)]})"
+        for t in lg.teams
+        if (lg.slug, t.slug) in previous.unreadable
+    ]
+    league_path = f"ics/{lg.slug}.ics"
+    if league_path in previous.unreadable_feeds:
+        unread.insert(0, f"{league_path} ({previous.unreadable_feeds[league_path]})")
+    if not unread:
+        return None
+    shown = "; ".join(unread[:MAX_NAMED]) + (f"; and {len(unread) - MAX_NAMED} more" if len(unread) > MAX_NAMED else "")
+    return Violation(
+        lg.slug,
+        lg.name,
+        None,
+        UNREADABLE_RULE,
+        f"{lg.name} ({lg.slug}): {len(unread)} previous calendar feed(s) could not be read, and the live "
+        f"feed is the only copy of the played games it keeps: {shown}",
+    )
+
+
 def _named(rows: Sequence[VanishedGame]) -> str:
     named = "; ".join(r.describe() for r in rows[:MAX_NAMED])
     return named + (f"; and {len(rows) - MAX_NAMED} more" if len(rows) > MAX_NAMED else "")
@@ -577,6 +623,12 @@ def render_refusal(report: GuardReport) -> str:
         "Nothing was written to --out, so the last good deploy (every league's calendar as of the "
         "previous good night) stays live."
     )
+    if any(v.rule == UNREADABLE_RULE for v in report.violations):
+        lines.append(
+            "A previous feed that could not be read is not a loss of games: re-run the pages workflow once "
+            "the live site answers. If a feed stays unreadable, a dated override for its league in "
+            "PUBLISH_GUARD_OVERRIDES publishes without the played games it kept."
+        )
     lines.append(
         "If this is a real removal (Ticketmaster withdrew the listings, the league canceled the games, a "
         "playoff series ended before its 'if necessary' games), accept it in "

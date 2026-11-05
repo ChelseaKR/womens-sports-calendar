@@ -67,8 +67,9 @@ used (requests, bytes).
   a refused build writes it to the GitHub Actions job summary. The
   thresholds, the dated per-league override and the accepted per-event
   removals are in `config.py` (`PUBLISH_GUARD`, `PUBLISH_GUARD_OVERRIDES`,
-  `REMOVED_EVENTS`). An unreadable previous publish never blocks but is
-  reported. An event in `REMOVED_EVENTS` is also withheld from every page,
+  `REMOVED_EVENTS`). A previous feed that existed but cannot be read
+  refuses the build for its league, since it is the only copy of the played
+  games it keeps (`../docs/DECISIONS.md` 0027); a new feed (404) does not. An event in `REMOVED_EVENTS` is also withheld from every page,
   feed and data file while Ticketmaster still lists it
   (`build.without_removed_events`): that is how a Ticketmaster request to
   remove an event within 24 hours is honoured.

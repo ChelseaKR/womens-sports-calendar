@@ -150,7 +150,9 @@ archived and private.
   drops a game that has started, every feed keeps its published entry (same
   UID, canceled games still marked canceled) for 120 days after the start.
   A game whose start, end or status changes gets a higher SEQUENCE, and any
-  change sets LAST-MODIFIED. The pages still show only listed games
+  change sets LAST-MODIFIED. The pages still show only listed games. A
+  previous feed that existed but cannot be read now refuses the build, so
+  the live feeds keep their played games until it can be read
   (DECISIONS 0027).
 - 43 college games that were in the Big Ten and SEC calendars now also
   reach the 14 teams' own pages and feeds that were missing them, and Penn

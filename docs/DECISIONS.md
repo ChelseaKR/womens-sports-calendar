@@ -1079,6 +1079,19 @@ season. Chelsea approved keeping them (decision D9).
   league feeds from the live league feeds (six more small requests a
   night), and `all.ics` keeps the league feeds' kept events, byte for byte,
   first league first, as it does for listed games.
+- **An unreadable previous feed refuses the build.** The live feeds are the
+  only copy of the played games they keep, so a team or league feed that
+  existed but could not be read (a request error, a status other than 200
+  or 404, or a body that is not a fetched feed) refuses the build for its
+  league (`guard.UNREADABLE_RULE`). Nothing is written, the live feeds stay
+  up with their kept games, and the next run that can read them publishes.
+  A 404 is a new feed with nothing to lose. A dated league override in
+  `PUBLISH_GUARD_OVERRIDES` accepts the loss. Before this, an unreadable
+  previous publish never blocked (ADR 0006).
+- **Old non-game entries are not kept.** A kept entry whose name says it is
+  a ticket product or names a men's team (`listings.name_says_not_a_game`,
+  the name rules of DECISIONS 0026) is dropped, for entries published
+  before those rules.
 - **Revisions.** A listed game is compared with its previous publish. A new
   start, end or STATUS raises SEQUENCE by one (RFC 5545 3.8.7.4); any
   change to those, SUMMARY, LOCATION or URL sets LAST-MODIFIED to the
@@ -1102,8 +1115,9 @@ season. Chelsea approved keeping them (decision D9).
 record and not also listed, has started, is inside the window, is not a
 removed event, and still carries the marker and note of its STATUS) and
 `tests/test_keep_played_games.py` (two and three builds in a row over a mock
-transport, the window edges, canceled games, removals, and a control for
-each validate_ics refusal).
+transport, the window edges, canceled games, removals, unreadable team and
+league feeds with a readable control, and a control for each validate_ics
+refusal).
 
 Revisit if a subscriber asks for upcoming-only feeds (a separate feed, not
 a change to these), or if Ticketmaster's storage term is read more narrowly
