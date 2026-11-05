@@ -12,6 +12,7 @@ treated as real, or an omitted-but-implied value.
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date, datetime, time
@@ -223,8 +224,19 @@ def _normalize_for_match(s: str) -> str:
     Ticketmaster writes both ("Tennessee Lady Volunteers Women's Basketball",
     "Florida Gators Womens Basketball"), and the keyword "Tennessee Lady
     Volunteers Womens Basketball" matched none of the 27 Tennessee events the
-    2026-11-02 measurement returned (DECISIONS 0023)."""
-    return _NON_ALNUM.sub(" ", _APOSTROPHES.sub("", s.lower())).strip()
+    2026-11-02 measurement returned (DECISIONS 0023).
+
+    Accents are folded first ("é" is "e"): Ticketmaster names the Montreal
+    Victoire's games "Montréal Victoire vs. Ottawa Charge", and without the
+    fold the "é" became a space, so the keyword "Montreal Victoire" matched
+    none of them. The live build of 2026-11-04 had 23 Victoire games in the
+    PWHL calendar and 1 on the Victoire's own page and feed."""
+    return _NON_ALNUM.sub(" ", _APOSTROPHES.sub("", _fold_accents(s).lower())).strip()
+
+
+def _fold_accents(s: str) -> str:
+    """s with every accent mark dropped ("Montréal" is "Montreal")."""
+    return "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c))
 
 
 def side_begins_with(name: str, side: str) -> bool:

@@ -325,19 +325,27 @@ LEAGUES: tuple[League, ...] = (
         slug="pwhl",
         name="PWHL",
         country_codes=("US", "CA"),
-        teams=_teams(
-            "Boston Fleet",
-            "PWHL Detroit",
-            "PWHL Hamilton",
-            "PWHL Las Vegas",
-            "Minnesota Frost",
-            "Montreal Victoire",
-            "New York Sirens",
-            "Ottawa Charge",
-            "PWHL San Jose",
-            "Seattle Torrent",
-            "Toronto Sceptres",
-            "Vancouver Goldeneyes",
+        teams=(
+            *_teams(
+                "Boston Fleet",
+                "PWHL Detroit",
+                "PWHL Hamilton",
+                "PWHL Las Vegas",
+                "Minnesota Frost",
+            ),
+            # Ticketmaster also names the Victoire's home games in French, "La
+            # Victoire De Montréal v PWHL Hamilton" (the 2026-27 home opener,
+            # live 2026-11-04), which "Montreal Victoire" is not a phrase of.
+            # The French name is a second search and a second recognized name.
+            Team(slug="montreal-victoire", name="Montreal Victoire", search_names=("Victoire de Montréal",)),
+            *_teams(
+                "New York Sirens",
+                "Ottawa Charge",
+                "PWHL San Jose",
+                "Seattle Torrent",
+                "Toronto Sceptres",
+                "Vancouver Goldeneyes",
+            ),
         ),
         schedule_source_used=False,
         schedule_source_note=(
