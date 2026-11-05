@@ -257,6 +257,10 @@ def build(
     # are left out of every page, feed and data file, and named in
     # COVERAGE.txt (listings.py).
     games, dropped_listings = listings.only_games(games)
+    # A team's game whose opponent Ticketmaster named with another sport's
+    # word ("Northern Colorado Bears Football" at a women's basketball game)
+    # is shown without that word, and named in COVERAGE.txt (listings.py).
+    games, relabeled_listings = listings.fix_opponent_sport(games)
     # When the listings were read (DATA-GOVERNANCE-STANDARD DG-02). None when
     # nothing was fetched: a degraded build states no fetch time at all.
     # Whole seconds, everywhere it is published: the page's <time datetime>
@@ -297,6 +301,7 @@ def build(
             truncated.get(lg.slug, set()),
             mismatched.get(lg.slug, set()),
             dropped=[d for d in dropped_listings if d.league_slug == lg.slug],
+            relabeled=[r for r in relabeled_listings if r.league_slug == lg.slug],
         )
         league_coverages.append(lc)
 

@@ -1150,3 +1150,46 @@ or published):
 
 Revisit after the next run: keep the names that attribute games, drop the
 rest, and copy the kept ones into config if that conference is added.
+
+## 0031 — Another sport's listing is not a team's game; a mislabeled opponent loses only the wrong word (2026-11-05)
+
+**Why:** On 2026-11-05 Texas's page said its next home game was "against
+Northern Colorado Bears Football" (Ticketmaster event Z7r9jZ1AAZSFK, "Texas
+Longhorns Womens Basketball vs Northern Colorado Bears Football", Nov 7 at
+7:00 PM CT, Moody Center ATX). texaslonghorns.com lists that game as women's
+basketball vs Northern Colorado, Nov 7 at 7:00 PM CT at Moody Center: a real
+game whose opponent Ticketmaster named with the football team's name. No
+rule in 0026 looked at a sport word, so a listing of another sport would
+also have reached a women's basketball page.
+
+**What changes (`listings.py`):**
+
+- A listing whose name has a word of a sport other than the league's
+  (football, baseball, volleyball, lacrosse, wrestling, gymnastics, and the
+  tracked leagues' own sports: basketball, soccer, hockey, softball) is left
+  out and named in COVERAGE.txt. "Football Club" is soccer, and in the NWSL
+  "football" is never another sport.
+- One exception: the tracked team's own side names the league's sport, and
+  only the opponent's side ends in another sport's word. That is the team's
+  game with a mislabeled opponent. It stays, with that last word taken off
+  the opponent's side and the event name, everywhere (page, feeds, data
+  file). COVERAGE.txt names each such listing. It keeps its event id, so its
+  calendar UID does not change. This amends 0026's "none is rewritten" for
+  this one case: one wrong word is dropped, and nothing is added or guessed.
+- When the tracked side does not name the league's sport, or names another
+  sport itself, the listing is left out: nothing in the name says whose
+  game it is.
+
+The Tennessee "Season Tickets" row seen the same day is 0026's ticket
+product rule, merged in #80 after that night's build; it is not changed
+here.
+
+**Enforced by** `tests/test_other_sport.py`: the live Texas listing built
+into a page and feeds, the Tennessee season tickets in the same build, other
+sports' events and the tracked side's sport as controls, real games in the
+NWSL and WNBA kept, and a sabotage control that turns the fix off and finds
+"Northern Colorado Bears Football" back on the page.
+
+Revisit if a tracked team's own name ever contains a sport word that is not
+its sport, or if Ticketmaster's `classifications` are read from a live
+response and can say the sport directly.
