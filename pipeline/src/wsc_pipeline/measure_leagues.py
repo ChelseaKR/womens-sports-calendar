@@ -29,13 +29,13 @@ import json
 import os
 import re
 import sys
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
 from .build import _search_team, attribute_games
-from .config import League, Team, league_by_slug
+from .config import COLLEGE_DIRECTION_PREFIXES, League, Team, _college_team, league_by_slug
 from .normalize import Game, event_names_team, normalize_event
 from .site_data import tracked_team_is_home
 from .ticketmaster import DiscoveryClient, TicketmasterFetchError
@@ -51,11 +51,12 @@ OVER_CAP = "skipped: request cap reached"
 
 # A "<School> women's basketball" title name is a plain substring of the same
 # name with a direction in front ("Kentucky" in "Northern Kentucky"), so the
-# phrase check would accept the other school's games. These are removed before
-# matching, the same way config.KEYWORD_COLLISIONS works for "Bay FC".
-_DIRECTIONS = ("North", "South", "Northern", "Southern", "Eastern", "Western", "Central", "East", "West")
-# Collisions that are not a direction: "kansas women s basketball" is inside
-# "arkansas women s basketball".
+# phrase check would accept the other school's games. config's
+# COLLEGE_DIRECTION_PREFIXES (used through config._college_team) removes
+# them, the same list the tracked conferences use; this module used to keep
+# its own copy, which lacked "Middle" and "Southeast" (Middle Tennessee,
+# Southeast Missouri). Collisions that are not a direction:
+# "kansas women s basketball" is inside "arkansas women s basketball".
 _EXTRA_COLLISIONS: dict[str, tuple[str, ...]] = {
     "Kansas": ("Arkansas women's basketball", "Arkansas Razorbacks Womens Basketball"),
 }
@@ -65,20 +66,57 @@ def _slug(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
 
 
-def _college_teams(schools: dict[str, str]) -> tuple[Team, ...]:
-    """{school: mascot} -> teams named the Big Ten way."""
+@dataclass(frozen=True)
+class _Probe:
+    """More Ticketmaster names to try for one school (DECISIONS 0028), the
+    way the SEC branch probed Georgia and Tennessee. Each search name is one
+    more request (more if it pages). None of these was read from a
+    Ticketmaster artist page: they are guesses for a run to confirm or rule
+    out, and a name that returns nothing costs one request and changes no
+    other count."""
+
+    search_names: tuple[str, ...] = ()
+    other_mascots: tuple[str, ...] = ()
+
+
+def _college_teams(schools: dict[str, str], probes: dict[str, _Probe] | None = None) -> tuple[Team, ...]:
+    """{school: mascot} -> teams named the Big Ten way, by config's own
+    _college_team, with any probe names for a school added."""
+    probes = probes or {}
+    unknown = set(probes) - set(schools)
+    if unknown:
+        raise ValueError(f"probe for a school not in the roster: {', '.join(sorted(unknown))}")
     teams = []
     for school, mascot in schools.items():
-        not_this = tuple(f"{d} {school} women's basketball" for d in _DIRECTIONS) + _EXTRA_COLLISIONS.get(school, ())
-        name = f"{school} {mascot} Womens Basketball"
+        probe = probes.get(school, _Probe())
+        team = _college_team(
+            _slug(f"{school} {mascot} Womens Basketball"),
+            school,
+            mascot,
+            search_names=probe.search_names,
+            other_mascots=probe.other_mascots,
+        )
+        teams.append(replace(team, not_this_team=team.not_this_team + _EXTRA_COLLISIONS.get(school, ())))
+    return tuple(teams)
+
+
+def _softball_teams(league_slug: str, without: frozenset[str]) -> tuple[Team, ...]:
+    """A tracked basketball conference's schools as softball teams: keyword
+    "<School> <Mascot> Softball", title "<School> softball", matched by name
+    only (school is left unset: normalize.side_names_college_team is a
+    basketball rule). `without`: schools with no softball team."""
+    teams = []
+    for bb in league_by_slug(league_slug).teams:
+        school = bb.school
+        if school is None or school in without:
+            continue
+        name = f"{school} {bb.mascots[0]} Softball"
         teams.append(
             Team(
                 slug=_slug(name),
                 name=name,
-                not_this_team=not_this,
-                title_name=f"{school} women's basketball",
-                school=school,
-                mascots=(mascot,),
+                not_this_team=tuple(f"{d} {school} softball" for d in COLLEGE_DIRECTION_PREFIXES),
+                title_name=f"{school} softball",
             )
         )
     return tuple(teams)
@@ -100,6 +138,9 @@ class Candidate:
     # Teams that could not be measured, and why: {team: reason}.
     unmeasured_teams: dict[str, str] = field(default_factory=dict)
     source: str = ""
+    # False: run only when named, never by "all" (a sport out of season,
+    # whose requests would measure nothing yet).
+    in_all: bool = True
 
 
 def _league(slug: str, name: str, teams: tuple[Team, ...]) -> League:
@@ -143,7 +184,12 @@ CANDIDATES: tuple[Candidate, ...] = (
                     "Virginia": "Cavaliers",
                     "Virginia Tech": "Hokies",
                     "Wake Forest": "Demon Deacons",
-                }
+                },
+                {
+                    # 2026-11-03: Clemson returned 22 events, none attributed.
+                    "Clemson": _Probe(("Clemson Women's Basketball",)),
+                    "Miami": _Probe(("Miami Women's Basketball",)),
+                },
             ),
         ),
         source="ACC membership for 2026-27 (18 schools).",
@@ -170,7 +216,28 @@ CANDIDATES: tuple[Candidate, ...] = (
                     "UCF": "Knights",
                     "Utah": "Utes",
                     "West Virginia": "Mountaineers",
-                }
+                },
+                # The seven with no listed home game on 2026-11-03
+                # (returned / attributed: ASU 26/7, Iowa State 27/7,
+                # Cincinnati 22/5, BYU 6/6, Oklahoma State 9/3, TCU 10/6,
+                # Texas Tech 1/0). The women's teams are the Cowgirls and
+                # Lady Raiders; the schools' other teams are the Cowboys and
+                # Red Raiders, which Ticketmaster may use for both.
+                {
+                    "Arizona State": _Probe(("Arizona State Women's Basketball",)),
+                    "Iowa State": _Probe(("Iowa State Women's Basketball",)),
+                    "Cincinnati": _Probe(("Cincinnati Women's Basketball",)),
+                    "BYU": _Probe(("BYU Women's Basketball",)),
+                    "Oklahoma State": _Probe(
+                        ("Oklahoma State Cowboys Womens Basketball", "Oklahoma State Women's Basketball"),
+                        ("Cowboys",),
+                    ),
+                    "TCU": _Probe(("TCU Women's Basketball",)),
+                    "Texas Tech": _Probe(
+                        ("Texas Tech Red Raiders Womens Basketball", "Texas Tech Women's Basketball"),
+                        ("Red Raiders",),
+                    ),
+                },
             ),
         ),
         source="Big 12 membership for 2026-27 (16 schools).",
@@ -192,7 +259,13 @@ CANDIDATES: tuple[Candidate, ...] = (
                     "UConn": "Huskies",
                     "Villanova": "Wildcats",
                     "Xavier": "Musketeers",
-                }
+                },
+                # 2026-11-03: these three returned events, none attributed.
+                {
+                    "Butler": _Probe(("Butler Women's Basketball",)),
+                    "Providence": _Probe(("Providence Women's Basketball",)),
+                    "St. John's": _Probe(("St. John's Women's Basketball",)),
+                },
             ),
         ),
         source="Big East membership for 2026-27 (11 schools).",
@@ -251,6 +324,22 @@ CANDIDATES: tuple[Candidate, ...] = (
         ),
         league_keyword="LOVB",
         source="Six 2026 teams plus the four announced for 2027 (lovb.com news).",
+    ),
+    # College softball, measured only when named (in_all=False): the season
+    # opens in February, so a run before about 2027-01-15 would mostly
+    # measure schedules not yet listed. The keywords follow the basketball
+    # pattern with "Softball" and were not checked against Ticketmaster.
+    Candidate(
+        _league("ncaaw-softball-sec", "NCAA Softball (SEC)", _softball_teams("ncaaw-sec", frozenset({"Vanderbilt"}))),
+        source="The SEC's tracked schools that play softball (15; Vanderbilt has no team). Run from about 2027-01-15.",
+        in_all=False,
+    ),
+    Candidate(
+        _league(
+            "ncaaw-softball-big-ten", "NCAA Softball (Big Ten)", _softball_teams("ncaaw-big-ten", frozenset({"USC"}))
+        ),
+        source="The Big Ten's tracked schools that play softball (17; USC has no team). Run from about 2027-01-15.",
+        in_all=False,
     ),
 )
 
@@ -481,7 +570,7 @@ def render_markdown(report: dict[str, Any]) -> str:
 
 def _select(arg: str) -> tuple[Candidate, ...]:
     if arg.strip() in ("", "all"):
-        return CANDIDATES
+        return tuple(c for c in CANDIDATES if c.in_all)
     by_slug = {c.league.slug: c for c in CANDIDATES}
     wanted = [s.strip() for s in arg.split(",") if s.strip()]
     unknown = [s for s in wanted if s not in by_slug]
@@ -493,7 +582,11 @@ def _select(arg: str) -> tuple[Candidate, ...]:
 def main(argv: list[str] | None = None, *, client: DiscoveryClient | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0] if __doc__ else None)
     parser.add_argument("--out", type=Path, required=True, help="directory for measure.json and measure.md")
-    parser.add_argument("--candidates", default="all", help="'all' or comma-separated slugs")
+    parser.add_argument(
+        "--candidates",
+        default="all",
+        help="'all' (every candidate except the named-only ones) or comma-separated slugs",
+    )
     args = parser.parse_args(argv)
     try:
         candidates = _select(args.candidates)

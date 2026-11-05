@@ -1050,3 +1050,31 @@ that look like products, and a feed that drops the label.
 
 Revisit if Ticketmaster lists a single game under a name with no matchup,
 or if a tracked team's own name ever contains one of the product words.
+
+## 0028 — Probe names for candidate teams with no listed home game; softball candidates (2026-11-05)
+
+**Why:** the measurement runs of 2026-11-03 and 2026-11-05 (0022) found Big
+12, ACC and Big East teams whose keyword search returned events but whose
+pages would list no home game (Big 12: 9 of 16 teams with one). That may be a
+wrong keyword rather than missing inventory, as Georgia and Tennessee were
+for the SEC (0023).
+
+The decision, measurement only (nothing new is fetched by the nightly build
+or published):
+
+- `measure_leagues.py` builds its college candidates with config's own
+  `_college_team`, so they exclude every `COLLEGE_DIRECTION_PREFIXES` entry.
+  Its private copy of that list lacked "Middle" and "Southeast".
+- Probe names (`search_names`, plus `other_mascots` "Cowboys" and "Red
+  Raiders") for Arizona State, Iowa State, Cincinnati, BYU, Oklahoma State,
+  TCU, Texas Tech, Clemson, Miami, Butler, Providence and St. John's. None
+  was read from a Ticketmaster artist page; a run confirms or rules them out.
+- SEC and Big Ten softball candidates (15 and 17 schools, keyword
+  "<School> <Mascot> Softball"). They run only when named, never under
+  "all", and not before about 2027-01-15.
+- One run of `ncaaw-big-12,ncaaw-acc,ncaaw-big-east,mlv` makes at least 68
+  requests (one per name searched, more when a search pages, at most 5 pages
+  each); "all" makes at least 124; the two softball candidates at least 32.
+
+Revisit after the next run: keep the names that attribute games, drop the
+rest, and copy the kept ones into config if that conference is added.
