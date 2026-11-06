@@ -104,7 +104,7 @@ def test_league_and_team_pages_say_when_the_listings_were_fetched(
     stamp = json.loads((out / "version.json").read_text())["fetched_at"]
     for page in (out / LEAGUES[0].slug / "index.html", out / LEAGUES[0].slug / LEAGUES[0].teams[0].slug / "index.html"):
         html = page.read_text()
-        match = re.search(r'Listings as of <time datetime="([^"]+)">([^<]+) UTC</time>', html)
+        match = re.search(r'Listings as of <time datetime="([^"]+)">([^<]+) PT</time>', html)
         assert match, f"{page}: no fetch time on the page"
         # HTML's valid-date-time allows at most three fractional digits; a raw
         # isoformat() carries six and failed the deploy's html validation.

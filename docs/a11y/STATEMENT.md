@@ -25,7 +25,7 @@ the build produces, plus two fixture pages with a populated games table:
 - pa11y-ci, WCAG2AA, with both the HTML_CodeSniffer and axe runners; zero
   errors.
 - axe-core with the wcag2a, wcag2aa, wcag21a, wcag21aa and wcag22aa tags;
-  any critical, serious or moderate violation fails. This covers colour
+  any critical, serious or moderate violation fails. This covers color
   contrast (SC 1.4.3 / 1.4.11), target size (2.5.8) and the page language
   (3.1.1).
 - A keyboard walk: Tab from the top reaches every link, the first stop is
