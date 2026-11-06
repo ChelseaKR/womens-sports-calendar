@@ -1432,6 +1432,12 @@ The decision:
   along the top of the header and footer.
 - Type is unchanged: Big Shoulders Display and Text over Public Sans, all
   self-hosted. The wordmark is set in Big Shoulders Display capitals.
+  Both Big Shoulders faces are preloaded and use `font-display: optional`,
+  not `swap`: without Arial Narrow (CI's Linux runner, most Android phones)
+  the fallback is far wider, the header wrapped to two lines and then
+  snapped back to one when the webfont arrived, moving the whole page (CLS
+  0.261 on every Lighthouse page in CI, budget 0.1). With `optional` the
+  page keeps whichever face it painted with. Public Sans stays `swap`.
 - Every page's header gets two plain links, "Leagues" (`/#leagues`) and
   "This week" (`/schedule/`). The home page lists the leagues before the
   all-games feed. No URL, `<title>`, H1 or meta description changes.

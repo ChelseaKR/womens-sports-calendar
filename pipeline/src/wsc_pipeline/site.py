@@ -180,6 +180,7 @@ def _base(
 {canonical_link}{feed_link}<meta name="theme-color" content="#16131d">
 <link rel="preload" href="/fonts/public-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/big-shoulders-display-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/big-shoulders-text-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="{CSS_PATH}">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
@@ -1936,14 +1937,14 @@ STYLE_CSS = """\
   font-family: "Big Shoulders Display";
   font-style: normal;
   font-weight: 500 800;
-  font-display: swap;
+  font-display: optional;
   src: url("/fonts/big-shoulders-display-latin.woff2") format("woff2");
 }
 @font-face {
   font-family: "Big Shoulders Text";
   font-style: normal;
   font-weight: 500 800;
-  font-display: swap;
+  font-display: optional;
   src: url("/fonts/big-shoulders-text-latin.woff2") format("woff2");
 }
 @font-face {
