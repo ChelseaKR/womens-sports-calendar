@@ -19,6 +19,6 @@ and added in the PR that introduces it.
 | Element | Why axe can't decide | Measured (2026-09-17, Chrome, computed colours) |
 |---|---|---|
 | Text in the subscribe box (`code`, `strong` in the instructions) | `.subscribe::before` / `::after` pseudo-elements share the box | `rgb(238,242,248)` on `rgb(16,28,48)`: 15.19:1. Not seen since 2026-09-18: the instructions moved out of the box to "Other calendar apps", and a pa11y run with warnings on a team page, a league page and the populated fixture found only the footer row below. |
-| Footer `h2` "Sources and terms" | footer children use `max-width` + auto margins over the navy band | `#ffffff` on `#0b1f3a`: 16.52:1 |
+| Footer `h2` "Sources and terms" | footer children use `max-width` + auto margins over the black band | `#ffffff` on `#16131d`: 18.34:1 (palette of DECISIONS 0035, 2026-11-05; was `#0b1f3a`, 16.52:1) |
 
 Both are well above 4.5:1.

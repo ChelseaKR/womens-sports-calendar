@@ -17,6 +17,16 @@ archived and private.
   Ticketmaster listings this site reads. Its page now says so and links
   that store, instead of promising games that cannot appear
   (DECISIONS 0013).
+- A new look, "Floodlight" (DECISIONS 0035): scoreboard black with one
+  floodlight-lime highlight, a ticket for the brand mark (now visible on the
+  header), a ticket-shaped next-game card with a tear line, and a warm black
+  dark mode. The favicon, touch icon and social cards are re-rendered in it.
+  Every page's header links "Leagues" and "This week", and the home page
+  lists the leagues before the all-games feed. URLs, titles, H1s and meta
+  descriptions are unchanged.
+  It also fixes a link that could not be seen: on a team page whose seller is
+  not Ticketmaster, the "Check ... for home games" link in the empty
+  next-game card was drawn in the card's own color.
 - A manual, counts-only `measure-gap` workflow compares each team's upcoming
   home games on its Wikipedia article page with the home games the site
   finds on Ticketmaster, and how often the two agree on date and venue

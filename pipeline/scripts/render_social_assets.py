@@ -9,18 +9,19 @@ into `dist/` on every run -- so a normal build (including the nightly CI
 run) never needs `rsvg-convert` installed. Re-run this script and commit
 the results only when the artwork itself changes.
 
-Palette (contrast-checked against WCAG 2.2 AA, same rigor as
-`site.STYLE_CSS`):
-  navy   #0b1f3a  -- background / glyph fill
-  gold   #f4c94c  -- highlighted "next game" cell / accent
+Palette -- "Floodlight" (DECISIONS 0035), the same constants as
+`site.STYLE_CSS`, contrast-checked against WCAG 2.2 AA:
+  chrome #16131d  -- scoreboard black: background / glyph fill
+  hi     #d4f24a  -- floodlight lime: highlighted "next game" cell, ticket
   white  #ffffff  -- title text, card background, seam lines
-  light  #c9d6ea  -- subtitle text on navy (contrast 11.24:1)
-  muted  #8fa8cf  -- small footer/domain text on navy (contrast 6.82:1)
-  border #c7ccd1  -- decorative calendar grid lines (non-text, no contrast
+  light  #cfcadb  -- subtitle text on chrome (contrast 11.46:1)
+  muted  #a29cb4  -- small footer/domain text on chrome (contrast 6.94:1)
+  lift   #2c2738  -- the calendar card's header band (non-text)
+  border #d6d2de  -- decorative calendar grid lines (non-text, no contrast
                       requirement, but kept off any text use)
 Checked ratios (relative-luminance formula, WCAG 2.2 1.4.3):
-  navy/white   16.52:1   navy/light  11.24:1   navy/muted  6.82:1
-  gold/navy    10.47:1 (glyph fill on the highlighted cell)
+  chrome/white 18.34:1   chrome/light 11.46:1   chrome/muted 6.94:1
+  lime/chrome  14.50:1 (glyph fill on the highlighted cell)
 All comfortably clear the 4.5:1 (normal text) and 3:1 (large text /
 graphical object) AA thresholds.
 """
@@ -34,12 +35,15 @@ from pathlib import Path
 
 ASSETS = Path(__file__).resolve().parent.parent / "assets"
 
-NAVY = "#0b1f3a"
-GOLD = "#f4c94c"
+CHROME = "#16131d"
+HI = "#d4f24a"
 WHITE = "#ffffff"
-LIGHT = "#c9d6ea"
-MUTED = "#8fa8cf"
-BORDER = "#c7ccd1"
+LIGHT = "#cfcadb"
+MUTED = "#a29cb4"
+BORDER = "#d6d2de"
+# The calendar card's header band: chrome lifted one step, so the card's
+# top edge shows against the chrome background (decorative, no text on it).
+CHROME_LIFT = "#2c2738"
 
 # The three real leagues this product tracks (wsc_pipeline.config.LEAGUES).
 # Order matches config.py.
@@ -49,7 +53,7 @@ LEAGUE_GLYPHS = ("wnba", "nwsl", "pwhl")
 def _basketball(cx: float, cy: float, r: float) -> str:
     """Circle + seam lines: the classic flat basketball glyph."""
     return f"""
-<circle cx="{cx}" cy="{cy}" r="{r}" fill="{NAVY}"/>
+<circle cx="{cx}" cy="{cy}" r="{r}" fill="{CHROME}"/>
 <path d="M{cx - r} {cy} H{cx + r} M{cx} {cy - r} V{cy + r}" stroke="{WHITE}" stroke-width="{r * 0.14}" fill="none"/>
 <path d="M{cx - r * 0.6} {cy - r} C{cx - r * 0.05} {cy - r * 0.4} {cx - r * 0.05} {cy + r * 0.4} {cx - r * 0.6} {cy + r}"
       stroke="{WHITE}" stroke-width="{r * 0.14}" fill="none"/>
@@ -69,7 +73,7 @@ def _soccer_ball(cx: float, cy: float, r: float) -> str:
         f'<path d="M{cx:.1f} {cy:.1f} L{x:.1f} {y:.1f}" stroke="{WHITE}" stroke-width="{r * 0.1}"/>' for x, y in pts
     )
     return f"""
-<circle cx="{cx}" cy="{cy}" r="{r}" fill="{NAVY}"/>
+<circle cx="{cx}" cy="{cy}" r="{r}" fill="{CHROME}"/>
 {spokes}
 <polygon points="{pentagon}" fill="{WHITE}"/>
 """
@@ -79,7 +83,7 @@ def _hockey_puck(cx: float, cy: float, r: float) -> str:
     """A short, wide rounded ellipse -- the puck's silhouette (never a circle)."""
     rx, ry = r * 1.05, r * 0.55
     return f"""
-<ellipse cx="{cx}" cy="{cy}" rx="{rx}" ry="{ry}" fill="{NAVY}"/>
+<ellipse cx="{cx}" cy="{cy}" rx="{rx}" ry="{ry}" fill="{CHROME}"/>
 <path d="M{cx - rx * 0.7} {cy - ry * 0.15} H{cx + rx * 0.7}" stroke="{WHITE}" stroke-width="{ry * 0.22}" opacity="0.8"/>
 """
 
@@ -95,7 +99,7 @@ def _calendar_card(*, highlights: list[tuple[int, int, object]]) -> str:
     """The calendar-with-highlighted-game-day(s) motif shared by every
     variant. A 4x7 grid of decorative cells (no dates/numbers -- nothing
     here asserts a real date or count); each (row, col, glyph_fn) in
-    `highlights` becomes a gold cell marking "a next home game," with the
+    `highlights` becomes a lime cell marking "a next home game," with the
     matching sport's glyph. The league variants pass one highlight; the
     site-wide default passes one per tracked league, so it reads as "one
     calendar, three leagues" rather than three glyphs crammed into a
@@ -117,16 +121,16 @@ def _calendar_card(*, highlights: list[tuple[int, int, object]]) -> str:
             y = grid_y + row * (cell + gap_y)
             glyph_fn = highlight_map.get((row, col))
             if glyph_fn is not None:
-                cells.append(f'<rect x="{x}" y="{y}" width="{cell}" height="{cell}" rx="10" fill="{GOLD}"/>')
+                cells.append(f'<rect x="{x}" y="{y}" width="{cell}" height="{cell}" rx="10" fill="{HI}"/>')
                 cells.append(glyph_fn(x + cell / 2, y + cell / 2, cell * 0.34))
             else:
                 cells.append(
                     f'<rect x="{x}" y="{y}" width="{cell}" height="{cell}" rx="10" fill="{BORDER}" opacity="0.35"/>'
                 )
 
-    # LIGHT, not NAVY: these sit above the card, directly on the navy page
-    # background, so a navy fill here would be invisible (same colour as
-    # the background it's drawn on).
+    # LIGHT, not CHROME: these sit above the card, directly on the chrome
+    # page background, so a chrome fill here would be invisible (same color
+    # as the background it's drawn on).
     tabs = "".join(
         f'<rect x="{card_x + card_w * frac - 6}" y="{card_y - 20}" width="12" height="26" rx="4" fill="{LIGHT}"/>'
         for frac in (0.22, 0.78)
@@ -152,14 +156,15 @@ def _calendar_card(*, highlights: list[tuple[int, int, object]]) -> str:
     return f"""
 {tabs}
 <rect x="{card_x}" y="{card_y}" width="{card_w}" height="{card_h}" rx="{r}" fill="{WHITE}"/>
-<path d="{header_path}" fill="{NAVY}"/>
+<path d="{header_path}" fill="{CHROME_LIFT}"/>
 {"".join(cells)}
 """
 
 
 def _wrap(body: str, *, width: int = 1200, height: int = 630) -> str:
     return f"""<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" role="img">
-<rect width="{width}" height="{height}" fill="{NAVY}"/>
+<rect width="{width}" height="{height}" fill="{CHROME}"/>
+<rect width="{width}" height="10" fill="{HI}"/>
 {body}
 </svg>
 """
@@ -180,6 +185,8 @@ def og_image_svg(*, highlights: list[tuple[int, int, object]], title: str, subti
     subtitle_y = title_top_y + title_line_height * 2 + 30
     return _wrap(f"""
 {card}
+<rect x="{text_x}" y="{title_top_y - 92}" width="72" height="10" rx="5" fill="{HI}"/>
+<rect x="{text_x + 72}" y="{title_top_y - 92}" width="44" height="10" rx="5" fill="{WHITE}"/>
 <text x="{text_x}" y="{title_top_y}" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="58" font-weight="700" fill="{WHITE}">
 {_tspans(title, x=text_x, line_height=title_line_height)}
 </text>
@@ -203,13 +210,20 @@ def _escape(text: str) -> str:
 
 
 def favicon_svg() -> str:
-    """A reduced version of the same mark (navy rounded square, gold
-    highlighted-day dot, two binder tabs) -- legible down to 16x16."""
+    """The site's mark: a lime admission ticket on a scoreboard-black plate.
+    Two side notches and a perforated tear line make it a ticket; the
+    chrome dot on the stub is the highlighted game. The plate keeps it
+    visible on a light browser tab; on the site's own black header the
+    plate merges into the header and the lime ticket carries the mark.
+    No league's or team's mark is drawn. Legible down to 16x16."""
     return f"""<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img">
-<rect x="14" y="2" width="8" height="16" rx="4" fill="{NAVY}"/>
-<rect x="42" y="2" width="8" height="16" rx="4" fill="{NAVY}"/>
-<rect x="4" y="10" width="56" height="50" rx="12" fill="{NAVY}"/>
-<circle cx="32" cy="38" r="15" fill="{GOLD}"/>
+<rect width="64" height="64" rx="14" fill="{CHROME}"/>
+<rect x="8" y="17" width="48" height="30" rx="5" fill="{HI}"/>
+<circle cx="8" cy="32" r="5.5" fill="{CHROME}"/>
+<circle cx="56" cy="32" r="5.5" fill="{CHROME}"/>
+<path d="M40 20.5 V43.5" stroke="{CHROME}" stroke-width="2.5" stroke-dasharray="3.5 3"/>
+<circle cx="24" cy="32" r="6.5" fill="{CHROME}"/>
+<circle cx="48" cy="32" r="2.5" fill="{CHROME}"/>
 </svg>
 """
 

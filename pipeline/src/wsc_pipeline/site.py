@@ -17,10 +17,12 @@ WCAG 2.2 AA per STANDARDS/ACCESSIBILITY-STANDARD.md: semantic landmarks,
 table headers with scope, link text that names its destination, sufficient
 color contrast (checked values noted inline), no color-only distinctions.
 
-Visual design: the real brand established in pipeline/assets/favicon.svg
-and scripts/render_social_assets.py (navy #0b1f3a / gold #f4c94c calendar
-card, gold = "this is the highlighted next-game cell") is extended here,
-not replaced -- see the palette comment on STYLE_CSS below.
+Visual design: the "Floodlight" identity (DECISIONS 0035) -- a scoreboard-black
+chrome with one floodlight-lime highlight, the same two colors as
+pipeline/assets/favicon.svg and scripts/render_social_assets.py (a lime
+ticket on a scoreboard plate). Lime keeps the single meaning gold had
+before it: "this is a real next game". See the palette comment on
+STYLE_CSS below.
 """
 
 from __future__ import annotations
@@ -175,9 +177,10 @@ def _base(
 <meta name='impact-site-verification' content='672c11dd-230b-463d-b029-e09ce84f1050'>
 <title>{e(title)}</title>
 {robots_meta}<meta name="description" content="{e(description)}">
-{canonical_link}{feed_link}<meta name="theme-color" content="#0b1f3a">
+{canonical_link}{feed_link}<meta name="theme-color" content="#16131d">
 <link rel="preload" href="/fonts/public-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/big-shoulders-display-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/big-shoulders-text-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="{CSS_PATH}">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
@@ -201,7 +204,10 @@ def _base(
 <body>
 <a class="skip-link" href="#main">Skip to main content</a>
 <header class="site-header">
-<a class="brand" href="/"><img class="brand-mark" src="/favicon.svg" alt="" width="28" height="28">{e(SITE_NAME)}</a>
+<div class="site-header-inner">
+<a class="brand" href="/"><img class="brand-mark" src="/favicon.svg" alt="" width="32" height="32">{e(SITE_NAME)}</a>
+{SITE_NAV}
+</div>
 </header>
 <main id="main">
 {body}
@@ -210,6 +216,16 @@ def _base(
 </body>
 </html>
 """
+
+
+# The header's two site links, on every page: the league list on the home
+# page and the week-ahead schedule. Plain links; the current page is not
+# marked, so every page renders the same header.
+SITE_NAV = (
+    '<nav class="site-nav" aria-label="Site">'
+    '<ul><li><a href="/#leagues">Leagues</a></li>'
+    '<li><a href="/schedule/">This week</a></li></ul></nav>'
+)
 
 
 # The footer's privacy note, in the two states the build can be in. Each is
@@ -859,11 +875,11 @@ Calendar, Apple Calendar or Outlook. Every listed game shows up on its own,
 updated nightly, with a link to buy tickets from the team's seller. No
 account, no ads.</p>
 <p><a href="{SCHEDULE_PATH}">The week ahead in every league, day by day</a></p>
-{_all_games_feed_block(base_url)}<h2>Leagues</h2>
+<h2 id="leagues">Leagues</h2>
 <ul class="league-strip">
 {league_links}
 </ul>
-{_teams_by_league_block(leagues)}<section class="not-included-panel" aria-labelledby="not-included-heading">
+{_all_games_feed_block(base_url)}{_teams_by_league_block(leagues)}<section class="not-included-panel" aria-labelledby="not-included-heading">
 <h2 id="not-included-heading">Leagues examined and not included</h2>
 <p>Per this site's own licensing research, these leagues' own schedules
 were not used because their published terms forbid it or could not be
@@ -1887,37 +1903,33 @@ def _freshness_note(payload: Mapping[str, object]) -> str:
 # ---------------------------------------------------------------------------
 # STYLE_CSS
 #
-# Palette -- extends the exact hex values already established in
-# pipeline/assets/favicon.svg and scripts/render_social_assets.py, not a
-# new one:
-#   navy   #0b1f3a  brand primary -- header/footer/hero chrome, headings
-#                    and links on paper (16.52:1 on white)
-#   gold   #f4c94c  reserved for ONE meaning only: "this is a real next
-#                    game" -- the hero date-chip and its buy-tickets CTA,
-#                    and a non-zero league game count. Never decoration.
-#                    (10.47:1 as navy-on-gold text, the same ratio
-#                    render_social_assets.py already checked for the
-#                    highlighted calendar cell.)
-#   white  #ffffff  paper / on-navy text (16.52:1 / 18.58:1)
-#   light  #c9d6ea  on-navy secondary text -- the exact "subtitle text on
-#                    navy" value from render_social_assets.py (11.24:1)
-#   dim    #8fa8cf  on-navy small text -- the exact "footer/domain text on
-#                    navy" value from render_social_assets.py (6.82:1),
-#                    now used for this site's real footer/domain text
-#   border #c7ccd1  the exact "decorative calendar grid lines" value,
-#                    reused as section/table dividers
-# New tokens added here (all contrast-checked against their real
-# backgrounds -- see the PR description for the full ratio table):
-#   paper-tint #eef3fb  subscribe box / table zebra / notice panel bg
-#   ink-muted  #51607a  secondary text on paper (6.36:1 on white)
-#   visited    #7a4a00  visited-link on paper (7.48:1) -- a dark amber,
-#                        same hue family as gold, never gold itself (gold
-#                        text on white is 1.58:1, which is why gold never
-#                        appears directly on a paper background)
-#   dark-mode swaps the paper for a near-navy canvas (#0a1420) -- in dark
-#   mode this site's "light" and "dark" colors are the same two colors the
-#   brand's own OG image already is: a navy world with gold, white and
-#   light-blue on it.
+# Palette -- "Floodlight" (DECISIONS 0035): a night game under the lights.
+# Two brand constants, the same in light and dark mode, shared with
+# pipeline/assets/favicon.svg and scripts/render_social_assets.py:
+#   chrome #16131d  scoreboard black -- header, footer, hero ticket, table
+#                    heads, subscribe buttons (18.34:1 with white)
+#   hi     #d4f24a  floodlight lime, ONE meaning only: "this is a real next
+#                    game" -- the hero date chip and its ticket button, and
+#                    a non-zero league game count. Focus rings and button
+#                    hovers borrow it; links never do (links are ink or
+#                    white, underlined, in both modes). Never text on paper
+#                    (1.27:1 on white). Chrome on lime: 14.50:1.
+# Paper (light mode), all on #ffffff / the #f3f1f6 surface:
+#   ink     #16131d  18.34:1 / 16.35:1
+#   muted   #57526a   7.45:1 /  6.64:1
+#   visited #7b2d6b   8.64:1 /  7.71:1  (berry, so visited never reads as ink)
+#   border  #d6d2de  dividers only, never text
+# On chrome (#16131d): white text and links 18.34:1, muted #cfcadb 11.46:1,
+#   dim #a29cb4 6.94:1, visited pink #f2a7d8 9.86:1, lime focus 14.50:1.
+# Dark mode canvas #0f0d14 / surface #1a1722 -- a warm black, not the blue
+# night the portfolio's water sites use: ink #f1eff5 16.92:1, muted #b3adc2
+#   8.89:1 / 8.13:1, links take the ink, visited #f2a7d8 10.38:1 / 9.49:1,
+#   lime focus 15.26:1, button outline #a29cb4 on the surface 6.68:1.
+# The motif is the ticket: the hero is a ticket with a perforated tear line
+# and two notches, the subscribe box a ticket-stock card, and a two-tone
+# "lane stripe" (lime then chrome) runs under each page's H1 and across
+# the top of the header. All of it is decoration in CSS; nothing is an
+# image of a league's or team's mark.
 # ---------------------------------------------------------------------------
 
 STYLE_CSS = """\
@@ -1925,14 +1937,14 @@ STYLE_CSS = """\
   font-family: "Big Shoulders Display";
   font-style: normal;
   font-weight: 500 800;
-  font-display: swap;
+  font-display: optional;
   src: url("/fonts/big-shoulders-display-latin.woff2") format("woff2");
 }
 @font-face {
   font-family: "Big Shoulders Text";
   font-style: normal;
   font-weight: 500 800;
-  font-display: swap;
+  font-display: optional;
   src: url("/fonts/big-shoulders-text-latin.woff2") format("woff2");
 }
 @font-face {
@@ -1947,30 +1959,32 @@ STYLE_CSS = """\
   color-scheme: light dark;
 
   /* brand -- constant in both modes */
-  --navy: #0b1f3a;
-  --gold: #f4c94c;
+  --chrome: #16131d;
+  --hi: #d4f24a;
 
-  /* content-area tokens (paper in light mode, a navy canvas in dark) */
+  /* content-area tokens (paper in light mode, a warm black in dark) */
   --bg: #ffffff;
-  --surface: #eef3fb;
-  --ink: #0b1f3a;
-  --muted: #51607a;
-  --border: #c7ccd1;
-  --link: #0b1f3a;
-  --link-visited: #7a4a00;
-  --focus: #0b1f3a;
-  /* subscribe-button outline: the button's own navy on paper; in dark mode
-     the on-navy dim blue, so four navy buttons on the navy-tinted box stay
-     distinct (#8fa8cf on #101c30: 7.04:1) */
-  --cta-border: #0b1f3a;
+  --surface: #f3f1f6;
+  --ink: #16131d;
+  --muted: #57526a;
+  --border: #d6d2de;
+  --link: #16131d;
+  --link-visited: #7b2d6b;
+  --focus: #16131d;
+  /* subscribe-button outline: the button's own chrome on paper; in dark
+     mode the on-chrome dim, so four chrome buttons on the dark surface stay
+     distinct (#a29cb4 on #1a1722: 6.68:1) */
+  --cta-border: #16131d;
+  /* the subscribe card's edge: ink on paper, the dark border in dark mode */
+  --card-edge: #16131d;
 
-  /* chrome tokens -- header, footer, hero, subscribe box: always navy */
-  --on-navy-fg: #ffffff;
-  --on-navy-muted: #c9d6ea;
-  --on-navy-dim: #8fa8cf;
-  --on-navy-link: #8fc0ff;
-  --on-navy-link-visited: #e8c37a;
-  --on-navy-focus: #f4c94c;
+  /* chrome tokens -- header, footer, hero ticket: always scoreboard black */
+  --on-chrome-fg: #ffffff;
+  --on-chrome-muted: #cfcadb;
+  --on-chrome-dim: #a29cb4;
+  --on-chrome-link: #ffffff;
+  --on-chrome-link-visited: #f2a7d8;
+  --on-chrome-focus: #d4f24a;
 
   --display-font: "Big Shoulders Display", "Arial Narrow", sans-serif;
   --label-font: "Big Shoulders Text", "Arial Narrow", sans-serif;
@@ -1980,15 +1994,16 @@ STYLE_CSS = """\
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0a1420;
-    --surface: #101c30;
-    --ink: #eef2f8;
-    --muted: #aab6c9;
-    --border: #24344f;
-    --link: #8fc0ff;
-    --link-visited: #e8c37a;
-    --focus: #f4c94c;
-    --cta-border: #8fa8cf;
+    --bg: #0f0d14;
+    --surface: #1a1722;
+    --ink: #f1eff5;
+    --muted: #b3adc2;
+    --border: #2e2a3a;
+    --link: #f1eff5;
+    --link-visited: #f2a7d8;
+    --focus: #d4f24a;
+    --cta-border: #a29cb4;
+    --card-edge: #2e2a3a;
   }
 }
 
@@ -2021,7 +2036,14 @@ h1, h2 {
   letter-spacing: -0.01em;
   margin: 0 0 0.5rem;
 }
-h1 { font-size: clamp(2rem, 5vw + 1rem, 3rem); margin-top: 1.5rem; }
+h1 { font-size: clamp(2rem, 5vw + 1rem, 3rem); margin-top: 1.75rem; }
+/* The lane stripe: lime then chrome, decoration only. In dark mode the
+   chrome half takes the ink color so it shows on the dark canvas. */
+main > h1::after {
+  content: ""; display: block; width: 4.5rem; height: 0.375rem; margin-top: 0.6rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--hi) 0 55%, var(--ink) 55% 100%);
+}
 h2 {
   font-size: clamp(1.15rem, 2vw + 0.8rem, 1.5rem);
   margin-top: 2.5rem;
@@ -2046,44 +2068,57 @@ a:focus-visible, button:focus-visible, .games-table-wrap:focus-visible {
 
 .skip-link {
   position: absolute; left: -999px; top: 0;
-  background: var(--gold); color: var(--navy); font-weight: 700;
+  background: var(--hi); color: var(--chrome); font-weight: 700;
   padding: 0.6rem 1rem; z-index: 10; text-decoration: none;
 }
 .skip-link:focus { left: 0.75rem; top: 0.75rem; border-radius: 0.25rem; }
 
-/* ---- chrome: header + footer, always navy, the brand's own colors ---- */
+/* ---- chrome: header + footer, always scoreboard black ---- */
 .site-header {
-  background: var(--navy);
-  padding: 0.9rem 1.25rem;
+  background: var(--chrome);
+  border-top: 4px solid var(--hi);
+  padding: 0.75rem 1.25rem;
+}
+.site-header-inner {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 0.25rem 1.25rem; max-width: 64rem; margin: 0 auto;
 }
 .brand {
-  display: flex; align-items: center; gap: 0.5rem;
-  max-width: 64rem; margin: 0 auto; box-sizing: border-box;
-  color: var(--on-navy-fg); text-decoration: none;
-  font-family: var(--label-font); font-weight: 700; font-size: 1.15rem;
-  letter-spacing: 0.01em;
+  display: flex; align-items: center; gap: 0.6rem; min-height: 2.75rem;
+  color: var(--on-chrome-fg); text-decoration: none;
+  font-family: var(--display-font); font-weight: 800; font-size: 1.4rem;
+  letter-spacing: 0.02em; text-transform: uppercase;
 }
-.brand:visited { color: var(--on-navy-fg); }
-.brand-mark { display: block; border-radius: 6px; }
-.site-header a:focus-visible { outline-color: var(--on-navy-focus); }
+.brand:visited { color: var(--on-chrome-fg); }
+.brand-mark { display: block; border-radius: 7px; }
+.site-nav ul { list-style: none; display: flex; gap: 0.25rem 1.25rem; margin: 0; padding: 0; }
+.site-nav a {
+  display: inline-flex; align-items: center; min-height: 2.75rem;
+  color: var(--on-chrome-fg); text-decoration: none;
+  font-family: var(--label-font); font-weight: 700; font-size: 1rem; letter-spacing: 0.04em;
+  text-transform: uppercase; border-bottom: 3px solid transparent;
+}
+.site-nav a:visited { color: var(--on-chrome-fg); }
+.site-nav a:hover { border-bottom-color: var(--hi); }
+.site-header a:focus-visible { outline-color: var(--on-chrome-focus); }
 
-.site-footer { background: var(--navy); color: var(--on-navy-muted); margin-top: 3rem; }
+.site-footer { background: var(--chrome); color: var(--on-chrome-muted); margin-top: 3rem; border-top: 4px solid var(--hi); }
 .site-footer > * { padding: 1.5rem 1.25rem 2rem; }
 .site-footer h2 {
-  color: var(--on-navy-fg); border-top: 0; margin-top: 0; padding-top: 0;
+  color: var(--on-chrome-fg); border-top: 0; margin-top: 0; padding-top: 0;
   font-size: 1.05rem;
 }
 .site-footer p { max-width: 42rem; font-size: 0.9375rem; }
-.site-footer a { color: var(--on-navy-link); }
-.site-footer a:visited { color: var(--on-navy-link-visited); }
-.site-footer a:focus-visible { outline-color: var(--on-navy-focus); }
-.site-footer .privacy-note { color: var(--on-navy-dim); }
+.site-footer a { color: var(--on-chrome-link); }
+.site-footer a:visited { color: var(--on-chrome-link-visited); }
+.site-footer a:focus-visible { outline-color: var(--on-chrome-focus); }
+.site-footer .privacy-note { color: var(--on-chrome-dim); }
 .analytics-toggle {
   background: none; border: 0; padding: 0.125rem 0; min-height: 1.5rem;
-  color: var(--on-navy-link); font: inherit; text-decoration: underline;
+  color: var(--on-chrome-link); font: inherit; text-decoration: underline;
   text-underline-offset: 0.15em; cursor: pointer;
 }
-.site-footer button:focus-visible { outline-color: var(--on-navy-focus); }
+.site-footer button:focus-visible { outline-color: var(--on-chrome-focus); }
 
 /* ---- breadcrumb + source note ---- */
 nav[aria-label="breadcrumb"] {
@@ -2100,15 +2135,19 @@ nav[aria-label="breadcrumb"] {
   padding: 0.9rem 0.25rem; text-decoration: none; color: var(--ink);
 }
 .league-row-link:visited { color: var(--ink); }
-.league-row-link:hover { background: var(--surface); }
-.league-row-name { font-family: var(--display-font); font-weight: 700; font-size: 1.375rem; }
+.league-row-link:hover { background: var(--surface); box-shadow: inset 4px 0 0 var(--ink); }
+.league-row-name {
+  font-family: var(--display-font); font-weight: 800; font-size: 1.6rem;
+  letter-spacing: 0.02em; text-transform: uppercase;
+}
 .league-row-count { font-family: var(--body-font); font-size: 0.9375rem; color: var(--muted); white-space: nowrap; }
 .league-row--live .league-row-count {
-  /* navy-on-gold, same pairing (and the same 10.47:1 ratio) as everywhere
-     else gold appears -- both colors are brand constants, unchanged
-     between light and dark mode, so this needs no dark-mode override. */
-  color: var(--navy); font-weight: 600;
-  background: var(--gold); padding: 0.2rem 0.55rem; border-radius: 999px;
+  /* chrome-on-lime, the same pairing (14.50:1) as everywhere else lime
+     appears -- both colors are brand constants, unchanged between light
+     and dark mode, so this needs no dark-mode override. */
+  color: var(--chrome); font-weight: 700;
+  background: var(--hi); padding: 0.2rem 0.6rem; border-radius: 0.3rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .not-included-panel {
@@ -2145,12 +2184,13 @@ nav[aria-label="breadcrumb"] {
 /* ---- subscribe box: the .ics mechanic, styled as the actual product ---- */
 .subscribe {
   position: relative;
-  background: var(--surface); border: 1px solid var(--border);
+  background: var(--surface); border: 2px solid var(--card-edge);
   border-radius: 0.85rem; padding: 1.5rem 1.25rem 1.25rem; margin: 1.5rem 0;
 }
+/* Two binder tabs: the box is a calendar page as well as a ticket. */
 .subscribe::before, .subscribe::after {
-  content: ""; position: absolute; top: -8px; width: 22px; height: 16px;
-  background: var(--navy); border-radius: 4px;
+  content: ""; position: absolute; top: -9px; width: 22px; height: 16px;
+  background: var(--hi); border: 2px solid var(--chrome); border-radius: 4px;
 }
 .subscribe::before { left: 1.75rem; }
 .subscribe::after { right: 1.75rem; }
@@ -2162,13 +2202,15 @@ nav[aria-label="breadcrumb"] {
 .subscribe-instructions { padding-left: 1.1rem; font-size: 0.9375rem; }
 .subscribe-instructions li { margin-bottom: 0.5rem; }
 .subscribe-cta {
-  display: inline-block; background: var(--navy); color: var(--on-navy-fg);
+  display: inline-flex; align-items: center; min-height: 2.75rem;
+  background: var(--chrome); color: var(--on-chrome-fg);
   font-family: var(--label-font); font-weight: 700; letter-spacing: 0.01em;
   text-decoration: none; padding: 0.6rem 1.1rem; border-radius: 0.5rem;
   margin-bottom: 0.15rem;
 }
-.subscribe-cta:visited { color: var(--on-navy-fg); }
-.subscribe-cta:hover { background: #132a4d; }
+.subscribe-cta:visited { color: var(--on-chrome-fg); }
+/* chrome on lime, 14.50:1 */
+.subscribe-cta:hover { background: var(--hi); color: var(--chrome); }
 .subscribe-buttons {
   list-style: none; margin: 0.75rem 0 1rem; padding: 0;
   display: flex; flex-wrap: wrap; gap: 0.5rem;
@@ -2178,17 +2220,27 @@ nav[aria-label="breadcrumb"] {
 
 /* ---- team page hero: the actual next home game ---- */
 .next-game {
-  background: var(--navy); color: var(--on-navy-fg);
+  position: relative;
+  background: var(--chrome); color: var(--on-chrome-fg);
+  border: 1px solid var(--card-edge);
   border-radius: 0.85rem; padding: 1.5rem 1.25rem;
   margin: 1.5rem 0; display: flex; flex-wrap: wrap; gap: 1.25rem;
 }
+/* The ticket's two notches, cut where the label's tear line runs (1.5rem
+   padding + the label's 1.14rem line + 0.75rem, less the notch radius). */
+.next-game::before, .next-game::after {
+  content: ""; position: absolute; top: 2.79rem; width: 1.2rem; height: 1.2rem;
+  border-radius: 50%; background: var(--bg);
+}
+.next-game::before { left: -0.6rem; }
+.next-game::after { right: -0.6rem; }
 .next-game-date {
   flex: 0 0 auto; width: 6rem; height: 6rem;
-  background: var(--gold); color: var(--navy); border-radius: 0.6rem;
+  background: var(--hi); color: var(--chrome); border-radius: 0.6rem;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   font-family: var(--display-font);
 }
-.next-game-date--tbd { background: var(--on-navy-dim); }
+.next-game-date--tbd { background: var(--on-chrome-dim); }
 .next-game-month { font-size: 1rem; font-weight: 700; letter-spacing: 0.04em; }
 .next-game-day { font-size: 2.75rem; font-weight: 800; line-height: 1; }
 .next-game-details { flex: 1 1 14rem; min-width: 0; }
@@ -2196,29 +2248,40 @@ nav[aria-label="breadcrumb"] {
   font-family: var(--display-font); font-weight: 800; font-size: clamp(1.4rem, 3vw + 1rem, 1.9rem);
   line-height: 1.05; margin: 0 0 0.3rem; max-width: none;
 }
-.next-game-when, .next-game-venue { margin: 0 0 0.2rem; color: var(--on-navy-muted); font-size: 0.9375rem; max-width: none; }
+.next-game-when, .next-game-venue { margin: 0 0 0.2rem; color: var(--on-chrome-muted); font-size: 0.9375rem; max-width: none; }
 .next-game-cta {
-  display: inline-block; background: var(--gold); color: var(--navy);
+  display: inline-block; background: var(--hi); color: var(--chrome);
   font-family: var(--label-font); font-weight: 700; letter-spacing: 0.01em;
   text-decoration: none; padding: 0.65rem 1.15rem; border-radius: 0.5rem;
   margin-top: 0.75rem;
 }
-.next-game-cta:visited { color: var(--navy); }
-.next-game-cta:hover { background: #ffd876; }
+.next-game-cta:visited { color: var(--chrome); }
+/* a lighter lime on hover, chrome text still: #16131d on #e6fa8c */
+.next-game-cta:hover { background: #e6fa8c; }
 .next-game-cta--unavailable {
-  background: none; color: var(--on-navy-dim); font-style: italic; padding: 0; font-size: 0.9375rem;
+  background: none; color: var(--on-chrome-dim); font-style: italic; padding: 0; font-size: 0.9375rem;
 }
+/* The label row ends in the ticket's tear line, a dashed perforation that
+   meets the two notches. */
 .next-game h2.next-game-label {
-  flex: 1 0 100%; margin: 0; padding: 0; border-top: 0;
-  font-family: var(--label-font); font-weight: 700; font-size: 0.95rem;
-  letter-spacing: 0.06em; text-transform: uppercase; color: var(--on-navy-muted);
+  flex: 1 0 100%; margin: 0; padding: 0 0 0.75rem; border-top: 0;
+  border-bottom: 2px dashed var(--on-chrome-dim);
+  font-family: var(--label-font); font-weight: 700; font-size: 0.95rem; line-height: 1.2;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--on-chrome-muted);
 }
 .next-game--empty .next-game-label { margin-bottom: 0.5rem; }
-.next-game-note { flex: 1 0 100%; margin: 0; color: var(--on-navy-muted); font-size: 0.9375rem; max-width: none; }
-.next-game .game-status { color: var(--on-navy-fg); }
+.next-game-note { flex: 1 0 100%; margin: 0; color: var(--on-chrome-muted); font-size: 0.9375rem; max-width: none; }
+.next-game .game-status { color: var(--on-chrome-fg); }
 .next-game--empty { display: block; }
-.next-game-empty-msg { color: var(--on-navy-muted); max-width: 36rem; margin: 0; }
-.next-game a:focus-visible { outline-color: var(--on-navy-focus); }
+.next-game-empty-msg { color: var(--on-chrome-muted); max-width: 36rem; margin: 0; }
+.next-game--empty .next-game-empty-msg { margin-top: 0.75rem; }
+/* A plain link inside the black hero (the "check the team's seller" link in
+   the empty message) takes the on-chrome link colors. Before 0035 it kept
+   the page's ink link color, the same color as the hero, so it could not
+   be seen (about 1:1). White 18.34:1, visited pink 9.86:1. */
+.next-game a:not(.next-game-cta) { color: var(--on-chrome-link); }
+.next-game a:not(.next-game-cta):visited { color: var(--on-chrome-link-visited); }
+.next-game a:focus-visible { outline-color: var(--on-chrome-focus); }
 
 /* ---- games table ---- */
 .no-games-message { color: var(--muted); }
@@ -2237,7 +2300,7 @@ table.games-table th, table.games-table td {
   border-bottom: 1px solid var(--border);
 }
 table.games-table thead th {
-  background: var(--navy); color: var(--on-navy-fg);
+  background: var(--chrome); color: var(--on-chrome-fg);
   font-family: var(--label-font); font-weight: 700; letter-spacing: 0.01em;
   border-bottom: 0;
 }
@@ -2260,10 +2323,10 @@ table.games-table tbody tr:last-child td { border-bottom: 0; }
 # The "Paid link" label (PAID_LINK_LABEL). Appended to style.css only when
 # some link can be an affiliate link (style_css), so with no affiliate link
 # configured, style.css is byte-for-byte what it was before (DECISIONS 0018).
-# --muted on --bg is 6.36:1 and on --surface (alternate table rows) 5.7:1 in
-# light mode, and 9.03:1 and 8.32:1 in dark mode. The hero is navy chrome,
-# so there the label takes the on-navy muted color the hero's own date and
-# venue lines use (#c9d6ea on #0b1f3a: 11.24:1).
+# --muted on --bg is 7.45:1 and on --surface (alternate table rows) 6.64:1 in
+# light mode, and 8.89:1 and 8.13:1 in dark mode. The hero is chrome, so
+# there the label takes the on-chrome muted color the hero's own date and
+# venue lines use (#cfcadb on #16131d: 11.46:1).
 PAID_LINK_CSS = """
 .paid-link {
   display: inline-block; margin-left: 0.35rem; padding: 0 0.45rem;
@@ -2271,7 +2334,7 @@ PAID_LINK_CSS = """
   font-family: var(--label-font); font-weight: 700; font-size: 0.8125rem;
   color: var(--muted); white-space: nowrap;
 }
-.next-game .paid-link { color: var(--on-navy-muted); margin-top: 0.75rem; }
+.next-game .paid-link { color: var(--on-chrome-muted); margin-top: 0.75rem; }
 """
 
 
