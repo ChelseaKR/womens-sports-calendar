@@ -67,6 +67,10 @@ archived and private.
 
 ### Changed
 
+- The Connecticut Sun are now the Houston Comets, at /wnba/houston-comets/
+  and /ics/wnba/houston-comets.ics. The old feed address keeps publishing
+  the same feed, the old page points to the new one, and the official ticket
+  link goes to comets.wnba.com (DECISIONS 0033).
 - A team page's first sentence now states the next home game in the name
   fans search: "The next USC women's basketball home game is against Utah
   State Aggies at Galen Center in Los Angeles, CA, on Sunday, November 8,

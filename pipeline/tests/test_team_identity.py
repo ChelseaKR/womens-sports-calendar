@@ -18,14 +18,14 @@ import pytest
 from icalendar import Calendar
 
 from wsc_pipeline import build as build_module
-from wsc_pipeline import config, site, validate_ics, validate_seo
+from wsc_pipeline import config, site, site_data, validate_ics, validate_seo
 from wsc_pipeline.config import League, Team, check_registry
 from wsc_pipeline.ics import make_uid
 from wsc_pipeline.normalize import team_is_participant_as_any
 from wsc_pipeline.site_data import records_dir
 from wsc_pipeline.ticketmaster import CrawlBudget, DiscoveryClient
 
-from .conftest import make_raw_event
+from .conftest import REAL_FETCH_PREVIOUS_PUBLISH, make_raw_event
 from .fixture_site import build_fixture_site
 
 BASE_URL = "https://nexthomegame.com"
@@ -34,8 +34,9 @@ BASE_URL = "https://nexthomegame.com"
 # has a page, a feed at /ics/<league>/<slug>.ics and a data file, all checked
 # live (HTTP 200) when this list was written. A slug is a URL people have
 # saved and a feed URL calendar apps poll; it may be added to this list but
-# never changed or removed. To rename a team, keep its slug (docs/DECISIONS.md
-# 0017).
+# never changed or removed. To rename a team, keep its slug, or move it to the
+# team's `former_slugs`, which keep its feed and a notice page published
+# (docs/DECISIONS.md 0017; the Connecticut Sun, now the Houston Comets, 0033).
 PUBLISHED_SLUGS: dict[str, tuple[str, ...]] = {
     "wnba": (
         "minnesota-lynx",
@@ -51,8 +52,10 @@ PUBLISHED_SLUGS: dict[str, tuple[str, ...]] = {
         "los-angeles-sparks",
         "phoenix-mercury",
         "toronto-tempo",
-        "connecticut-sun",
+        "connecticut-sun",  # a former slug of houston-comets since DECISIONS 0033
         "seattle-storm",
+        # First published by the Connecticut Sun's move (DECISIONS 0033).
+        "houston-comets",
     ),
     "nwsl": (
         "angel-city",
@@ -177,11 +180,22 @@ GOLDEN_FEED_UIDS: dict[str, list[str]] = {
 # --- what is published today must not move -------------------------------------------------------------
 
 
+def _configured_slugs() -> dict[str, set[str]]:
+    """Every slug each league publishes at: each team's current slug and its
+    former ones (a former slug still gets the feed and a notice page)."""
+    return {lg.slug: {s for t in lg.teams for s in (t.slug, *t.former_slugs)} for lg in config.LEAGUES}
+
+
+def _former_slugs() -> set[tuple[str, str]]:
+    return {(lg.slug, f) for lg in config.LEAGUES for t in lg.teams for f in t.former_slugs}
+
+
 def test_every_published_league_and_team_slug_is_still_configured():
     """Fails if any existing slug changes or disappears (a renamed team whose
     slug was re-derived from its new name, a changed slugify rule, a removed
-    team). New teams may be added."""
-    configured = {lg.slug: {t.slug for t in lg.teams} for lg in config.LEAGUES}
+    team). New teams may be added, and a slug may move to a team's
+    former_slugs."""
+    configured = _configured_slugs()
     missing_leagues = set(PUBLISHED_SLUGS) - set(configured)
     assert not missing_leagues, f"published league slugs no longer configured: {sorted(missing_leagues)}"
     for league_slug, published in PUBLISHED_SLUGS.items():
@@ -192,20 +206,106 @@ def test_every_published_league_and_team_slug_is_still_configured():
 def test_the_published_slug_list_has_every_team_configured_today():
     """So a slug that is configured but was never pinned cannot slip through:
     add it to PUBLISHED_SLUGS the day it first publishes."""
-    configured = {lg.slug: {t.slug for t in lg.teams} for lg in config.LEAGUES}
-    assert {k: set(v) for k, v in PUBLISHED_SLUGS.items()} == configured
-    assert sum(len(v) for v in PUBLISHED_SLUGS.values()) == 83
+    assert {k: set(v) for k, v in PUBLISHED_SLUGS.items()} == _configured_slugs()
+    assert sum(len(v) for v in PUBLISHED_SLUGS.values()) == 84
+    assert _former_slugs() == {("wnba", "connecticut-sun")}
 
 
 def test_every_published_slug_still_gets_a_feed_a_page_and_a_data_file(tmp_path: Path):
+    """A former slug gets its feed and a page (the notice) but no data file:
+    the records are never deployed (DECISIONS 0024), so no reader holds the
+    old one's address (DECISIONS 0033)."""
     out = tmp_path / "dist"
     build_fixture_site(out)
+    former = _former_slugs()
     for league_slug, slugs in PUBLISHED_SLUGS.items():
         assert (out / "ics" / f"{league_slug}.ics").is_file()
         for slug in slugs:
             assert (out / "ics" / league_slug / f"{slug}.ics").is_file(), f"feed {league_slug}/{slug}"
-            assert (records_dir(out) / league_slug / f"{slug}.json").is_file(), f"data {league_slug}/{slug}"
+            data = records_dir(out) / league_slug / f"{slug}.json"
+            assert data.is_file() != ((league_slug, slug) in former), f"data {league_slug}/{slug}"
             assert (out / league_slug / slug / "index.html").is_file(), f"page {league_slug}/{slug}"
+
+
+# --- the Connecticut Sun became the Houston Comets (DECISIONS 0033) --------------------------------------
+
+
+def test_the_sun_feed_is_the_comets_feed_byte_for_byte(tmp_path: Path):
+    """A subscriber to the Sun's feed keeps getting the team's games, under
+    the same UIDs, and nobody subscribed to both gets a game twice."""
+    out = tmp_path / "dist"
+    build_fixture_site(out)
+    sun = (out / "ics" / "wnba" / "connecticut-sun.ics").read_bytes()
+    assert sun == (out / "ics" / "wnba" / "houston-comets.ics").read_bytes()
+    assert b"Houston Comets" in sun
+
+
+def test_the_sun_page_is_a_noindex_notice_for_the_comets_page(tmp_path: Path):
+    out = tmp_path / "dist"
+    build_fixture_site(out)
+    notice = (out / "wnba" / "connecticut-sun" / "index.html").read_text()
+    assert '<meta name="robots" content="noindex">' in notice
+    assert '<meta http-equiv="refresh" content="0; url=/wnba/houston-comets/">' in notice
+    assert "Houston Comets has a new page address" in notice
+    assert "The Connecticut Sun moved to Houston and became the Houston Comets" in notice
+    sitemap_xml = (out / "sitemap.xml").read_text()
+    assert f"{BASE_URL}/wnba/houston-comets/" in sitemap_xml
+    assert "connecticut-sun" not in sitemap_xml
+
+
+def test_the_comets_page_says_the_2027_schedule_is_not_out_while_nothing_is_listed():
+    """Built in the off-season with nothing listed, the page names the move
+    and says plainly the 2027 schedule is not out; it never implies a game."""
+    wnba = config.league_by_slug("wnba")
+    comets = next(t for t in wnba.teams if t.slug == "houston-comets")
+    payload = site_data.team_data(comets, wnba, [], fetched=True)
+    payload["fetched_at"] = "2026-11-05T12:00:00+00:00"
+    html = site.render_team(team=payload, base_url=BASE_URL)
+    assert (
+        '<p class="team-history">The Connecticut Sun moved to Houston and became the Houston Comets for the '
+        "2027 WNBA season. The 2027 schedule is not out yet.</p>"
+    ) in html
+    assert "<title>Houston Comets 2027 schedule" in html
+    assert "Next home game:" not in html
+
+
+def test_the_comets_note_drops_the_not_out_sentence_once_a_game_is_listed():
+    wnba = config.league_by_slug("wnba")
+    comets = next(t for t in wnba.teams if t.slug == "houston-comets")
+    payload: dict[str, Any] = {"league_slug": "wnba", "team_slug": "houston-comets", "games": [{}]}
+    payload["fetched"], payload["fetched_at"] = True, "2027-01-05T12:00:00+00:00"
+    assert site.team_history_text(payload) == comets.history_note
+    unfetched = {"league_slug": "wnba", "team_slug": "houston-comets", "games": [], "fetched": False}
+    assert site.team_history_text(unfetched) == comets.history_note  # an unchecked build claims nothing
+    assert site.team_history_text({"league_slug": "wnba", "team_slug": "indiana-fever", "games": []}) == ""
+
+
+def test_the_comets_search_the_sun_name_and_accept_it_in_an_event():
+    comets = next(t for t in config.league_by_slug("wnba").teams if t.slug == "houston-comets")
+    assert comets.all_names == ("Houston Comets", "Connecticut Sun")
+    assert comets.shown_name == "Houston Comets"
+
+
+def test_the_first_build_after_the_move_reads_the_sun_feed_as_the_comets_previous_publish(tmp_path: Path):
+    """The live site has no houston-comets.ics yet, only the Sun's feed. The
+    guard and the played-games history (DECISIONS 0027) must read that one,
+    or the first build would treat the team as new and drop the Sun's played
+    games from the feed its subscribers hold."""
+    out = tmp_path / "dist"
+    build_fixture_site(out)
+    (out / "ics" / "wnba" / "houston-comets.ics").unlink()  # as live before the move
+    sun_feed = (out / "ics" / "wnba" / "connecticut-sun.ics").read_bytes()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        target = out / request.url.path.lstrip("/")
+        return httpx.Response(200, content=target.read_bytes()) if target.is_file() else httpx.Response(404)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        previous = REAL_FETCH_PREVIOUS_PUBLISH(BASE_URL, client=client)
+    key = ("wnba", "houston-comets")
+    assert key in previous.games and key not in previous.new_teams and key not in previous.unreadable
+    assert "ics/wnba/houston-comets.ics" in previous.feeds
+    assert len(previous.feeds["ics/wnba/houston-comets.ics"]) == len(Calendar.from_ical(sun_feed).walk("VEVENT"))
 
 
 def test_the_fixture_site_publishes_exactly_the_uids_it_always_did(tmp_path: Path):
@@ -489,3 +589,67 @@ def test_the_home_flag_recognizes_the_former_name(tmp_path: Path, monkeypatch):
     games = {g["event_id"]: g for g in json.loads((records_dir(out) / "demo" / "old-name.json").read_text())["games"]}
     assert games["E1"]["tracked_team_is_home"] is True
     assert games["E2"]["tracked_team_is_home"] is True  # "Old Name vs Rival Two": the former name is the home side
+
+
+def test_a_sun_game_played_before_the_move_stays_in_both_feeds(tmp_path: Path, monkeypatch):
+    """Night 1 publishes a played Sun game at the Sun's address only (the site
+    before the move). Night 2, the first build with the Comets, no longer gets
+    it from Ticketmaster: it stays in the Comets feed and so, byte for byte,
+    in the Sun feed (history.py, DECISIONS 0027)."""
+    from datetime import UTC, datetime, timedelta
+
+    from .test_build import _FakeDiscoveryClient
+
+    night1 = datetime(2026, 9, 1, 8, 13, tzinfo=UTC)
+    played_at = night1 + timedelta(hours=12)
+    played = make_raw_event(
+        event_id="SUN-PLAYED",
+        name="Connecticut Sun vs Chicago Sky",
+        date_time=played_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        local_date=played_at.strftime("%Y-%m-%d"),
+        venue_name="Mohegan Sun Arena",
+        venue_city="Uncasville",
+        venue_state="CT",
+        timezone="America/New_York",
+    )
+    # Other teams' later games keep the change far from the publish guard's limits.
+    later = [
+        make_raw_event(
+            event_id=f"L{i}",
+            name="New York Liberty vs Chicago Sky",
+            date_time=(night1 + timedelta(days=20 + i)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            local_date=(night1 + timedelta(days=20 + i)).strftime("%Y-%m-%d"),
+        )
+        for i in range(8)
+    ]
+    n1, n2 = tmp_path / "n1", tmp_path / "n2"
+    monkeypatch.setattr(
+        build_module,
+        "DiscoveryClient",
+        lambda api_key: _FakeDiscoveryClient({"houston-comets": [played], "new-york-liberty": later}),
+    )
+    build_module.build(out_dir=n1, base_url=BASE_URL, api_key="fake-key", affiliate_id=None, now=night1)
+    (n1 / "ics" / "wnba" / "houston-comets.ics").unlink()  # live before the move: only the Sun's feed
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        target = n1 / request.url.path.lstrip("/")
+        return httpx.Response(200, content=target.read_bytes()) if target.is_file() else httpx.Response(404)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        previous = REAL_FETCH_PREVIOUS_PUBLISH(BASE_URL, client=client)
+    monkeypatch.setattr(
+        build_module, "DiscoveryClient", lambda api_key: _FakeDiscoveryClient({"new-york-liberty": later})
+    )
+    build_module.build(
+        out_dir=n2,
+        base_url=BASE_URL,
+        api_key="fake-key",
+        affiliate_id=None,
+        previous_publish=previous,
+        now=night1 + timedelta(days=1),
+    )
+    validate_ics.validate_dist(n2)
+    comets = (n2 / "ics" / "wnba" / "houston-comets.ics").read_bytes()
+    assert comets == (n2 / "ics" / "wnba" / "connecticut-sun.ics").read_bytes()
+    uids = {str(e["uid"]) for e in Calendar.from_ical(comets).walk("VEVENT")}
+    assert make_uid("SUN-PLAYED") in uids
