@@ -66,7 +66,7 @@ def test_every_url_is_plain_https_with_evidence():
     pages = [*official_tickets.OFFICIAL_TEAM_TICKETS.values(), *official_tickets.OFFICIAL_LEAGUE_TICKETS.values()]
     for page in pages:
         assert page.url.startswith("https://") and "?" not in page.url and "#" not in page.url, page.url
-        checked = (official_tickets.CHECKED_ON, official_tickets.SEC_CHECKED_ON)
+        checked = (official_tickets.CHECKED_ON, official_tickets.SEC_CHECKED_ON, official_tickets.COMETS_CHECKED_ON)
         assert any(day in page.evidence for day in checked) or "fetched" in page.evidence, page.url
     official_tickets._check()
 

@@ -20,6 +20,10 @@ Not covered, on purpose:
 - PWHL and AUSL: the sitemap has no team pages for either league.
 - WNBA Portland Fire and Toronto Tempo, and NWSL Bay FC, Boston Legacy,
   Denver Summit and Gotham FC: no team page in the sitemap.
+- WNBA Houston Comets: the sitemap, read again 2026-11-05, has a store for
+  the Connecticut Sun and none for the Comets, so the Sun's entry was
+  dropped when the team moved (DECISIONS 0033). The team's own store,
+  rocketsshop.com/pages/comets, is not Fanatics.
 - NCAA women's basketball: Fanatics sells each school's whole-athletics
   store, not a women's basketball store, so a "team shop" link would not
   be this team's.
@@ -74,7 +78,6 @@ FANATICS_TEAM_SHOPS: dict[tuple[str, str], str] = {
     ): "https://www.fanatics.com/nwsl/washington-spirit/o-21792421+t-5677015343+z-93-3021596904",
     ("wnba", "atlanta-dream"): "https://www.fanatics.com/wnba/atlanta-dream/o-1460+t-69434525+z-92374-3568125624",
     ("wnba", "chicago-sky"): "https://www.fanatics.com/wnba/chicago-sky/o-2559+t-69106760+z-91608-4263507522",
-    ("wnba", "connecticut-sun"): "https://www.fanatics.com/wnba/connecticut-sun/o-4715+t-92547816+z-93624-729867934",
     ("wnba", "dallas-wings"): "https://www.fanatics.com/wnba/dallas-wings/o-1471+t-25092395+z-92906-162900988",
     (
         "wnba",

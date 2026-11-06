@@ -299,9 +299,8 @@ def fetch_previous_publish(base_url: str, *, client: httpx.Client | None = None)
             if transport_failures >= _GIVE_UP_AFTER:
                 previous.unreadable[key] = "not tried: the site did not answer the requests before it"
                 continue
-            url = f"{base_url}/ics/{league.slug}/{team.slug}.ics"
             try:
-                response = http.get(url)
+                response = _get_team_feed(http, base_url, league, team)
             except httpx.HTTPError as exc:
                 transport_failures += 1
                 previous.unreadable[key] = f"request failed ({type(exc).__name__})"
@@ -329,6 +328,21 @@ def fetch_previous_publish(base_url: str, *, client: httpx.Client | None = None)
             http.close()
     previous.fetched_at = min(fetched_times) if fetched_times else None
     return previous
+
+
+def _get_team_feed(http: httpx.Client, base_url: str, league: config.League, team: config.Team) -> httpx.Response:
+    """The live feed at the team's slug, or, when that is a 404 and the team
+    has former slugs, the first former-slug feed that is not: the build that
+    first publishes a moved team (DECISIONS 0017, 0033) then compares with,
+    and keeps the played games of, the feed its subscribers already hold,
+    instead of treating the team as new and dropping them. The two paths
+    publish the same bytes from then on, so later builds read the new one."""
+    response = http.get(f"{base_url}/ics/{league.slug}/{team.slug}.ics")
+    for former in team.former_slugs:
+        if response.status_code != 404:
+            break
+        response = http.get(f"{base_url}/ics/{league.slug}/{former}.ics")
+    return response
 
 
 def _fetch_league_feeds(http: httpx.Client, base_url: str, previous: PreviousPublish, transport_failures: int) -> None:
