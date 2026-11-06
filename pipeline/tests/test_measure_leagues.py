@@ -225,8 +225,15 @@ def test_main_refuses_without_a_key_or_with_an_unknown_candidate(tmp_path, monke
 
 
 def test_selecting_all_and_a_subset() -> None:
-    assert measure_leagues._select("all") == CANDIDATES
-    assert measure_leagues._select(" ") == CANDIDATES
+    in_all = tuple(c for c in CANDIDATES if c.in_all)
+    assert measure_leagues._select("all") == in_all
+    assert measure_leagues._select(" ") == in_all
+    # Softball runs only when named (DECISIONS 0028).
+    assert {c.league.slug for c in CANDIDATES} - {c.league.slug for c in in_all} == {
+        "ncaaw-softball-sec",
+        "ncaaw-softball-big-ten",
+    }
+    assert [c.league.slug for c in measure_leagues._select("ncaaw-softball-sec")] == ["ncaaw-softball-sec"]
     assert [c.league.slug for c in measure_leagues._select("lovb, mlv")] == ["lovb", "mlv"]
 
 
@@ -249,6 +256,8 @@ def test_candidate_registry_is_sound() -> None:
         "unrivaled",
         "lovb",
         "ncaaw-ncaa-tournament",
+        "ncaaw-softball-sec",
+        "ncaaw-softball-big-ten",
     }
     sizes = {c.league.slug: len(c.league.teams) + len(c.unmeasured_teams) for c in CANDIDATES}
     assert sizes == {
@@ -261,13 +270,64 @@ def test_candidate_registry_is_sound() -> None:
         "unrivaled": 8,
         "lovb": 10,
         "ncaaw-ncaa-tournament": 34,
+        "ncaaw-softball-sec": 15,
+        "ncaaw-softball-big-ten": 17,
     }
     for c in CANDIDATES:
         team_slugs = [t.slug for t in c.league.teams]
         assert len(team_slugs) == len(set(team_slugs))
         assert c.source
-        if c.league.slug.startswith("ncaaw-"):
+        if c.league.slug.startswith("ncaaw-softball-"):
+            assert all(t.name.endswith(" Softball") and t.title_name for t in c.league.teams)
+        elif c.league.slug.startswith("ncaaw-"):
             assert all(t.name.endswith(" Womens Basketball") and t.title_name for t in c.league.teams)
+
+
+def _team(slug: str, school: str) -> config.Team:
+    cand = next(c for c in CANDIDATES if c.league.slug == slug)
+    return next(t for t in cand.league.teams if t.title_name and t.title_name.startswith(f"{school} "))
+
+
+def test_every_college_candidate_excludes_every_direction_prefix() -> None:
+    """The shared config list, Middle and Southeast included (0028)."""
+    assert {"Middle", "Southeast"} <= set(config.COLLEGE_DIRECTION_PREFIXES)
+    for c in CANDIDATES:
+        if not c.league.slug.startswith("ncaaw-"):
+            continue
+        sport = "softball" if "softball" in c.league.slug else "women's basketball"
+        for t in c.league.teams:
+            school = t.title_name.removesuffix(f" {sport}") if t.title_name else None
+            assert school, t.slug
+            for d in config.COLLEGE_DIRECTION_PREFIXES:
+                assert f"{d} {school} {sport}" in t.not_this_team, (t.slug, d)
+
+
+def test_middle_tennessee_is_not_a_tennessee_softball_game() -> None:
+    raw = _event("S-1", "Middle Tennessee Softball vs Belmont Softball")
+    team = _team("ncaaw-softball-sec", "Tennessee")
+    assert not measure_leagues._attribute(team, config.League("s", "s", ("US",), (team,)), [raw])
+    bare = config.Team(slug="t", name=team.name, title_name=team.title_name)  # control: no exclusions
+    assert measure_leagues._attribute(bare, config.League("s", "s", ("US",), (bare,)), [raw])
+
+
+def test_probe_names_are_searched_and_their_home_games_counted() -> None:
+    texas_tech = _team("ncaaw-big-12", "Texas Tech")
+    assert texas_tech.search_names == ("Texas Tech Red Raiders Womens Basketball", "Texas Tech Women's Basketball")
+    RESPONSES["Texas Tech Women's Basketball"] = [
+        _event("TT-1", "Texas Tech Women's Basketball vs Baylor Women's Basketball")
+    ]
+    try:
+        client, seen = _client()
+        result = measure_candidate(client, _candidate("b12", (texas_tech,)), TODAY)
+    finally:
+        del RESPONSES["Texas Tech Women's Basketball"]
+    assert seen == list(texas_tech.all_names)  # one request per name
+    assert (result.teams[0].attributed, result.teams[0].home_games) == (1, 1)
+
+
+def test_a_probe_for_a_school_not_in_the_roster_is_refused() -> None:
+    with pytest.raises(ValueError, match="Texas Tek"):
+        measure_leagues._college_teams({"Texas Tech": "Lady Raiders"}, {"Texas Tek": measure_leagues._Probe(("x",))})
 
 
 BIG_TEN_TOURNAMENT = "Big Ten Women's Basketball Tournament"
@@ -338,7 +398,7 @@ def test_keyword_only_candidate_failed_keyword_is_incomplete() -> None:
 
 def test_tournament_keywords_are_registered() -> None:
     by_slug = {c.league.slug: c for c in CANDIDATES}
-    assert {s: by_slug[s].league_keyword for s in by_slug if s.startswith("ncaaw-")} == {
+    assert {s: by_slug[s].league_keyword for s in by_slug if s.startswith("ncaaw-") and "softball" not in s} == {
         "ncaaw-sec": "SEC Women's Basketball Tournament",
         "ncaaw-big-ten": BIG_TEN_TOURNAMENT,
         "ncaaw-acc": "ACC Women's Basketball Tournament",

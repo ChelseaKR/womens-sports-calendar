@@ -21,6 +21,7 @@ from .fixture_site import BASE_URL, build_fixture_site
 HREF = re.compile(r'<a (?:class="[^"]*" )?href="(/[^"#?]*)"')
 TEAM_PATHS = {f"/{lg.slug}/{t.slug}/" for lg in config.LEAGUES for t in lg.teams}
 LEAGUE_PATHS = {f"/{lg.slug}/" for lg in config.LEAGUES}
+FORMER_SLUGS = {f"/{lg.slug}/{t.slug}/": t.former_slugs for lg in config.LEAGUES for t in lg.teams if t.former_slugs}
 
 
 @pytest.fixture(scope="module")
@@ -178,7 +179,8 @@ def test_control_without_the_sibling_blocks_team_pages_fall_back_to_two_links_in
     for path in TEAM_PATHS:
         pages[path] = _strip(pages[path], "more-teams")
     inbound = _inbound(pages)
-    assert all(inbound[path] <= 2 for path in TEAM_PATHS)  # home + league page
+    # home + league page, + the notice page at each former slug (DECISIONS 0033)
+    assert all(inbound[path] <= 2 + len(FORMER_SLUGS.get(path, ())) for path in TEAM_PATHS)
     assert not all(inbound[path] >= 7 for path in TEAM_PATHS)
 
 

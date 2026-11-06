@@ -1137,6 +1137,35 @@ Revisit if a subscriber asks for upcoming-only feeds (a separate feed, not
 a change to these), or if Ticketmaster's storage term is read more narrowly
 (docs/LICENSES-AND-ATTRIBUTION.md, Storage).
 
+## 0028 — Probe names for candidate teams with no listed home game; softball candidates (2026-11-05)
+
+**Why:** the measurement runs of 2026-11-03 and 2026-11-05 (0022) found Big
+12, ACC and Big East teams whose keyword search returned events but whose
+pages would list no home game (Big 12: 9 of 16 teams with one). That may be a
+wrong keyword rather than missing inventory, as Georgia and Tennessee were
+for the SEC (0023).
+
+The decision, measurement only (nothing new is fetched by the nightly build
+or published):
+
+- `measure_leagues.py` builds its college candidates with config's own
+  `_college_team`, so they exclude every `COLLEGE_DIRECTION_PREFIXES` entry.
+  Its private copy of that list lacked "Middle" and "Southeast".
+- Probe names (`search_names`, plus `other_mascots` "Cowboys" and "Red
+  Raiders") for Arizona State, Iowa State, Cincinnati, BYU, Oklahoma State,
+  TCU, Texas Tech, Clemson, Miami, Butler, Providence and St. John's. None
+  was read from a Ticketmaster artist page; a run confirms or rules them out.
+- SEC and Big Ten softball candidates (15 and 17 schools, keyword
+  "<School> <Mascot> Softball"). They run only when named, never under
+  "all", and not before about 2027-01-15.
+- One run of `ncaaw-big-12,ncaaw-acc,ncaaw-big-east,mlv` makes at least 71
+  requests (one per name searched and one per league keyword of 0032, more
+  when a search pages, at most 5 pages each); "all" makes at least 130; the
+  two softball candidates at least 32.
+
+Revisit after the next run: keep the names that attribute games, drop the
+rest, and copy the kept ones into config if that conference is added.
+
 ## 0029 — An empty WNBA team page names the season it waits for; seller-table descriptions match the body (2026-11-05)
 
 **Why:** "phoenix mercury schedule 2027" was the site's top named query
@@ -1300,3 +1329,72 @@ Revisit after the runs planned for about 2026-12-15 and 2027-01-12: pass if
 each conference tournament has at least one dated session listing, and copy
 the attraction names that match into the build's plan; otherwise build
 nothing for tournaments this season.
+
+## 0033 — The Connecticut Sun are now the Houston Comets, at a new address; the old feed and page keep working (2026-11-05)
+
+**Why:** the WNBA and NBA boards approved the sale of the Connecticut Sun to
+Tilman Fertitta and the team's move to Houston "beginning with the 2027
+season" (WNBA release, May 13, 2026). The league's own team site,
+comets.wnba.com, and the wnba.com Teams menu call the team the Houston
+Comets. The page at /wnba/connecticut-sun/ was titled "Connecticut Sun
+schedule", and its official ticket link, sun.wnba.com/tickets, now
+redirects to a wnba.com page that still names Mohegan Sun Arena. This is the
+first real use of the rename path in 0017.
+
+The decision (`config.py`, option B of the 2026-11-05 research note; Chelsea
+has not yet confirmed it, the old data file or the timing):
+
+- The team is `Team(slug="houston-comets", name="Houston Comets",
+  search_names=("Connecticut Sun",), former_slugs=("connecticut-sun",))`.
+  The new page and feed are /wnba/houston-comets/ and
+  /ics/wnba/houston-comets.ics. The feed at /ics/wnba/connecticut-sun.ics is
+  the same bytes (same UIDs), so a subscriber's calendar keeps working with
+  no duplicate games. The old page is the noindex notice that points to the
+  new one, and the sitemap lists only the new page. "Connecticut Sun" stays
+  searched and accepted in event names while any Ticketmaster listing uses
+  it (one more request per build); drop it once none does, but never drop
+  the former slug.
+- No page record is written at the former slug. Records are never deployed
+  (0024), so there was no published copy to keep.
+- A new `Team.history_note` says "The Connecticut Sun moved to Houston and
+  became the Houston Comets for the 2027 WNBA season." on the team page and
+  on the notice page. While a fetched build lists no Comets game (the 0029
+  empty-page case), both add "The 2027 schedule is not out yet." Nothing on
+  either page implies a game is listed.
+- The first build after the move finds no houston-comets.ics on the live
+  site. `guard.fetch_previous_publish` then reads the team's former-slug
+  feed as its previous publish, so the publish guard compares against it
+  and the Sun's played 2026 games stay in both feeds (0027) instead of
+  being dropped as if the team were new.
+- Official ticket link: comets.wnba.com/tickets (HTTP 200, title "Tickets",
+  fetched 2026-11-05; the site had no robots.txt, a 404). The team sells
+  through AXS, not Ticketmaster, but no axs.com team page exists yet, so no
+  seller row is added: the page keeps the usual Ticketmaster empty state.
+- `make a11y` had never run on a real notice page. Its meta refresh made
+  pa11y check the team page instead, so notice pages are left out of the
+  URL list and checked without the refresh as
+  `_a11y-fixtures/moved-<league>-<slug>.html`. That check found the page's
+  full-URL link 360px wide at a 320px viewport (WCAG 1.4.10), so the link
+  now wraps like the subscribe links do.
+- Team shop: Fanatics' sitemap (robots.txt allows it), read again
+  2026-11-05, has a Connecticut Sun store and no Comets store, so the shop
+  entry is dropped. The team's own store (rocketsshop.com) is not Fanatics.
+
+**Enforced by** `tests/test_team_identity.py`: the pinned slug list is 84
+with `connecticut-sun` kept as a former slug, the two feeds are identical,
+the old page is a noindex notice outside the sitemap, the Comets page names
+the move and says the 2027 schedule is not out while nothing is listed, and
+the first build after the move reads the Sun's feed and keeps its played
+game (both fail without the guard change). `tests/test_build.py`'s
+head-to-head fixture keeps the event name "Atlanta Dream vs Connecticut Sun"
+under the Comets' slug, which proves the old name still matches.
+
+Not checked: whether fans search "houston comets schedule" (Search Console
+can show it once the 2027 schedule is out), and the Toyota Center as the
+home arena, which comes from news reports of the team's press conference,
+not the team site. Most Comets home games will probably never reach this
+site, since Ticketmaster does not sell them.
+
+Revisit when an axs.com page for the Comets appears (add an AXS seller row
+like the Dallas Wings'), when no Ticketmaster listing uses "Connecticut
+Sun" any more (drop the search name), or if Fanatics lists a Comets store.
