@@ -12,6 +12,11 @@ archived and private.
 
 ### Added
 
+- Missouri women's basketball is in the seller table as Ticketmaster
+  Account Manager, the school's own store, whose games never reach the
+  Ticketmaster listings this site reads. Its page now says so and links
+  that store, instead of promising games that cannot appear
+  (DECISIONS 0013).
 - A new look, "Floodlight" (DECISIONS 0035): scoreboard black with one
   floodlight-lime highlight, a ticket for the brand mark (now visible on the
   header), a ticket-shaped next-game card with a tear line, and a warm black
@@ -72,6 +77,19 @@ archived and private.
 
 ### Changed
 
+- Games tables: the box that scrolls sideways on a phone can now be reached
+  with the keyboard and is named by its table's caption. Each row's ticket
+  link now reads "Tickets (Ticketmaster)" (or the team's own seller), and the
+  matchup and date are in hidden text inside the link for screen readers. The
+  next-game hero keeps its full sentence.
+- The "Listings as of" line reads "Thursday, Nov. 5, 2026, 12:25 AM PT" (US
+  order, Pacific time) instead of "Thursday 5 November 2026, 08:25 UTC".
+- Privacy page, footer and README no longer say the calendar feeds are "never
+  tracked" or carry "no tracking". They now say what is measured (Google
+  Analytics counts clicks on calendar-subscribe links on pages) and what is
+  not (the feeds carry no analytics, so a calendar app's re-fetches are not
+  measured). American spellings on the privacy and accessibility pages and in
+  the README.
 - The Connecticut Sun are now the Houston Comets, at /wnba/houston-comets/
   and /ics/wnba/houston-comets.ics. The old feed address keeps publishing
   the same feed, the old page points to the new one, and the official ticket

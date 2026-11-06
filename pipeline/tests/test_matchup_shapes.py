@@ -262,8 +262,8 @@ def test_the_team_page_shows_the_label_and_the_title_beside_clean_team_names(tmp
     assert '<span class="home-away game-type">Exhibition</span>' in page
     assert '<span class="event-title">McBride Homes Braggin&#x27; Rights</span>' in page
     assert f"{ILLINOIS} vs Missouri Tigers Womens Basketball" in page
-    assert "Buy tickets for McBride" not in page  # the link text names the two teams only
-    assert f"Buy tickets for {ILLINOIS} vs Missouri Tigers Womens Basketball on" in page
+    assert " for McBride" not in page  # the link text names the two teams only
+    assert f'<span class="sr-only"> for {ILLINOIS} vs Missouri Tigers Womens Basketball on' in page
     # The next home game is the earlier one, the exhibition, and its type is said.
     assert f"{ILLINOIS} vs UIS Prairie Stars Womens Basketball (Exhibition)</p>" in page
     # ...and the description names that game's date and opponent (the school
