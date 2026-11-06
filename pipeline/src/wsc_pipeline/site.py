@@ -526,7 +526,7 @@ def _sells_elsewhere_msg(team: Mapping[str, Any]) -> str:
     owner_cap = owner[0].upper() + owner[1:]
     return (
         f"No {e(team['team_name'])} games are listed by Ticketmaster right now.\n"
-        f"{e(owner_cap)} main ticket seller is {e(seller.name)}, not Ticketmaster, so its\n"
+        f"{e(owner_cap)} main ticket seller is {e(seller.name)}, {e(seller.contrast)}, so its\n"
         f"home games may not show up here or in your calendar. Check {link} for home games."
     )
 
@@ -1454,7 +1454,7 @@ def _team_description(team: Mapping[str, Any]) -> str:
             return _fit(
                 [
                     f"{name} schedule. No games are listed right now. {owner} main ticket seller is "
-                    f"{seller.name}, not Ticketmaster, so home games may not show up here.",
+                    f"{seller.name}, {seller.contrast}, so home games may not show up here.",
                     f"{name} schedule. No games are listed right now. {owner} main ticket seller is {seller.name}.",
                     f"{name} schedule. No games are listed right now.",
                 ],
