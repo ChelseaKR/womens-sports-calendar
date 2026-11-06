@@ -280,7 +280,9 @@ def test_head_to_head_game_is_listed_and_counted_once_per_league(tmp_path: Path,
         venue_state="GA",
         timezone="America/New_York",
     )
-    fake_client = _FakeDiscoveryClient({"atlanta-dream": [head_to_head], "connecticut-sun": [head_to_head]})
+    # The Sun are now the Houston Comets (DECISIONS 0033); the event keeps the
+    # name Ticketmaster used, which the Comets' search_names still accept.
+    fake_client = _FakeDiscoveryClient({"atlanta-dream": [head_to_head], "houston-comets": [head_to_head]})
     monkeypatch.setattr(build_module, "DiscoveryClient", lambda api_key: fake_client)
 
     out_dir = tmp_path / "dist"
@@ -301,7 +303,7 @@ def test_head_to_head_game_is_listed_and_counted_once_per_league(tmp_path: Path,
     league_cal = Calendar.from_ical((out_dir / "ics" / "wnba.ics").read_bytes())
     assert len(league_cal.walk("VEVENT")) == 1
 
-    for team_slug in ("atlanta-dream", "connecticut-sun"):
+    for team_slug in ("atlanta-dream", "houston-comets"):
         team_json = json.loads((records_dir(out_dir) / "wnba" / f"{team_slug}.json").read_text())
         assert [g["event_id"] for g in team_json["games"]] == ["EVT-H2H"]
         team_cal = Calendar.from_ical((out_dir / "ics" / "wnba" / f"{team_slug}.ics").read_bytes())

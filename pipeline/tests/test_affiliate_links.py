@@ -312,7 +312,7 @@ def test_axs_and_ticketmaster_pages_are_untouched_by_the_seatgeek_link(monkeypat
 
 def test_every_team_shop_is_a_tracked_team_on_fanatics():
     tracked = {(lg.slug, t.slug) for lg in LEAGUES for t in lg.teams}
-    assert len(team_shops.FANATICS_TEAM_SHOPS) == 25
+    assert len(team_shops.FANATICS_TEAM_SHOPS) == 24
     for key, url in team_shops.FANATICS_TEAM_SHOPS.items():
         assert key in tracked, key
         parsed = urlparse(url)

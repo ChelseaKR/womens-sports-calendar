@@ -633,6 +633,7 @@ def _write_html(
                         base_url=base_url,
                         ga4_id=ga4_id,
                         paid_links=paid_links,
+                        history=site.team_history_text(team_payload),
                     ),
                     encoding="utf-8",
                 )

@@ -84,6 +84,13 @@ class Team:
     # old path (so no subscriber gets a 404), and the old page is a small
     # notice that points to the new one. Never listed in the sitemap.
     former_slugs: tuple[str, ...] = ()
+    # One plain sentence about a move or rename ("The Connecticut Sun moved
+    # to Houston and became the Houston Comets for the 2027 WNBA season."),
+    # shown on the team page and on the notice page at each former slug, so
+    # a fan who knew the old name sees why the page changed. A fact about the
+    # team only: nothing about games, which come from the listings. None: no
+    # note.
+    history_note: str | None = None
     # What a page <title>, meta description and <h1> call the team when
     # `shown_name` is too long or not what a fan searches ("Ohio State women's
     # basketball", not the Ticketmaster keyword "Ohio State Buckeyes Womens
@@ -206,6 +213,17 @@ def title_name_for(league_slug: str, shown_name: str) -> str:
     return shown_name
 
 
+def history_note_for(league_slug: str, team_slug: str) -> str | None:
+    """The team's `history_note`, or None: a team without one, or not in the
+    registry (a test's)."""
+    for lg in LEAGUES:
+        if lg.slug == league_slug:
+            for team in lg.teams:
+                if team.slug == team_slug:
+                    return team.history_note
+    return None
+
+
 def league_names_for(league_slug: str, name: str) -> tuple[str, str]:
     """(title name, short name) for a league: what its page heading and a
     team page's meta description call it. A league not in the registry keeps
@@ -276,22 +294,37 @@ LEAGUES: tuple[League, ...] = (
         slug="wnba",
         name="WNBA",
         country_codes=("US", "CA"),
-        teams=_teams(
-            "Minnesota Lynx",
-            "Golden State Valkyries",
-            "Las Vegas Aces",
-            "Atlanta Dream",
-            "Indiana Fever",
-            "New York Liberty",
-            "Washington Mystics",
-            "Dallas Wings",
-            "Portland Fire",
-            "Chicago Sky",
-            "Los Angeles Sparks",
-            "Phoenix Mercury",
-            "Toronto Tempo",
-            "Connecticut Sun",
-            "Seattle Storm",
+        teams=(
+            *_teams(
+                "Minnesota Lynx",
+                "Golden State Valkyries",
+                "Las Vegas Aces",
+                "Atlanta Dream",
+                "Indiana Fever",
+                "New York Liberty",
+                "Washington Mystics",
+                "Dallas Wings",
+                "Portland Fire",
+                "Chicago Sky",
+                "Los Angeles Sparks",
+                "Phoenix Mercury",
+                "Toronto Tempo",
+            ),
+            # The Connecticut Sun, sold and moved to Houston for the 2027
+            # season (DECISIONS 0033). The old feed URL keeps publishing the
+            # same feed and the old page points here. "Connecticut Sun" stays
+            # searched, and accepted in event names, while any Ticketmaster
+            # listing still uses it.
+            Team(
+                slug="houston-comets",
+                name="Houston Comets",
+                search_names=("Connecticut Sun",),
+                former_slugs=("connecticut-sun",),
+                history_note=(
+                    "The Connecticut Sun moved to Houston and became the Houston Comets for the 2027 WNBA season."
+                ),
+            ),
+            *_teams("Seattle Storm"),
         ),
         schedule_source_used=False,
         schedule_source_note=(
