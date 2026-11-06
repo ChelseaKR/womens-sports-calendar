@@ -12,6 +12,16 @@ archived and private.
 
 ### Added
 
+- A new look, "Floodlight" (DECISIONS 0035): scoreboard black with one
+  floodlight-lime highlight, a ticket for the brand mark (now visible on the
+  header), a ticket-shaped next-game card with a tear line, and a warm black
+  dark mode. The favicon, touch icon and social cards are re-rendered in it.
+  Every page's header links "Leagues" and "This week", and the home page
+  lists the leagues before the all-games feed. URLs, titles, H1s and meta
+  descriptions are unchanged.
+  It also fixes a link that could not be seen: on a team page whose seller is
+  not Ticketmaster, the "Check ... for home games" link in the empty
+  next-game card was drawn in the card's own color.
 - Each game's `SportsEvent` markup names its two teams as `performer`, and,
   when the page's "Buy tickets" link goes to the game's own Ticketmaster
   listing, an `offers` holding only that listing's URL. No price,

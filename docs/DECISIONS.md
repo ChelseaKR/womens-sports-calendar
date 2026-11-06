@@ -1384,3 +1384,54 @@ site, since Ticketmaster does not sell them.
 Revisit when an axs.com page for the Comets appears (add an AXS seller row
 like the Dallas Wings'), when no Ticketmaster listing uses "Connecticut
 Sun" any more (drop the search name), or if Fanatics lists a Comets store.
+
+## 0035 — The "Floodlight" identity: scoreboard black, one lime highlight, a ticket for a mark (2026-11-05)
+
+**Why:** the site's navy and gold were a stock sports look, and the
+portfolio's other sites (Tide Hours, Lake Notice) use navy and teal on a
+blue night, so in dark mode they read as one template. The brand mark was
+a navy calendar drawn on a navy header, so only its gold dot showed. Chelsea
+asked on 2026-11-05 for each monetized site to look as finished and as
+distinct as Family Greenhouse.
+
+The decision:
+
+- Two brand constants, the same in both color schemes: scoreboard black
+  `#16131d` (header, footer, hero, table heads, subscribe buttons) and
+  floodlight lime `#d4f24a`. Lime keeps the one meaning gold had (0013's
+  "this is a real next game"): the hero's date chip and ticket button and
+  a non-zero league game count. Focus rings and button hovers borrow it.
+  It is never text and never a link color.
+- Paper stays white. Dark mode is a warm black (`#0f0d14`), not blue.
+  Links are ink in light mode and near-white in dark mode, always
+  underlined; visited links are berry `#7b2d6b` on paper and pink
+  `#f2a7d8` on dark. Every pair is computed from the CSS tokens by
+  `tests/test_design_identity.py` and clears 4.5:1 for text and 3:1 for
+  outlines in both schemes.
+- The mark is a lime admission ticket (two notches, a tear line, a dot on
+  the stub) on a black plate. On the black header the plate disappears and
+  the ticket carries the mark. It draws no league's or team's mark, and the
+  league art in the social cards stays generic balls and a puck.
+- The motif is the ticket: the next-game hero has a dashed tear line with
+  two notches, the subscribe box has ticket-stock edges and two lime
+  binder tabs, and a lime-then-ink "lane stripe" sits under each H1 and
+  along the top of the header and footer.
+- Type is unchanged: Big Shoulders Display and Text over Public Sans, all
+  self-hosted. The wordmark is set in Big Shoulders Display capitals.
+- Every page's header gets two plain links, "Leagues" (`/#leagues`) and
+  "This week" (`/schedule/`). The home page lists the leagues before the
+  all-games feed. No URL, `<title>`, H1 or meta description changes.
+- Subscribe stays the team page's first action; the block order (0025's
+  `TEAM_PAGE_NEXT_GAME_FIRST`, off) is unchanged.
+
+**Enforced by** `tests/test_design_identity.py` (contrast of every token
+pair in both schemes, with a control that a washed-out muted fails; lime is
+never a `color:`; the brand constants do not change in dark mode; the
+favicon is self-contained; every built page has the same header and the
+home page's league anchor and order) and the existing `make a11y` and
+`make perf` gates. `tests/test_internal_links.py`'s week-ahead control now
+also removes the header links, because they are a second link to
+`/schedule/`.
+
+Revisit if Search Console click-through drops on pages whose OG image
+changed, or if another portfolio site takes black and lime.

@@ -12,7 +12,8 @@ one build-time constant (site.TEAM_PAGE_NEXT_GAME_FIRST), off by default.
   a team whose main ticket seller is not Ticketmaster (the Thorns: SeatGeek),
   and again that day for the same teams' meta description (DECISIONS 0029)
   and for the SportsEvent performer and offers in the JSON-LD (DECISIONS
-  0030); the block order they pin did not change.
+  0030), and again that day for the header's mark, site links and
+  theme color (DECISIONS 0035); the block order they pin did not change.
 - On: the "Next home game" section comes before the subscribe section, and
   the page is otherwise the same text (same lines, same links, same rel
   attributes, same "Paid link" labels). Only a page with a next home game

@@ -14,7 +14,7 @@ import pytest
 
 from wsc_pipeline import build as build_module
 from wsc_pipeline import config
-from wsc_pipeline.site import SCHEDULE_PATH
+from wsc_pipeline.site import SCHEDULE_PATH, SITE_NAV
 
 from .fixture_site import BASE_URL, build_fixture_site
 
@@ -192,4 +192,9 @@ def test_control_without_the_home_teams_section_the_home_page_links_no_team(dist
 
 def test_control_without_the_strip_a_team_page_does_not_link_the_week_ahead_page(dist: Path, tmp_path: Path):
     pages = _sabotaged(dist, tmp_path, "/wnba/las-vegas-aces/", "this-week")
-    assert SCHEDULE_PATH not in HREF.findall(pages["/wnba/las-vegas-aces/"])
+    # The header's site links (site.SITE_NAV) are the page's other link to
+    # the week-ahead page; take them out too, and check that applied.
+    page = pages["/wnba/las-vegas-aces/"]
+    without_nav = page.replace(SITE_NAV, "")
+    assert without_nav != page, "sabotage target not found: site nav"
+    assert SCHEDULE_PATH not in HREF.findall(without_nav)
