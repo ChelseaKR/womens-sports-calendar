@@ -13,9 +13,10 @@ Rules for an entry:
 - The URL is on the team's or league's own site, or is the address the
   league's own site links as that team's ticket page. Each entry says
   where the link was found ("evidence").
-- It was fetched on CHECKED_ON (SEC_CHECKED_ON for the SEC) and returned
-  HTTP 200 with a ticket page's title. A candidate that 404'd, redirected somewhere else (a football
-  ticket page), or served a placeholder title ("@title") is left out.
+- It was fetched on CHECKED_ON (SEC_CHECKED_ON for the SEC, COMETS_CHECKED_ON
+  for the Houston Comets) and returned HTTP 200 with a ticket page's title.
+  A candidate that 404'd, redirected somewhere else (a football ticket
+  page), or served a placeholder title ("@title") is left out.
 - A team with no entry gets no link. Rutgers has none: its "TicketCentral"
   address now redirects to football tickets, and no women's basketball
   ticket page was found on scarletknights.com. Georgia has none either (see
@@ -68,6 +69,8 @@ _AUSL_TEAM = "Linked from this team's page on theausl.com, the league's own site
 _SCHOOL_WBB = (
     "Linked from the school's official athletics site (women's basketball or main menu), read " + CHECKED_ON + "."
 )
+# The Houston Comets' page replaced the Connecticut Sun's later than the rest.
+COMETS_CHECKED_ON = "2026-11-05"
 # The SEC schools' pages were found and fetched later than the rest.
 SEC_CHECKED_ON = "2026-11-02"
 _SEC_SCHOOL_WBB = (
@@ -79,8 +82,13 @@ OFFICIAL_TEAM_TICKETS: dict[tuple[str, str], OfficialTicketPage] = {
     # WNBA: every team's page as wnba.com/teams links it.
     ("wnba", "atlanta-dream"): OfficialTicketPage("https://dream.wnba.com/tickets/", _WNBA_LINKED),
     ("wnba", "chicago-sky"): OfficialTicketPage("https://sky.wnba.com/tickets/", _WNBA_LINKED),
-    ("wnba", "connecticut-sun"): OfficialTicketPage("https://sun.wnba.com/tickets", _WNBA_LINKED),
     ("wnba", "dallas-wings"): OfficialTicketPage("https://wings.wnba.com/tickets", _WNBA_LINKED),
+    ("wnba", "houston-comets"): OfficialTicketPage(
+        "https://comets.wnba.com/tickets",
+        "The tickets page of comets.wnba.com, the team site wnba.com's Teams menu links for the Houston "
+        "Comets (the Connecticut Sun until the 2027 move, DECISIONS 0033); fetched " + COMETS_CHECKED_ON + ". "
+        "sun.wnba.com/tickets now redirects to a wnba.com page that still names Mohegan Sun Arena.",
+    ),
     ("wnba", "golden-state-valkyries"): OfficialTicketPage("https://valkyries.com/tickets", _WNBA_LINKED),
     ("wnba", "indiana-fever"): OfficialTicketPage("https://fever.wnba.com/tickets/", _WNBA_LINKED),
     ("wnba", "las-vegas-aces"): OfficialTicketPage("https://aces.wnba.com/tickets/", _WNBA_LINKED),

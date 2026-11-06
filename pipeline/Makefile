@@ -207,6 +207,10 @@ validate-fixture-site: install
 # per check in a copy of a fixture page and fails unless each is caught;
 # scripts/check_a11y_browser_report.py then refuses a report that skipped
 # a page or examined nothing on one.
+# A former slug's notice page (site.render_moved_team, DECISIONS 0033) sends
+# the browser on with a meta refresh, so pa11y would check and report the
+# page it lands on instead. It is left out of the URL list, and its markup is
+# checked without the refresh as _a11y-fixtures/moved-<league>-<slug>.html.
 a11y: install install-a11y build
 	set -e; \
 	rm -rf dist/_a11y-fixtures pa11y-ci-results.json a11y-browser-results.json; \
@@ -220,6 +224,7 @@ a11y: install install-a11y build
 	done; \
 	urls=""; \
 	for f in $$(find dist -name '*.html' | sort); do \
+		if grep -q 'http-equiv="refresh"' "$$f"; then continue; fi; \
 		urls="$$urls http://127.0.0.1:8917/$${f#dist/}"; \
 	done; \
 	./node_modules/.bin/pa11y-ci --config pa11y-ci.config.json $$urls; \

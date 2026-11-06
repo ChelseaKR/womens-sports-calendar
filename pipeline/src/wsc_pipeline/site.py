@@ -34,7 +34,7 @@ from urllib.parse import quote, urlencode
 
 from . import config, feeds, official_tickets, structured_data
 from .analytics import GA4_DATA_RETENTION, ga4_head_snippet, measurement_id
-from .config import league_names_for, title_name_for
+from .config import history_note_for, league_names_for, title_name_for
 from .ics import COMBINED_FEED_PATH, TIME_TBA_NOTE, TIME_TBA_SUFFIX, calendar_name
 from .normalize import display_date
 from .sellers import (
@@ -675,6 +675,24 @@ def _awaited_season(team: Mapping[str, Any]) -> str | None:
     return str(when.year + 1 if when.month >= rollover else when.year)
 
 
+def team_history_text(team: Mapping[str, Any]) -> str:
+    """A moved or renamed team's note (config.Team.history_note), plain text,
+    or "" for a team without one. While the page waits for a season
+    (_awaited_season: a fetched build that lists no game), it adds that the
+    season's schedule is not out yet, so the note never reads as if games
+    were listed. Shown on the team page and on its former-slug notice page."""
+    note = history_note_for(team["league_slug"], team["team_slug"])
+    if not note:
+        return ""
+    awaited = _awaited_season(team)
+    return f"{note} The {awaited} schedule is not out yet." if awaited else note
+
+
+def _team_history_block(team: Mapping[str, Any]) -> str:
+    text = team_history_text(team)
+    return f'<p class="team-history">{e(text)}</p>\n' if text else ""
+
+
 def _team_title(
     name: str, season: str | None, *, listed: bool, home_listed: bool, awaited_season: str | None = None
 ) -> str:
@@ -893,18 +911,22 @@ def render_moved_team(
     base_url: str,
     ga4_id: str | None = None,
     paid_links: bool = False,
+    history: str = "",
 ) -> str:
     """The page at a slug a team used to have (config.Team.former_slugs): a
     notice that points to the current page, and sends the browser there. A
     static host cannot redirect, so this is what a saved link to the old
     page lands on. noindex, and kept out of the sitemap, so the old path is
     never a second listing of the same team; the calendar feed at the old
-    path still works and is not touched."""
+    path still works and is not touched. `history` is the team page's note
+    (team_history_text), plain text, so a fan who followed a link with the
+    old name sees why it changed."""
     new_path = f"/{league_slug}/{team_slug}/"
+    history_html = f"<p>{e(history)}</p>\n" if history else ""
     body = f"""<h1>{e(team_name)} has a new page address</h1>
-<p class="lede">The {e(team_name)} ({e(league_name)}) schedule is now at
+<p class="lede moved-notice">The {e(team_name)} ({e(league_name)}) schedule is now at
 <a href="{e(new_path)}">{e(base_url)}{e(new_path)}</a>.</p>
-<p>A calendar you already subscribed to keeps working at its old address.</p>
+{history_html}<p>A calendar you already subscribed to keeps working at its old address.</p>
 """
     return _base(
         title=f"{team_name} schedule has moved | {SITE_NAME}",
@@ -1755,7 +1777,7 @@ def render_team(
     body = f"""{_breadcrumb([("All leagues", "/"), (league_name, f"/{league_slug}/")], team_name)}
 <h1>{e(h1)}</h1>
 {_team_lede(team)}
-{lead_blocks}
+{_team_history_block(team)}{lead_blocks}
 {tickets}<h2>Upcoming games</h2>
 {incomplete_note}{_freshness_note(team)}{_games_table(team["games"], buy_link_subject=team_name, fetched=fetched, home_away=True)}
 {_this_week_block(team)}{_other_apps_block(ics_https_url=ics_https)}{_team_shop_block(league_slug, team_slug, team_name)}{_sibling_teams_block(league_slug, team_slug, league_name)}{_about_schedule(team["schedule_source_note"])}"""
@@ -2085,7 +2107,7 @@ nav[aria-label="breadcrumb"] {
 /* The feed URL is one long unbroken token (".../ics/<league>/<team>.ics");
    without a break opportunity it pushed team pages to 350-430 CSS px wide at
    a 320 px viewport, failing WCAG 1.4.10 Reflow. */
-.subscribe p a, .other-apps p a { overflow-wrap: anywhere; }
+.subscribe p a, .other-apps p a, .moved-notice a { overflow-wrap: anywhere; }
 .subscribe-instructions { padding-left: 1.1rem; font-size: 0.9375rem; }
 .subscribe-instructions li { margin-bottom: 0.5rem; }
 .subscribe-cta {
