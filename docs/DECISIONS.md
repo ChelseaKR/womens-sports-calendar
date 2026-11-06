@@ -356,6 +356,20 @@ What changes:
   dropped because their seller page could not be confirmed on 2026-11-05.
   The analytics matcher (`sellers.ticket_host_names()`) now names each
   seller host by its domain ("evenue", "tixr"), not its first label.
+
+  *Amended 2026-11-05 (owner decision):* Missouri is in the table as
+  "Ticketmaster Account Manager". The school sells only through its
+  Account Manager store (`am.ticketmaster.com/mizzou`), which the
+  Discovery API never returns: the live build listed 0 of its 17
+  remaining home games. mutigers.com links that store and no
+  ticketmaster.com event. A `Seller.contrast` field holds the words after
+  "main ticket seller is <name>,": "not Ticketmaster" for every other
+  entry, and for Missouri "a school store whose games Ticketmaster's
+  public listings leave out", so no page says Ticketmaster is not
+  Ticketmaster. The only seller named Ticketmaster allowed in the table
+  is an Account Manager store on am.ticketmaster.com
+  (`tests/test_sellers.py`). Missouri home-game links now go to that
+  store instead of a Ticketmaster event listing, like every other entry.
 - **Links are plain, with no affiliate IDs.**
   `sellers.AFFILIATE_LINK_TEMPLATES` is the single place one would be added
   once [moved to private strategy notes]. The footer's disclosure is rendered from that same table,

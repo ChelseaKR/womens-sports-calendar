@@ -4,8 +4,10 @@ ID would be applied to it (DECISIONS 0013).
 The site shows no prices (DECISIONS 0013). Each game gets one plain link to
 wherever its tickets are sold:
 
-- If the home team's primary seller is known and is not Ticketmaster
-  (PRIMARY_SELLERS below), the link goes to that team's page at that seller.
+- If the home team's primary seller is known and is not Ticketmaster, or is
+  a Ticketmaster Account Manager team store whose games the Discovery API
+  never returns (PRIMARY_SELLERS below), the link goes to that team's page
+  at that seller.
   Ticketmaster often lists these games too, but from resale or the venue,
   not from the team's own box office. Per-game URLs at these sellers are not
   known (this pipeline reads only Ticketmaster), so the link lands on the
@@ -52,6 +54,11 @@ class Seller:
     name: str
     team_page_url: str
     evidence: str
+    # What the team pages say after "main ticket seller is <name>," to
+    # explain why its home games can be missing here. Almost every seller is
+    # simply not Ticketmaster. A team store that Ticketmaster itself runs
+    # (Account Manager) is Ticketmaster, so it says why that is not enough.
+    contrast: str = "not Ticketmaster"
 
 
 # (league slug, team slug) -> the home team's primary ticket seller.
@@ -358,6 +365,18 @@ PRIMARY_SELLERS: dict[tuple[str, str], Seller] = {
         team_page_url="https://hailstate.evenue.net/list/WBSING",
         evidence=("hailstate.com's ticket page links this hailstate.evenue.net single-game page. Checked 2026-11-05."),
     ),
+    ("ncaaw-sec", "missouri-tigers-womens-basketball"): Seller(
+        name="Ticketmaster Account Manager",
+        team_page_url="https://am.ticketmaster.com/mizzou/buy/mizzouwomensbasketball",
+        evidence=(
+            "mutigers.com/sports/womens-basketball links this "
+            "am.ticketmaster.com page and no ticketmaster.com event; "
+            "am.ticketmaster.com answers a plain client with a bot check, so "
+            "the page itself was not read. Its games are not in the Discovery "
+            "API (0 of 17 home games listed). Checked 2026-11-05."
+        ),
+        contrast="a school store whose games Ticketmaster's public listings leave out",
+    ),
     ("ncaaw-sec", "oklahoma-sooners-womens-basketball"): Seller(
         name="Paciolan",
         team_page_url="https://soonersports.evenue.net/list/WB",
@@ -526,10 +545,11 @@ def seller_label_for_url(url: str) -> str:
 
 
 def team_primary_seller(league_slug: str, team_slug: str) -> Seller | None:
-    """The team's recorded primary seller when it is not Ticketmaster
-    (PRIMARY_SELLERS), else None. Team pages use this to say why a team
-    can have no Ticketmaster listings: this pipeline reads only Ticketmaster,
-    so it cannot promise that this team's next game will appear."""
+    """The team's recorded primary seller when it is not Ticketmaster's
+    public listings (PRIMARY_SELLERS), else None. Team pages use this to say
+    why a team can have no Ticketmaster listings: this pipeline reads only
+    Ticketmaster's Discovery API, so it cannot promise that this team's next
+    game will appear."""
     return PRIMARY_SELLERS.get((league_slug, team_slug))
 
 

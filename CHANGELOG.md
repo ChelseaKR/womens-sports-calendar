@@ -12,6 +12,11 @@ archived and private.
 
 ### Added
 
+- Missouri women's basketball is in the seller table as Ticketmaster
+  Account Manager, the school's own store, whose games never reach the
+  Ticketmaster listings this site reads. Its page now says so and links
+  that store, instead of promising games that cannot appear
+  (DECISIONS 0013).
 - Each game's `SportsEvent` markup names its two teams as `performer`, and,
   when the page's "Buy tickets" link goes to the game's own Ticketmaster
   listing, an `offers` holding only that listing's URL. No price,

@@ -4,6 +4,7 @@ config point (DECISIONS 0013)."""
 from __future__ import annotations
 
 import re
+from html import unescape
 from html.parser import HTMLParser
 
 import pytest
@@ -258,7 +259,7 @@ def test_every_team_that_sells_elsewhere_drops_the_promise():
         team = next(t for t in league.teams if t.slug == team_slug)
         msg = _empty_msg(render_team(team=team_data(team, league, []), base_url="https://nexthomegame.com"))
         assert TM_PROMISE not in msg, team_slug
-        assert f"main ticket seller is {seller.name}, not Ticketmaster" in msg, team_slug
+        assert f"main ticket seller is {seller.name}, {seller.contrast}" in unescape(msg), team_slug
 
 
 def test_empty_page_falls_back_to_the_sellers_team_page_without_an_official_page(monkeypatch):
@@ -285,12 +286,18 @@ def test_every_seller_table_url_is_https_and_every_key_is_a_site_team():
     from urllib.parse import urlparse
 
     site_teams = {(lg.slug, t.slug) for lg in LEAGUES for t in lg.teams}
-    assert len(sellers.PRIMARY_SELLERS) == 45
+    assert len(sellers.PRIMARY_SELLERS) == 46
     for key, seller in sellers.PRIMARY_SELLERS.items():
         assert key in site_teams, key
         parsed = urlparse(seller.team_page_url)
         assert parsed.scheme == "https" and parsed.hostname and "." in parsed.hostname, (key, seller.team_page_url)
-        assert seller.name.strip() and "Ticketmaster" not in seller.name, key
+        assert seller.name.strip(), key
+        # A seller named Ticketmaster is only ever a team store the Discovery
+        # API leaves out, and its pages must never say "not Ticketmaster".
+        if "Ticketmaster" in seller.name:
+            assert seller.name == "Ticketmaster Account Manager", key
+            assert urlparse(seller.team_page_url).hostname == "am.ticketmaster.com", key
+            assert "not Ticketmaster" not in seller.contrast, key
         assert re.search(r"20[0-9]{2}-[0-9]{2}-[0-9]{2}", seller.evidence), key
 
 
@@ -301,3 +308,50 @@ def test_ticket_host_names_use_the_sellers_domain_not_a_subdomain():
     names = sellers.ticket_host_names()
     assert {"evenue", "tixr", "axs", "seatgeek", "nccourage", "theausl", "ticketmaster"} <= set(names)
     assert not {"tickets", "go", "www", "gophersports"} & set(names)
+
+
+MISSOURI_KEY = ("ncaaw-sec", "missouri-tigers-womens-basketball")
+
+
+def _missouri():
+    league = next(lg for lg in LEAGUES if lg.slug == MISSOURI_KEY[0])
+    return league, next(t for t in league.teams if t.slug == MISSOURI_KEY[1])
+
+
+def test_missouri_sells_through_its_account_manager_store():
+    """Missouri sells only through am.ticketmaster.com/mizzou, which the
+    Discovery API never returns (0 of 17 home games listed on 2026-11-05)."""
+    seller = sellers.team_primary_seller(*MISSOURI_KEY)
+    assert seller is not None
+    assert seller.name == "Ticketmaster Account Manager"
+    assert seller.team_page_url == "https://am.ticketmaster.com/mizzou/buy/mizzouwomensbasketball"
+    assert "?" not in seller.team_page_url  # no tracking parameters copied from the school's link
+
+
+def test_missouri_empty_page_never_says_not_ticketmaster():
+    league, team = _missouri()
+    msg = _empty_msg(render_team(team=team_data(team, league, []), base_url="https://nexthomegame.com"))
+    assert "main ticket seller is Ticketmaster Account Manager, a school store whose games" in msg
+    assert "public listings leave out, so its" in msg
+    assert "not Ticketmaster" not in msg
+    assert TM_PROMISE not in msg
+
+
+def test_missouri_home_game_links_to_the_account_manager_store():
+    league, team = _missouri()
+    raw = make_raw_event(
+        event_id="MIZ1",
+        name="Missouri Tigers Womens Basketball vs Kansas Jayhawks Womens Basketball",
+        url="https://www.ticketmaster.com/event/MIZ1",
+    )
+    game = normalize_event(raw, league_slug=league.slug, tracked_team_slug=team.slug, tracked_team_name=team.name)
+    buy = sellers.buy_link(game)
+    assert buy is not None
+    assert buy["url"] == "https://am.ticketmaster.com/mizzou/buy/mizzouwomensbasketball"
+    assert buy["seller"] == "Ticketmaster Account Manager"
+
+
+def test_every_other_seller_keeps_the_not_ticketmaster_wording():
+    for key, seller in sellers.PRIMARY_SELLERS.items():
+        if key != MISSOURI_KEY:
+            assert seller.contrast == "not Ticketmaster", key
