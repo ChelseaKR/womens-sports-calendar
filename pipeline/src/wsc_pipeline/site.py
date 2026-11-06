@@ -2200,7 +2200,12 @@ nav[aria-label="breadcrumb"] {
 
 /* ---- games table ---- */
 .no-games-message { color: var(--muted); }
+/* position: relative makes the wrapper the containing block of the ticket
+   links' visually hidden spans (.sr-only, position: absolute), so they stay
+   inside its scroll box; without it they sit at their place in the 42rem
+   table and widen the whole page at 320px (the a11y reflow check). */
 .games-table-wrap {
+  position: relative;
   overflow-x: auto; -webkit-overflow-scrolling: touch;
   margin: 1rem 0; border: 1px solid var(--border); border-radius: 0.6rem;
 }
