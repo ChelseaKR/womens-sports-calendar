@@ -4,12 +4,14 @@ Subscribable `.ics` calendar feeds per league and team for women's pro and
 college sports, built nightly from the Ticketmaster Discovery API, with one
 plain "Buy tickets" link per game to the home team's ticket seller. No
 account. Calendar-first and price-free since 2026-09-17
-(`docs/DECISIONS.md` 0013): no licence-clean price source exists, and the old
+(`docs/DECISIONS.md` 0013): no license-clean price source exists, and the old
 price promise was empty on every game. Any revenue would come only from
 affiliate links, and none is active yet. The web pages use Google Analytics 4
 (not loaded under Global Privacy Control or Do Not Track, or after the
-footer's "Opt out of analytics", ads features off; `docs/DECISIONS.md` 0012);
-the calendar feeds carry no tracking of any kind.
+footer's "Opt out of analytics", ads features off; `docs/DECISIONS.md` 0012),
+which counts page views and clicks, including clicks on calendar-subscribe
+links. The calendar feeds themselves carry no analytics, pixels or redirecting
+links, so a calendar app's re-fetches are not measured.
 
 [moved to private strategy notes]
 
@@ -58,7 +60,7 @@ says the schedule was not fetched, never "no games". With a key
   `pipeline/src/wsc_pipeline/analytics.py`'s `GA4_MEASUREMENT_ID` is set
   (it is: `G-YKGPZ76LVE`); it loads nothing under Global Privacy Control,
   Do Not Track, or the footer's remembered "Opt out of analytics" choice,
-  turns Google signals and ad personalisation off, and denies
+  turns Google signals and ad personalization off, and denies
   analytics storage for the EEA, UK and Switzerland. The `.ics` feeds are
   never tracked.
 - `docs/` — decisions, licenses and attributions.

@@ -107,7 +107,8 @@ AFFILIATE_TEMPLATE = "https://aff.example/c/123?u={url}"
 
 
 class _TicketAnchors(HTMLParser):
-    """Every "Buy tickets for ..." anchor on a page, as (attributes, text)."""
+    """Every ticket anchor on a page ("Buy tickets for ..." in the hero,
+    "Tickets (<seller>) ..." in a table row), as (attributes, text)."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -126,7 +127,7 @@ class _TicketAnchors(HTMLParser):
     def handle_endtag(self, tag):
         if tag == "a" and self._open is not None:
             text = "".join(self._text)
-            if text.startswith("Buy tickets for"):
+            if text.startswith(("Buy tickets for", "Tickets (")):
                 self.anchors.append((self._open, text))
             self._open = None
 

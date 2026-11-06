@@ -31,6 +31,7 @@ from datetime import UTC, date, datetime
 from html import escape as e
 from typing import Any
 from urllib.parse import quote, urlencode
+from zoneinfo import ZoneInfo
 
 from . import config, feeds, official_tickets, structured_data
 from .analytics import GA4_DATA_RETENTION, ga4_head_snippet, measurement_id
@@ -69,8 +70,8 @@ _EMAIL_SHAPE = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$"
 # The "Updated" date printed on /privacy/, /accessibility/ and /terms/, and their
 # sitemap <lastmod>: one value each, so the two cannot disagree. Change it
 # whenever that page's text changes.
-PRIVACY_UPDATED = date(2026, 10, 31)
-ACCESSIBILITY_UPDATED = date(2026, 9, 17)
+PRIVACY_UPDATED = date(2026, 11, 5)
+ACCESSIBILITY_UPDATED = date(2026, 11, 5)
 TERMS_UPDATED = date(2026, 11, 3)
 # One-click subscribe links. Each takes the feed's webcal:// address; Google
 # and Outlook then fetch the feed themselves and keep it subscribed.
@@ -216,12 +217,12 @@ def _base(
 PRIVACY_NOTE_ANALYTICS = """This site's pages use Google Analytics to count
 visits and clicks on ticket and calendar links, with Google's advertising
 features switched off. It is not loaded at all if your browser sends Global
-Privacy Control or Do Not Track, or once you opt out here, and the calendar
-feeds are never tracked. A
+Privacy Control or Do Not Track, or once you opt out here. The calendar
+feeds themselves carry no analytics. A
 &ldquo;Buy tickets&rdquo; link goes to the ticket seller's own site and tells
 them we sent you."""
 PRIVACY_NOTE_NO_ANALYTICS = """This site runs no analytics, no scripts, and
-sets no cookies, and the calendar feeds are never tracked. A &ldquo;Buy
+sets no cookies, and the calendar feeds carry no analytics either. A &ldquo;Buy
 tickets&rdquo; link goes to the ticket seller's own site and tells them we
 sent you."""
 
@@ -377,17 +378,30 @@ def _other_apps_block(*, ics_https_url: str) -> str:
 """
 
 
-def _buy_link(game: Mapping[str, Any], matchup: str, *, css_class: str = "") -> str | None:
+def _buy_link(game: Mapping[str, Any], matchup: str, *, css_class: str = "", short: bool = False) -> str | None:
     """The one "Buy tickets" link for a game, from site_data's `buy`
     (sellers.buy_link), with link text naming where it goes. None when
     there is nowhere to buy; callers say so in words. No price is ever
-    shown (DECISIONS 0013)."""
+    shown (DECISIONS 0013).
+
+    `short` is for a games-table row, where the matchup and date are already
+    in the row: the visible text is "Tickets (<seller>)", so the link still
+    names where it goes (DECISIONS 0013, 0018), and the matchup and date are
+    in a visually hidden span inside the link, so a screen reader's link list
+    still names each game.
+    The visible word starts the accessible name, so voice control's "click
+    Tickets" still works (WCAG 2.5.3). The hero keeps the full sentence."""
     buy = game.get("buy")
     if not buy:
         return None
-    text = f"Buy tickets for {matchup} on {game['start_display']} from {buy['seller']}"
-    if buy.get("home_team"):
-        text += f", the official seller for {buy['home_team']} home games"
+    official = f", the official seller for {buy['home_team']} home games" if buy.get("home_team") else ""
+    if short:
+        hidden = f" for {matchup} on {game['start_display']}"
+        if official:
+            hidden += f"; {buy['seller']} is the official seller for {buy['home_team']} home games"
+        text_html = f'{e(SHORT_TICKET_TEXT)} ({e(buy["seller"])})<span class="sr-only">{e(hidden)}</span>'
+    else:
+        text_html = e(f"Buy tickets for {matchup} on {game['start_display']} from {buy['seller']}{official}")
     # An affiliate link is marked as one for search engines (Google asks that
     # paid and affiliate links say so) and for the reader, with the visible
     # "Paid link" label right after it (the footer note is not enough on its
@@ -397,9 +411,13 @@ def _buy_link(game: Mapping[str, Any], matchup: str, *, css_class: str = "") -> 
     # host it goes through. A plain link gets no rel attribute and no label
     # at all.
     if is_affiliate_link(buy["seller"], buy["url"]):
-        return _paid_link(buy["url"], e(text), css_class=css_class)
+        return _paid_link(buy["url"], text_html, css_class=css_class)
     class_attr = f' class="{css_class}"' if css_class else ""
-    return f'<a{class_attr} href="{e(buy["url"])}">{e(text)}</a>'
+    return f'<a{class_attr} href="{e(buy["url"])}">{text_html}</a>'
+
+
+# The visible text of a games-table row's ticket link (_buy_link short=True).
+SHORT_TICKET_TEXT = "Tickets"
 
 
 def _matchup_text(game: Mapping[str, Any]) -> str:
@@ -592,6 +610,15 @@ your calendar automatically &mdash; nothing to check back for.</p>
 """
 
 
+def _games_table_wrap_open(caption_id: str) -> str:
+    """The games table's wrapper, which scrolls sideways on a phone. A
+    keyboard user can only scroll a box they can focus (Safari, and Chrome
+    before 130, never focus one on their own), so it is a focusable region
+    named by the table's caption (WCAG 2.1.1; axe scrollable-region-focusable).
+    The caption id must be unique on the page."""
+    return f'<div class="games-table-wrap" role="region" tabindex="0" aria-labelledby="{e(caption_id)}">'
+
+
 def _games_table(
     games: list[dict[str, Any]], *, buy_link_subject: str, fetched: bool = True, home_away: bool = False
 ) -> str:
@@ -603,7 +630,9 @@ def _games_table(
     for g in games:
         matchup = _matchup_text(g)
         date_note = _feed_note(g)
-        buy = _buy_link(g, matchup) or '<span class="ticket-unavailable">no ticket link published yet</span>'
+        buy = (
+            _buy_link(g, matchup, short=True) or '<span class="ticket-unavailable">no ticket link published yet</span>'
+        )
         tag = _home_away_tag(g) if home_away else ""
         rows.append(
             "<tr>"
@@ -613,9 +642,9 @@ def _games_table(
             f"<td>{buy}</td>"
             "</tr>"
         )
-    return f"""<div class="games-table-wrap">
+    return f"""{_games_table_wrap_open("games-caption")}
 <table class="games-table">
-<caption class="sr-caption">Upcoming {e(buy_link_subject)} games, from Ticketmaster</caption>
+<caption id="games-caption" class="sr-caption">Upcoming {e(buy_link_subject)} games, from Ticketmaster</caption>
 <thead>
 <tr>
 <th scope="col">Date</th>
@@ -970,7 +999,7 @@ ad personalization is denied for every visitor.</li>
 <li><strong>In the EEA, the UK and Switzerland</strong>, analytics storage is
 denied as well, so Google Analytics sets no cookies on your device. Google
 still receives a cookieless measurement request for each page view and link
-click, with nothing stored on your device to recognise you next time.</li>
+click, with nothing stored on your device to recognize you next time.</li>
 <li><strong>Everywhere else</strong>, Google Analytics sets first-party
 cookies (named <code>_ga</code> and <code>_ga_</code> followed by an ID) to
 tell a returning visitor from a new one.</li>
@@ -997,12 +1026,16 @@ To opt out, use &ldquo;Opt out of analytics&rdquo; at the bottom of any page,
 turn on Global Privacy Control or Do Not Track in your browser, or install <a href="https://tools.google.com/dlpage/gaoptout">Google's Analytics opt-out browser add-on</a>.</p>
 """
         ticket_measured = " Google Analytics records only that the link was clicked, on this site's page."
+        feed_clicks = """<p>On a web page, a click on a calendar-subscribe link is counted
+by Google Analytics, as described above.</p>
+"""
     else:
         pages_section = """<h2>Web pages: no analytics</h2>
 <p>This site runs no analytics: no measurement service of any kind, no
 scripts at all, and no cookies.</p>
 """
         ticket_measured = ""
+        feed_clicks = ""
     if _buy_links_paid(paid_links):
         ticket_links = """<p>Every &ldquo;Buy tickets&rdquo; link goes to the home team's
 own ticket seller's page for that team where we know it (for example AXS or
@@ -1039,10 +1072,11 @@ address it leads to, and notes that it was a paid link.</p>
 <h1>Privacy</h1>
 <p class="lede">What this site measures, what it never measures, and how to
 opt out.</p>
-{pages_section}<h2>Calendar feeds: never tracked</h2>
-<p>The <code>.ics</code> calendar feeds carry game listings and nothing else:
-no tracking pixel, no analytics, no redirecting links. A calendar app that
-subscribes to a feed and re-fetches it is not measured by this site. Ticket
+{pages_section}<h2>Calendar feeds: what is and isn't measured</h2>
+{feed_clicks}<p>The <code>.ics</code> calendar feeds carry game listings and nothing else:
+no analytics, no image or pixel, and no redirecting links. A calendar app that
+subscribes to a feed and re-fetches it is not measured by this site; the
+host, GitHub Pages, receives those requests like any other (see Hosting). Ticket
 links inside a feed are the plain Ticketmaster addresses for each game.</p>
 <h2>Ticket links</h2>
 {ticket_links}{ticket_measured} Following one takes you to that seller, which then
@@ -1082,7 +1116,7 @@ def render_accessibility(*, base_url: str, ga4_id: str | None = None, paid_links
 accepted:</p>
 <ul>
 <li>pa11y, to the WCAG 2 AA standard, with two independent rule engines.</li>
-<li>axe-core against WCAG 2.0, 2.1 and 2.2 A and AA rules, including colour
+<li>axe-core against WCAG 2.0, 2.1 and 2.2 A and AA rules, including color
 contrast, target size and the page language.</li>
 <li>A keyboard walk: the first Tab reaches &ldquo;Skip to main
 content&rdquo;, every link can be reached, and each one shows a visible focus
@@ -1231,7 +1265,9 @@ def _schedule_day(day: Mapping[str, Any]) -> str:
     rows = []
     for g in day["games"]:
         matchup = _matchup_text(g)
-        buy = _buy_link(g, matchup) or '<span class="ticket-unavailable">no ticket link published yet</span>'
+        buy = (
+            _buy_link(g, matchup, short=True) or '<span class="ticket-unavailable">no ticket link published yet</span>'
+        )
         rows.append(
             "<tr>"
             f'<td><span class="game-date">{_when_html(g)}</span></td>'
@@ -1243,9 +1279,9 @@ def _schedule_day(day: Mapping[str, Any]) -> str:
         )
     return f"""<section class="schedule-day" aria-labelledby="day-{e(day["date"])}">
 <h2 id="day-{e(day["date"])}">{e(label)}</h2>
-<div class="games-table-wrap">
+{_games_table_wrap_open(f"games-caption-{day['date']}")}
 <table class="games-table">
-<caption class="sr-caption">Games on {e(label)}, from Ticketmaster</caption>
+<caption id="games-caption-{e(day["date"])}" class="sr-caption">Games on {e(label)}, from Ticketmaster</caption>
 <thead>
 <tr>
 <th scope="col">Date and time</th>
@@ -1816,6 +1852,21 @@ def render_team(
     )
 
 
+PACIFIC = ZoneInfo("America/Los_Angeles")
+# AP style: March through July are never abbreviated, September is "Sept."
+AP_MONTHS = ("Jan.", "Feb.", "March", "April", "May", "June", "July", "Aug.", "Sept.", "Oct.", "Nov.", "Dec.")
+
+
+def _pacific_stamp(when: datetime) -> str:
+    """ "Thursday, Nov. 5, 2026, 12:25 AM PT": a build time in US order and
+    Pacific time, where the nightly build and its owner are. Built by hand,
+    not with %b/%p, so the output never depends on the machine's locale."""
+    local = when.astimezone(PACIFIC)
+    hour = local.hour % 12 or 12
+    meridiem = "AM" if local.hour < 12 else "PM"
+    return f"{local:%A}, {AP_MONTHS[local.month - 1]} {local.day}, {local.year}, {hour}:{local:%M} {meridiem} PT"
+
+
 def _freshness_note(payload: Mapping[str, object]) -> str:
     """When these listings were read from Ticketmaster, stated on the page
     (DATA-GOVERNANCE-STANDARD DG-04): if the nightly build stops, readers can
@@ -1826,7 +1877,7 @@ def _freshness_note(payload: Mapping[str, object]) -> str:
     if not payload.get("fetched", True) or not fetched_at:
         return ""
     when = datetime.fromisoformat(str(fetched_at)).astimezone(UTC)
-    shown = f"{when:%A} {when.day} {when:%B %Y}, {when:%H:%M} UTC"
+    shown = _pacific_stamp(when)
     return (
         f'<p class="schedule-source-note data-freshness">Listings as of <time datetime="{e(when.isoformat(timespec="seconds"))}">'
         f"{e(shown)}</time>, from Ticketmaster. They are refreshed every night.</p>\n"
@@ -1984,7 +2035,7 @@ p { max-width: var(--measure); }
 
 a { color: var(--link); text-underline-offset: 0.15em; }
 a:visited { color: var(--link-visited); }
-a:focus-visible, button:focus-visible {
+a:focus-visible, button:focus-visible, .games-table-wrap:focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
   border-radius: 2px;
@@ -2171,7 +2222,12 @@ nav[aria-label="breadcrumb"] {
 
 /* ---- games table ---- */
 .no-games-message { color: var(--muted); }
+/* position: relative makes the wrapper the containing block of the ticket
+   links' visually hidden spans (.sr-only, position: absolute), so they stay
+   inside its scroll box; without it they sit at their place in the 42rem
+   table and widen the whole page at 320px (the a11y reflow check). */
 .games-table-wrap {
+  position: relative;
   overflow-x: auto; -webkit-overflow-scrolling: touch;
   margin: 1rem 0; border: 1px solid var(--border); border-radius: 0.6rem;
 }
@@ -2198,7 +2254,7 @@ table.games-table tbody tr:last-child td { border-bottom: 0; }
 }
 .home-away--home { color: var(--ink); border-color: var(--ink); }
 
-.sr-caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.sr-caption, .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 """
 
 # The "Paid link" label (PAID_LINK_LABEL). Appended to style.css only when

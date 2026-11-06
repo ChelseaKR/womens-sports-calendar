@@ -62,6 +62,19 @@ archived and private.
 
 ### Changed
 
+- Games tables: the box that scrolls sideways on a phone can now be reached
+  with the keyboard and is named by its table's caption. Each row's ticket
+  link now reads "Tickets (Ticketmaster)" (or the team's own seller), and the
+  matchup and date are in hidden text inside the link for screen readers. The
+  next-game hero keeps its full sentence.
+- The "Listings as of" line reads "Thursday, Nov. 5, 2026, 12:25 AM PT" (US
+  order, Pacific time) instead of "Thursday 5 November 2026, 08:25 UTC".
+- Privacy page, footer and README no longer say the calendar feeds are "never
+  tracked" or carry "no tracking". They now say what is measured (Google
+  Analytics counts clicks on calendar-subscribe links on pages) and what is
+  not (the feeds carry no analytics, so a calendar app's re-fetches are not
+  measured). American spellings on the privacy and accessibility pages and in
+  the README.
 - The Connecticut Sun are now the Houston Comets, at /wnba/houston-comets/
   and /ics/wnba/houston-comets.ics. The old feed address keeps publishing
   the same feed, the old page points to the new one, and the official ticket
