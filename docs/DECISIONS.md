@@ -1123,6 +1123,35 @@ Revisit if a subscriber asks for upcoming-only feeds (a separate feed, not
 a change to these), or if Ticketmaster's storage term is read more narrowly
 (docs/LICENSES-AND-ATTRIBUTION.md, Storage).
 
+## 0028 — Probe names for candidate teams with no listed home game; softball candidates (2026-11-05)
+
+**Why:** the measurement runs of 2026-11-03 and 2026-11-05 (0022) found Big
+12, ACC and Big East teams whose keyword search returned events but whose
+pages would list no home game (Big 12: 9 of 16 teams with one). That may be a
+wrong keyword rather than missing inventory, as Georgia and Tennessee were
+for the SEC (0023).
+
+The decision, measurement only (nothing new is fetched by the nightly build
+or published):
+
+- `measure_leagues.py` builds its college candidates with config's own
+  `_college_team`, so they exclude every `COLLEGE_DIRECTION_PREFIXES` entry.
+  Its private copy of that list lacked "Middle" and "Southeast".
+- Probe names (`search_names`, plus `other_mascots` "Cowboys" and "Red
+  Raiders") for Arizona State, Iowa State, Cincinnati, BYU, Oklahoma State,
+  TCU, Texas Tech, Clemson, Miami, Butler, Providence and St. John's. None
+  was read from a Ticketmaster artist page; a run confirms or rules them out.
+- SEC and Big Ten softball candidates (15 and 17 schools, keyword
+  "<School> <Mascot> Softball"). They run only when named, never under
+  "all", and not before about 2027-01-15.
+- One run of `ncaaw-big-12,ncaaw-acc,ncaaw-big-east,mlv` makes at least 71
+  requests (one per name searched and one per league keyword of 0032, more
+  when a search pages, at most 5 pages each); "all" makes at least 130; the
+  two softball candidates at least 32.
+
+Revisit after the next run: keep the names that attribute games, drop the
+rest, and copy the kept ones into config if that conference is added.
+
 ## 0029 — An empty WNBA team page names the season it waits for; seller-table descriptions match the body (2026-11-05)
 
 **Why:** "phoenix mercury schedule 2027" was the site's top named query
