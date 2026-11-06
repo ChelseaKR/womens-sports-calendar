@@ -17,6 +17,11 @@ archived and private.
   Ticketmaster listings this site reads. Its page now says so and links
   that store, instead of promising games that cannot appear
   (DECISIONS 0013).
+- A manual, counts-only `measure-gap` workflow compares each team's upcoming
+  home games on its Wikipedia article page with the home games the site
+  finds on Ticketmaster, and how often the two agree on date and venue
+  (bar: 95%). Nothing from Wikipedia is published; the nightly build, site
+  and feeds are unchanged (DECISIONS 0034).
 - Each game's `SportsEvent` markup names its two teams as `performer`, and,
   when the page's "Buy tickets" link goes to the game's own Ticketmaster
   listing, an `offers` holding only that listing's URL. No price,
