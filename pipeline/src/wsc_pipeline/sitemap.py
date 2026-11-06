@@ -27,7 +27,7 @@ records no dates either; the deploy workflow never publishes one anyway.
 
 The fingerprint covers everything the page renders from except when it was
 fetched (the "Listings as of" line changes every night; the schedule may
-not). The privacy and accessibility pages are not schedules: their lastmod
+not). The privacy, accessibility, terms and help pages are not schedules: their lastmod
 is the "Updated" date printed on each page, from one constant in site.py.
 """
 

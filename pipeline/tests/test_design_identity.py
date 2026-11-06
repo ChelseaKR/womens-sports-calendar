@@ -183,7 +183,7 @@ def test_every_page_has_the_same_header(pages: dict[str, str]):
     assert len(pages) > 40
     for name, html in pages.items():
         header = _parse(html)
-        assert header.links == ["/", "/#leagues", "/schedule/"], name
+        assert header.links == ["/", "/#leagues", "/schedule/", "/help/"], name
         assert header.brand_img, name
         assert html.count(site.SITE_NAV) == 1, name
 

@@ -54,6 +54,7 @@ CSS_PATH = "/style.css"
 PRIVACY_PATH = "/privacy/"
 ACCESSIBILITY_PATH = "/accessibility/"
 TERMS_PATH = "/terms/"
+HELP_PATH = "/help/"
 # The status line docs/a11y/STATEMENT.md opens with. The page renders this
 # exact sentence and tests/test_accessibility_page.py asserts the two agree,
 # so the published statement and the committed one cannot drift apart.
@@ -69,12 +70,13 @@ ACCESSIBILITY_CONTACT_URL = "https://chelseakr.com/contact"
 # REMOVED_EVENTS (config.py, ADR 0006) is the switch a request is honoured with.
 REMOVAL_CONTACT_EMAIL: str | None = "chelsea@chelseakr.com"
 _EMAIL_SHAPE = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$")
-# The "Updated" date printed on /privacy/, /accessibility/ and /terms/, and their
+# The "Updated" date printed on /privacy/, /accessibility/, /terms/ and /help/, and their
 # sitemap <lastmod>: one value each, so the two cannot disagree. Change it
 # whenever that page's text changes.
 PRIVACY_UPDATED = date(2026, 11, 5)
 ACCESSIBILITY_UPDATED = date(2026, 11, 5)
 TERMS_UPDATED = date(2026, 11, 3)
+HELP_UPDATED = date(2026, 11, 6)
 # One-click subscribe links. Each takes the feed's webcal:// address; Google
 # and Outlook then fetch the feed themselves and keep it subscribed.
 # Google's "add by URL" prompt:
@@ -217,13 +219,15 @@ def _base(
 """
 
 
-# The header's two site links, on every page: the league list on the home
-# page and the week-ahead schedule. Plain links; the current page is not
-# marked, so every page renders the same header.
+# The header's three site links, on every page: the league list on the home
+# page, the week-ahead schedule, and the calendar help page (DECISIONS 0036).
+# Plain links; the current page is not marked, so every page renders the
+# same header.
 SITE_NAV = (
     '<nav class="site-nav" aria-label="Site">'
     '<ul><li><a href="/#leagues">Leagues</a></li>'
-    '<li><a href="/schedule/">This week</a></li></ul></nav>'
+    '<li><a href="/schedule/">This week</a></li>'
+    f'<li><a href="{HELP_PATH}">Help</a></li></ul></nav>'
 )
 
 
@@ -333,7 +337,7 @@ know it, and otherwise to the game's Ticketmaster listing.
 {affiliate_note}</p>
 <p class="privacy-note">{note}
 <a href="{PRIVACY_PATH}">Privacy: what this site measures and what it never does</a>.{choice}</p>
-<p class="privacy-note"><a href="{ACCESSIBILITY_PATH}">Accessibility statement</a> &middot; <a href="{TERMS_PATH}">Terms of use</a>.</p>{_removal_contact()}
+<p class="privacy-note"><a href="{HELP_PATH}">Calendar help</a> &middot; <a href="{ACCESSIBILITY_PATH}">Accessibility statement</a> &middot; <a href="{TERMS_PATH}">Terms of use</a>.</p>{_removal_contact()}
 </footer>
 """
 
@@ -389,6 +393,7 @@ def _other_apps_block(*, ics_https_url: str) -> str:
 <li><strong>Google Calendar:</strong> on the left, next to &ldquo;Other calendars,&rdquo; select the + icon &rsaquo; From URL, then paste the address above.</li>
 <li><strong>Outlook:</strong> Add calendar &rsaquo; Subscribe from web, then paste the address above.</li>
 </ul>
+<p><a href="{HELP_PATH}">Step-by-step help for each calendar app, and how to unsubscribe</a>.</p>
 </section>
 """
 
@@ -1253,6 +1258,225 @@ something goes wrong, please email me first, and I will try to fix it.</p>
             "or late, and how its ticket links work."
         ),
         canonical_url=f"{base_url}{TERMS_PATH}",
+        base_url=base_url,
+        body=body,
+        ga4_id=ga4_id,
+        paid_links=paid_links,
+    )
+
+
+# The official help pages /help/ follows, each read on HELP_UPDATED. Every
+# step and every refresh figure on the page comes from one of these; where
+# a page gives no figure, /help/ says the app does not publish one.
+HELP_SOURCES: dict[str, str] = {
+    "apple_icloud": "https://support.apple.com/en-us/102301",
+    "apple_iphone_remove": "https://support.apple.com/en-us/102444",
+    "apple_mac_refresh": "https://support.apple.com/guide/calendar/refresh-calendars-icl1024/mac",
+    "apple_mac_delete": "https://support.apple.com/guide/calendar/delete-or-remove-calendars-icl1005/mac",
+    "google_subscribe": "https://support.google.com/calendar/answer/37100",
+    "google_unsubscribe": "https://support.google.com/calendar/answer/37188",
+    "outlook_subscribe": (
+        "https://support.microsoft.com/en-us/outlook/"
+        "import-or-subscribe-to-a-calendar-in-outlook-com-or-outlook-on-the-web"
+    ),
+    "outlook_remove": "https://support.microsoft.com/en-us/outlook/add-a-calendar-in-outlook-com-or-outlook-on-the-web",
+}
+# The ticket sellers /help/ names as the reason a team can list few or no
+# home games (DECISIONS 0013, 0034, 0036). tests/test_help_page.py checks
+# each is a seller in sellers.PRIMARY_SELLERS, so the page cannot name one
+# the seller table does not have.
+HELP_NAMED_SELLERS = ("AXS", "SeatGeek", "Paciolan")
+# The one team that sells through a Ticketmaster Account Manager store; the
+# test checks the seller table still says so.
+HELP_ACCOUNT_MANAGER_TEAM = ("ncaaw-sec", "missouri-tigers-womens-basketball")
+HELP_ACCOUNT_MANAGER_NAME = "Missouri women's basketball"
+
+
+def _help_source(key: str, text: str) -> str:
+    return f'<a href="{e(HELP_SOURCES[key])}">{e(text)}</a>'
+
+
+def render_help(*, base_url: str, ga4_id: str | None = None, paid_links: bool = False) -> str:
+    """dist/help/index.html, linked from every page's header and footer
+    (DECISIONS 0036): how to subscribe to a feed in Apple Calendar, Google
+    Calendar and Outlook, how to unsubscribe, how often a feed updates, and
+    why a game can be missing. Each app's steps and refresh behavior are
+    what that app's own help page says (HELP_SOURCES); nothing is assumed.
+    The page links no ticket seller, so it carries no paid link; the footer
+    keeps the site's affiliate disclosure."""
+    league = config.LEAGUES[0]
+    team = league.teams[0]
+    team_feed = f"{base_url}/ics/{league.slug}/{team.slug}.ics"
+    league_feed = f"{base_url}/ics/{league.slug}.ics"
+    all_feed = f"{base_url}/{COMBINED_FEED_PATH}"
+    sellers = ", ".join(HELP_NAMED_SELLERS[:-1]) + f" or {HELP_NAMED_SELLERS[-1]}"
+    contact = REMOVAL_CONTACT_EMAIL or "chelsea@chelseakr.com"
+    mail = f'<a href="mailto:{e(contact)}">{e(contact)}</a>'
+    body = f"""<nav aria-label="breadcrumb"><a href="/">All leagues</a></nav>
+<h1>Calendar help</h1>
+<p class="lede">Every team and league on this site has its own calendar feed.
+Subscribe once, and its games show up in the calendar app you already use.
+Here is how, app by app, and how to stop.</p>
+<ul class="help-contents">
+<li><a href="#help-address">Find the calendar address</a></li>
+<li><a href="#help-apple">Apple Calendar (iPhone, iPad, Mac)</a></li>
+<li><a href="#help-google">Google Calendar</a></li>
+<li><a href="#help-outlook">Outlook</a></li>
+<li><a href="#help-unsubscribe">Unsubscribe</a></li>
+<li><a href="#help-refresh">How often your calendar updates</a></li>
+<li><a href="#help-missing">Why a game might be missing</a></li>
+<li><a href="#help-contact">Report a problem</a></li>
+</ul>
+
+<h2 id="help-address">Find the calendar address</h2>
+<p>On a team or league page, the &ldquo;Add to&hellip;&rdquo; buttons near the
+top do the steps below for you. If a button does not work, scroll to
+&ldquo;Other calendar apps&rdquo; on the same page and copy the address shown
+there. It ends in <code>.ics</code>. For example:</p>
+<ul class="help-addresses">
+<li>One team ({e(team.shown_name)}): <code>{e(team_feed)}</code></li>
+<li>One league ({e(league.name)}): <code>{e(league_feed)}</code></li>
+<li>Every league on the site: <code>{e(all_feed)}</code></li>
+</ul>
+<p>Subscribe to the address; do not download the file and import it. An
+imported file is a one-time copy and never updates (Microsoft&rsquo;s
+{_help_source("outlook_subscribe", "Outlook help")} says so plainly).</p>
+
+<h2 id="help-apple">Apple Calendar</h2>
+<h3>iPhone or iPad</h3>
+<p>The quickest way is the &ldquo;Add to Apple Calendar&rdquo; button on a team
+page. To do it by hand (iOS or iPadOS 26 or later):</p>
+<ol>
+<li>Open Calendar and tap the Calendars button.</li>
+<li>Tap Add Calendar, then tap Add Subscription Calendar.</li>
+<li>Paste the calendar address, then tap Find.</li>
+<li>Give it a name and color. Next to Account, choose iCloud so it shows on
+all your Apple devices.</li>
+<li>Tap Done.</li>
+</ol>
+<p>On iOS 18 or earlier, tap Calendars at the bottom of the screen, then Add
+Calendar &rsaquo; Add Subscription Calendar, paste the address and tap
+Subscribe.</p>
+<h3>Mac</h3>
+<ol>
+<li>In Calendar, choose File &rsaquo; New Calendar Subscription.</li>
+<li>Paste the calendar address, then click Subscribe.</li>
+<li>Give it a name and color. Next to Location, choose iCloud so it shows on
+your other Apple devices.</li>
+<li>Click OK.</li>
+</ol>
+<p class="help-source">Source: Apple,
+{_help_source("apple_icloud", "Add calendar subscriptions in iCloud")}.</p>
+
+<h2 id="help-google">Google Calendar</h2>
+<p>Google adds a calendar by address only on a computer, in a web browser, not
+in the Google Calendar phone app.</p>
+<ol>
+<li>Open Google Calendar on your computer.</li>
+<li>On the left, next to &ldquo;Other calendars,&rdquo; click Add other
+calendars (+), then From URL.</li>
+<li>Paste the calendar address.</li>
+<li>Click Add calendar. It appears on the left, under &ldquo;Other
+calendars.&rdquo;</li>
+</ol>
+<p class="help-source">Source: Google,
+{_help_source("google_subscribe", "Subscribe to someone else's calendar")}.</p>
+
+<h2 id="help-outlook">Outlook</h2>
+<h3>Outlook.com (a personal Microsoft account)</h3>
+<ol>
+<li>Sign in to Outlook.com and open Calendar.</li>
+<li>Select Add calendar, then Subscribe from web.</li>
+<li>Paste the calendar address, then select Import.</li>
+</ol>
+<h3>Outlook on the web (a work or school account)</h3>
+<ol>
+<li>Sign in to Outlook on the web and open Calendar.</li>
+<li>Select Add calendar, then Subscribe from web.</li>
+<li>Paste the calendar address, then select Import and Save.</li>
+</ol>
+<p>Choose Subscribe from web, not Upload from file: an uploaded file never
+updates.</p>
+<p class="help-source">Source: Microsoft,
+{_help_source("outlook_subscribe", "Import or subscribe to a calendar in Outlook.com or Outlook on the web")}.</p>
+
+<h2 id="help-unsubscribe">Unsubscribe</h2>
+<p>There is no account here to cancel. Remove the calendar in your app and the
+games are gone from it.</p>
+<ul>
+<li><strong>iPhone or iPad:</strong> in Calendar, tap the Calendars button,
+tap the info button next to the calendar, tap Unsubscribe, then tap
+Unsubscribe again to confirm
+({_help_source("apple_iphone_remove", "Apple's steps")}).</li>
+<li><strong>Mac:</strong> in Calendar, click the calendar&rsquo;s name in the
+calendar list (View &rsaquo; Show Calendar List if you do not see it), then
+choose Edit &rsaquo; Delete
+({_help_source("apple_mac_delete", "Apple's steps")}).</li>
+<li><strong>Google Calendar:</strong> on a computer, click Settings at the top
+right, select the calendar in the left column, click Remove calendar, then
+Unsubscribe, and confirm with Remove calendar
+({_help_source("google_unsubscribe", "Google's steps")}).</li>
+<li><strong>Outlook.com or Outlook on the web:</strong> in your list of
+calendars, select More options next to the calendar, then Remove
+({_help_source("outlook_remove", "Microsoft's steps")}).</li>
+</ul>
+
+<h2 id="help-refresh">How often your calendar updates</h2>
+<p>This site rebuilds every feed once a night, shortly after midnight Pacific
+time. Each feed asks calendar apps to check it again once a day. Your app
+decides when it actually checks:</p>
+<ul>
+<li><strong>Apple Calendar on a Mac:</strong> you choose. Control-click the
+calendar&rsquo;s name, choose Get Info, and pick a setting from the
+Auto-refresh menu
+({_help_source("apple_mac_refresh", "Apple's steps")}).</li>
+<li><strong>Apple Calendar on iPhone or iPad:</strong> Apple does not publish
+how often it checks a subscribed calendar, so it varies.</li>
+<li><strong>Google Calendar:</strong> Google does not publish how often it
+checks a calendar added by address, so it varies.</li>
+<li><strong>Outlook.com:</strong> Microsoft says about every 3 hours, though an
+update can take more than 24 hours.</li>
+<li><strong>Outlook on the web (work or school):</strong> Microsoft says about
+every 6 hours, though an update can take more than 24 hours.</li>
+</ul>
+<p>So a new game or a time change can take a day or more to reach your
+calendar. Before you travel or buy tickets, check the game with the team or
+the ticket seller.</p>
+
+<h2 id="help-missing">Why a game might be missing</h2>
+<ul>
+<li><strong>This site reads one source.</strong> Every game comes from
+Ticketmaster&rsquo;s public listings. No league&rsquo;s or team&rsquo;s own
+schedule is used, so a game Ticketmaster does not list is not here.</li>
+<li><strong>Some teams sell tickets somewhere else.</strong> Teams that sell
+through {e(sellers)} may show few or no home games here. So may
+{e(HELP_ACCOUNT_MANAGER_NAME)}, which sells through its own Ticketmaster Account Manager store;
+those games are not in Ticketmaster&rsquo;s public listings. When one of
+these teams has no games listed, its page names its seller and links to
+it.</li>
+<li><strong>Not listed yet.</strong> A game appears with the first nightly
+rebuild after Ticketmaster lists it.</li>
+<li><strong>No date yet.</strong> A game whose date Ticketmaster has not set
+is shown on its team page but left out of the calendar feed until it has
+one. A game with a date but no start time is in the feed as an all-day
+event marked &ldquo;time TBA.&rdquo;</li>
+<li><strong>Canceled or postponed.</strong> These stay in the feed, marked
+with their status, so your calendar does not keep showing a game that is
+off as if it were on.</li>
+</ul>
+
+<h2 id="help-contact">Report a problem</h2>
+<p>If a game is missing or wrong, or these steps do not match what you see,
+email {mail}. Name the team and the date, and the calendar app you use.</p>
+<p>Updated {e(display_date(HELP_UPDATED))}.</p>
+"""
+    return _base(
+        title=f"Calendar help: subscribe and unsubscribe | {SITE_NAME}",
+        description=(
+            "How to add a team's games to Apple Calendar, Google Calendar or Outlook, "
+            "how to unsubscribe, how often feeds update, and why a game can be missing."
+        ),
+        canonical_url=f"{base_url}{HELP_PATH}",
         base_url=base_url,
         body=body,
         ga4_id=ga4_id,
@@ -2315,6 +2539,13 @@ table.games-table tbody tr:last-child td { border-bottom: 0; }
   color: var(--muted); white-space: nowrap;
 }
 .home-away--home { color: var(--ink); border-color: var(--ink); }
+
+/* ---- help page ---- */
+/* A feed address is one long unbroken token: let it wrap at 320px. */
+.help-addresses code { overflow-wrap: anywhere; }
+.help-contents { padding-left: 1.1rem; }
+.help-contents li, main > ol li { margin-bottom: 0.35rem; }
+.help-source { color: var(--muted); font-size: 0.9375rem; }
 
 .sr-caption, .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 """

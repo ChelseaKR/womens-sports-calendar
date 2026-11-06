@@ -185,12 +185,12 @@ def test_hostile_strings_cannot_close_the_json_ld_block():
 
 def test_validator_passes_the_fixture_site_and_counts_its_events(fixture_dist: Path):
     pages, events = validate_seo.validate_dist(fixture_dist)
-    # Home, privacy, accessibility, terms, schedule; the 3 leagues that list a game;
+    # Home, privacy, accessibility, terms, help, schedule; the 3 leagues that list a game;
     # the empty AUSL league page and every team page but Rutgers's and Georgia's: an empty
     # page with an official ticket link stays indexed (DECISIONS 0020, 0021).
     # The empty Big Ten and SEC league pages, Rutgers and Georgia (empty, no
     # official link) are noindex and unlisted.
-    assert pages == 5 + 3 + 1 + sum(len(lg.teams) for lg in config.LEAGUES) - 2
+    assert pages == 6 + 3 + 1 + sum(len(lg.teams) for lg in config.LEAGUES) - 2
     # Aces 4 + Storm 1 + Thorns 1 + Sceptres 1 on team pages; WNBA 4, NWSL 1
     # and PWHL 1 on league pages (the Aces/Storm game once); and 5 more on the
     # pages of tracked opponents, which every fetched event is matched against
