@@ -1449,3 +1449,55 @@ also removes the header links, because they are a second link to
 
 Revisit if Search Console click-through drops on pages whose OG image
 changed, or if another portfolio site takes black and lime.
+
+## 0036 — A calendar help page at /help/, built only from each app's own help pages (2026-11-06)
+
+**Why:** the design audit for 0035 found one product surface Family
+Greenhouse has and this site lacked: help. Team pages carry one line of
+by-hand steps per app, but nothing says how to unsubscribe, how long a
+change takes to reach a calendar, or why a team shows few or no games.
+Chelsea approved building the page on 2026-11-05 (design audit decision
+B(a)).
+
+The decision:
+
+- One new page, `/help/`, with its own title ("Calendar help: subscribe
+  and unsubscribe | Next Home Game"), H1 ("Calendar help") and meta
+  description. It is in the sitemap, dated by `site.HELP_UPDATED` like the
+  privacy, accessibility and terms pages, and in `llms.txt`.
+- Every page's header gets a third link, "Help", and the footer's policy
+  line starts with "Calendar help". Each "Other calendar apps" box links it.
+- The subscribe and unsubscribe steps, and every refresh figure, come from
+  the app maker's own help page, read on 2026-11-06 and linked from the
+  page (`site.HELP_SOURCES`): Apple (support.apple.com 102301, 102444 and
+  the Mac Calendar guide's refresh and delete topics), Google (Calendar
+  help 37100 and 37188) and Microsoft (the Outlook.com and Outlook on the
+  web subscribe and add-a-calendar pages). Each site's robots.txt allowed
+  those paths; requests named the project in their User-Agent.
+- Refresh: the page says what the site does (rebuilt nightly at 08:13 UTC;
+  each feed asks for a daily refresh, `ics.REFRESH_INTERVAL`) and only what
+  each app documents: Mac Calendar's Auto-refresh setting; Outlook.com
+  about every 3 hours and Outlook on the web about every 6, either of which
+  can take more than 24 hours. Apple (iPhone and iPad) and Google publish no
+  interval, so the page says it varies. No figure is guessed.
+- Missing games: the page says plainly that the site reads only
+  Ticketmaster's public listings (0006), that teams selling through AXS,
+  SeatGeek or Paciolan may show few or no home games (0013, 0034), and that
+  Missouri women's basketball sells through a Ticketmaster Account Manager
+  store whose games are not in those listings. It also covers games not
+  yet listed, games with no date (on the page, not in the feed) and
+  canceled or postponed games (kept, with their status).
+- The page links no ticket seller, so it carries no paid link; the footer
+  keeps the site's affiliate disclosure (0018).
+
+**Enforced by** `tests/test_help_page.py`: the refresh sentence is tied to
+`ics.REFRESH_INTERVAL` and the cron in `pages.yml`; the named sellers must be
+in `sellers.PRIMARY_SELLERS` and Missouri's seller must be the Account
+Manager store; the example feed addresses must be files the build writes;
+every page links `/help/` from its header and footer (with a control that
+removing both leaves none); and the sitemap and `make a11y`'s coverage
+check (`scripts/check_a11y_coverage.py`) must include the page.
+
+Revisit when Apple, Google or Microsoft change these help pages (the
+`HELP_UPDATED` date marks the last read), or when a second schedule source
+is adopted under 0034.

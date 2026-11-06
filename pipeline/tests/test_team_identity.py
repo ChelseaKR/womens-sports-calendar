@@ -458,10 +458,10 @@ def test_the_validators_accept_a_site_with_a_former_slug_and_reject_a_diverged_f
     _build(out, monkeypatch, _league(team), {"New Name": RENAME_EVENTS["New Name"]})
 
     # Counted against what else the build writes, so a feed or page added by
-    # another change (the all-leagues feed, the schedule page) does not make
+    # another change (the all-leagues feed, the schedule and help pages) does not make
     # this test about it.
     other_feeds = int((out / "ics" / "all.ics").is_file())
-    other_pages = int((out / "schedule" / "index.html").is_file())
+    other_pages = sum((out / page / "index.html").is_file() for page in ("schedule", "help"))
     feeds, _events = validate_ics.validate_dist(out)
     assert feeds == 3 + other_feeds  # the league feed, the team feed and the former-slug feed
     pages, _ = validate_seo.validate_dist(out)
