@@ -1399,6 +1399,93 @@ Revisit when an axs.com page for the Comets appears (add an AXS seller row
 like the Dallas Wings'), when no Ticketmaster listing uses "Connecticut
 Sun" any more (drop the search name), or if Fanatics lists a Comets store.
 
+## 0034 — Count the home games Ticketmaster misses against Wikipedia, publishing nothing from it (2026-11-05)
+
+**Why:** eight teams list few or no home games because their tickets are
+sold outside Ticketmaster's Discovery API (Minnesota Frost, Vancouver
+Goldeneyes, and Minnesota, Purdue, Michigan State, Indiana, Arkansas and
+Missouri; about 123 games on 2026-11-05). DECISIONS 0006 keeps Ticketmaster
+the only source, and 0024 says to revisit that only when a second source
+passes 0003. Wikipedia is the one permitted, machine-readable candidate
+(CC BY-SA 4.0). Before anyone decides to use it, the size of the gap and
+Wikipedia's accuracy need numbers.
+
+**Owner decisions (2026-11-05):**
+
+- 1a: build a counts-only measurement of Wikipedia against Ticketmaster.
+  It publishes no Wikipedia event data anywhere: no feed, page, artifact
+  or committed file carries a Wikipedia game. Counts only.
+- 2a: if anything from a second source is ever published, it is labeled
+  with its source and license and kept separate from Ticketmaster events,
+  and only after a legal read of whether ShareAlike reaches a feed that
+  also holds Ticketmaster content. Nothing is built for this now.
+- 3a: the WNBA teams whose seller is not Ticketmaster (Dallas Wings, Las
+  Vegas Aces, Los Angeles Sparks, Minnesota Lynx, Houston Comets) are
+  re-measured after the 2027 schedule is released (expected December
+  2026). They are not in this measurement's list yet, and are not counted
+  as gaps without numbers.
+- 4a (Missouri in the seller table) is a separate change to 0013.
+
+**The decision:**
+
+- `.github/workflows/measure-gap.yml` runs only on `workflow_dispatch`, with
+  `contents: read`, no write token, no deploy, pinned actions and a
+  20-minute timeout, like measure-leagues.yml (0022).
+- `pipeline/src/wsc_pipeline/measure_gap.py` reads a fixed list of 14
+  English Wikipedia article pages (`WIKI_SOURCES`: the 2026–27 PWHL season
+  page for all 12 PWHL teams, and 13 college team-season pages): the nine
+  vendor-gap teams (the eight above plus PWHL Las Vegas) and 16 teams
+  Ticketmaster lists, as controls. It counts each team's upcoming home
+  games there, and the home games the site's own search and attribution
+  code (`build._search_team`, `build.attribute_games`,
+  `site_data.tracked_team_is_home`) finds on Ticketmaster.
+- Shared games are a Wikipedia home game and a Ticketmaster home game
+  against the same opponent at most 7 days apart. One agrees when the
+  dates are equal and, where Wikipedia names a venue, Ticketmaster's venue
+  city or venue name is in Wikipedia's site cell. The PWHL season tables
+  name no venue, so PWHL games are compared on date only; the report says
+  how many games had a venue compared. **The bar is 95% agreement on
+  shared games**, summed over every team both sources list.
+- It writes counts only (per team: home games on each side, missing,
+  shared, same date, venue compared, same venue, agree; and the totals) to
+  the job summary and a `gap-measurement` artifact kept 30 days. No date,
+  opponent, venue, time or event name from either source is written. A
+  page that is missing, failed or has no schedule table the parser
+  recognizes is "not measured", never 0; a failed fetch fails the run
+  after the counts are written.
+- The test fixtures copy only the shape of Wikipedia's tables; every date
+  in them is invented.
+
+**How Wikipedia is read.** One request per title (the PWHL page is read
+once for 12 teams), at most one every 3 seconds, at most 40 a run, with
+the User-Agent `NextHomeGame-gap-measure/0.1 (https://nexthomegame.com/;
+chelsea@chelseakr.com) python-httpx`, as Wikimedia's User-Agent policy
+asks. The brief asked for the REST API (`/api/rest_v1/`), but
+en.wikipedia.org's robots.txt of 2026-11-05 has `Disallow: /api/` and
+`Disallow: /w/` for every user agent (only `/api/rest_v1/?doc` is
+allowed), and says "friendly, low-speed bots are welcome viewing article
+pages". So the module reads article pages under `/wiki/` only, never `/w/`
+or `/api/`, and a test fails if a request goes anywhere else. Switching to
+the REST API is a one-line change to `WIKI_BASE` if the owner decides
+robots.txt does not bind an API client.
+
+**Ticketmaster load:** about 30 Discovery requests a run (25 teams, a few
+with a second search name), capped at 300, inside the 5,000 a day the
+nightly build shares.
+
+**Enforced by** `tests/test_measure_gap.py` (no network): the PWHL parser
+skips preseason, standings and other sections and gets the year right;
+the college parser keeps only rows with no "at" or "vs." in front; a
+missing, failed, capped or table-less page is never a count; pairing uses
+each Ticketmaster game once; and the written report holds none of the
+fixtures' dates, opponents or venues.
+
+**Revisit** after about two weeks of runs (from about 2026-11-19), and
+again after the 2027 WNBA schedule is out. If agreement is at least 95%,
+publishing Wikipedia-sourced home games for the gap teams can be proposed,
+subject to 2a. If it is below, or fewer than half the gap teams' pages
+parse, build nothing more from Wikipedia.
+
 ## 0035 — The "Floodlight" identity: scoreboard black, one lime highlight, a ticket for a mark (2026-11-05)
 
 **Why:** the site's navy and gold were a stock sports look, and the

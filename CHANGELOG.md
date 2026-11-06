@@ -27,6 +27,11 @@ archived and private.
   It also fixes a link that could not be seen: on a team page whose seller is
   not Ticketmaster, the "Check ... for home games" link in the empty
   next-game card was drawn in the card's own color.
+- A manual, counts-only `measure-gap` workflow compares each team's upcoming
+  home games on its Wikipedia article page with the home games the site
+  finds on Ticketmaster, and how often the two agree on date and venue
+  (bar: 95%). Nothing from Wikipedia is published; the nightly build, site
+  and feeds are unchanged (DECISIONS 0034).
 - Each game's `SportsEvent` markup names its two teams as `performer`, and,
   when the page's "Buy tickets" link goes to the game's own Ticketmaster
   listing, an `offers` holding only that listing's URL. No price,

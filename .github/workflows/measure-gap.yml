@@ -1,0 +1,78 @@
+# Count home games Wikipedia lists against what Ticketmaster lists
+# (DECISIONS 0034).
+#
+# Manual only: run it with
+#   gh workflow run measure-gap.yml -R ChelseaKR/womens-sports-calendar
+# It reads a fixed list of English Wikipedia article pages (one request per
+# title, 3 seconds apart, with a User-Agent that names a contact) and the
+# Ticketmaster Discovery API with the existing TICKETMASTER_API_KEY secret.
+# It writes counts only (no date, opponent, venue or event name from either
+# source) to the job summary and a `gap-measurement` artifact. It never builds
+# or deploys the site, never writes to the repository or to Pages, and has no
+# write token. Nothing from Wikipedia is published.
+#
+# Every action is pinned to a commit, as in pages.yml.
+
+name: measure-gap
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One run at a time; it shares the Discovery API's daily limit with the
+# nightly build and measure-leagues.yml. A queued run waits.
+concurrency:
+  group: measure-gap
+  cancel-in-progress: false
+
+env:
+  UV_VERSION: "0.12.9"
+
+jobs:
+  measure:
+    name: measure the home-game gap
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: pipeline
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv (Python 3.12)
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+          enable-cache: false
+
+      - name: make install
+        run: |
+          set -euo pipefail
+          make install
+
+      - name: Measure
+        env:
+          TICKETMASTER_API_KEY: ${{ secrets.TICKETMASTER_API_KEY }}
+        run: |
+          set -euo pipefail
+          uv run python -m wsc_pipeline.measure_gap --out "$RUNNER_TEMP/gap-measurement"
+
+      # Uploaded even when a fetch failed, so the counts that were measured
+      # are kept; the failed rows say "failed", never 0.
+      - name: Upload the counts
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gap-measurement
+          path: ${{ runner.temp }}/gap-measurement
+          retention-days: 30
+          if-no-files-found: error
