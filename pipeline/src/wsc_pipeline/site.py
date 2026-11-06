@@ -681,7 +681,32 @@ def _fit(candidates: list[str], limit: int) -> str:
     return next((c for c in candidates if len(c) <= limit), candidates[-1])
 
 
-def _team_title(name: str, season: str | None, *, listed: bool, home_listed: bool) -> str:
+# Leagues whose season is one calendar year and whose last games are played
+# by the month given (the WNBA finals end in October). A team page with no
+# listed game, built in that month or later, is about the next year's season
+# (DECISIONS 0029). Other leagues' empty pages name no year.
+NEXT_SEASON_FROM_MONTH: dict[str, int] = {"wnba": 10}
+
+
+def _awaited_season(team: Mapping[str, Any]) -> str | None:
+    """The season an empty team page is waiting for ("2027"), or None: only
+    for a NEXT_SEASON_FROM_MONTH league, only when this build fetched and
+    listed nothing, and never for a team whose main seller is not
+    Ticketmaster (its home games may never be listed here, so the page must
+    not promise that season will fill in)."""
+    rollover = NEXT_SEASON_FROM_MONTH.get(team["league_slug"])
+    fetched_at = team.get("fetched_at")
+    if rollover is None or team["games"] or not team.get("fetched", True) or not fetched_at:
+        return None
+    if team_primary_seller(team["league_slug"], team["team_slug"]) is not None:
+        return None
+    when = datetime.fromisoformat(str(fetched_at)).astimezone(UTC)
+    return str(when.year + 1 if when.month >= rollover else when.year)
+
+
+def _team_title(
+    name: str, season: str | None, *, listed: bool, home_listed: bool, awaited_season: str | None = None
+) -> str:
     """ "New York Sirens schedule 2026-27: next home game and tickets": the
     words a fan types, in the order Search Console shows them typed
     ("minnesota frost schedule 2026-27", "boston fleet 2026-27 schedule",
@@ -689,8 +714,17 @@ def _team_title(name: str, season: str | None, *, listed: bool, home_listed: boo
     when the page backs it: "tickets" and the season when games are listed
     (every game links to its ticket seller; the site shows no prices), "next
     home game" and "home games" when a home game is listed (the page opens
-    with it). A page with nothing listed is just "<team> schedule"."""
+    with it). A page with nothing listed is just "<team> schedule", or
+    "<team> 2027 schedule" while it waits for that season (_awaited_season;
+    "phoenix mercury schedule 2027" was the site's top named query,
+    2026-10-21 to 11-04), and its description says that season is not listed
+    yet."""
     if not listed:
+        if awaited_season:
+            return _fit(
+                [f"{name} {awaited_season} schedule: add it to your calendar", f"{name} {awaited_season} schedule"],
+                TITLE_MAX,
+            )
         return _fit([f"{name} schedule"], TITLE_MAX)
     schedule = f"{name} schedule {season}" if season else f"{name} schedule"
     lead = (
@@ -1435,7 +1469,33 @@ def _team_description(team: Mapping[str, Any]) -> str:
             ],
             DESCRIPTION_MAX,
         )
+    seller = team_primary_seller(team["league_slug"], team["team_slug"])
+    owner = "The school's" if team["league_slug"].startswith("ncaaw-") else "The team's"
+    awaited = _awaited_season(team)
     if not team["games"]:
+        if awaited:
+            return _fit(
+                [
+                    f"{name} {awaited} schedule. Ticketmaster has not listed the {awaited} schedule yet; add it to "
+                    "your calendar and games appear as they are listed, updated nightly.",
+                    f"{name} {awaited} schedule. Ticketmaster has not listed the {awaited} schedule yet; "
+                    "add it to your calendar.",
+                    f"{name} {awaited} schedule. Ticketmaster has not listed it yet.",
+                ],
+                DESCRIPTION_MAX,
+            )
+        if team.get("fetched", True) and seller is not None:
+            # The body's wording (_sells_elsewhere_msg): no promise that home
+            # games will reach the calendar on their own.
+            return _fit(
+                [
+                    f"{name} schedule. No games are listed right now. {owner} main ticket seller is "
+                    f"{seller.name}, not Ticketmaster, so home games may not show up here.",
+                    f"{name} schedule. No games are listed right now. {owner} main ticket seller is {seller.name}.",
+                    f"{name} schedule. No games are listed right now.",
+                ],
+                DESCRIPTION_MAX,
+            )
         if team.get("fetched", True):
             return _fit(
                 [
@@ -1447,6 +1507,26 @@ def _team_description(team: Mapping[str, Any]) -> str:
             )
         return _fit(
             [f"{name} schedule. Add it to your calendar, updated nightly.", f"{name} schedule."], DESCRIPTION_MAX
+        )
+    if home is None and seller is not None and team.get("fetched", True):
+        # Games are listed but no home game (the Minnesota Frost sell on
+        # SeatGeek): never "every home and away game".
+        return _fit(
+            [
+                *(
+                    [
+                        f"{lead}: listed games with dates, venues and ticket links. No home game is listed: "
+                        f"{owner.lower()} main ticket seller is {seller.name}."
+                    ]
+                    if lead
+                    else []
+                ),
+                f"{name} schedule: listed games with dates, venues and ticket links. No home game is listed: "
+                f"{owner.lower()} main ticket seller is {seller.name}.",
+                f"{name} schedule. No home game is listed: {owner.lower()} main ticket seller is {seller.name}.",
+                f"{name} schedule.",
+            ],
+            DESCRIPTION_MAX,
         )
     return _fit(
         [
@@ -1735,6 +1815,7 @@ def render_team(
             team.get("season"),
             listed=bool(team["games"]),
             home_listed=home_listed,
+            awaited_season=_awaited_season(team),
         ),
         description=_team_description(team),
         canonical_url=page_url,

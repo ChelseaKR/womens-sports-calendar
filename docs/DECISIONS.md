@@ -1050,3 +1050,239 @@ that look like products, and a feed that drops the label.
 
 Revisit if Ticketmaster lists a single game under a name with no matchup,
 or if a tracked team's own name ever contains one of the product words.
+
+## 0027 — Played games stay in the feeds for 120 days; changed events carry SEQUENCE and LAST-MODIFIED (2026-11-05)
+
+**Why:** The 2026-11-05 quality audit found no event before Nov 5 in any of
+the 90 live feeds: Ticketmaster drops a game from its listing once it starts,
+the feeds mirrored that, and a subscriber's calendar lost each game the night
+after it was played (Tennessee–Duquesne Nov 2, Michigan State–Valparaiso
+Nov 3, Oregon–Hawai'i Nov 2). Fans use the calendar as a record of the
+season. Chelsea approved keeping them (decision D9).
+
+**What changes (`history.py`, applied in `build.build`):**
+
+- **Kept, as published.** A feed writes again an event its previous publish
+  carried when Ticketmaster no longer lists the game at all, the game has
+  started (an all-day game: its date is over), it started no more than
+  `KEEP_PLAYED_DAYS` (120) days ago, and its event id is not in
+  `REMOVED_EVENTS`. The VEVENT is copied as it was, with only DTSTAMP set to
+  tonight's fetch: same UID, summary, times, location, ticket link,
+  description, STATUS, SEQUENCE and LAST-MODIFIED. No score or result is
+  added, and nothing is re-derived. A game Ticketmaster still lists but a
+  rule here leaves out is never kept: the test is Ticketmaster's listing.
+- **Canceled and postponed stay marked.** A game that was "Canceled: " with
+  STATUS:CANCELLED, or "Postponed: " with STATUS:TENTATIVE, when it was
+  last listed is kept exactly so. A delisted game that has not started is
+  not kept (it may be off); the publish guard (ADR 0006) still judges those.
+- **Every feed keeps its own.** Team feeds keep from the live team feeds,
+  league feeds from the live league feeds (six more small requests a
+  night), and `all.ics` keeps the league feeds' kept events, byte for byte,
+  first league first, as it does for listed games.
+- **An unreadable previous feed refuses the build.** The live feeds are the
+  only copy of the played games they keep, so a team or league feed that
+  existed but could not be read (a request error, a status other than 200
+  or 404, or a body that is not a fetched feed) refuses the build for its
+  league (`guard.UNREADABLE_RULE`). Nothing is written, the live feeds stay
+  up with their kept games, and the next run that can read them publishes.
+  A 404 is a new feed with nothing to lose. A dated league override in
+  `PUBLISH_GUARD_OVERRIDES` accepts the loss. Before this, an unreadable
+  previous publish never blocked (ADR 0006).
+- **Old non-game entries are not kept.** A kept entry whose name says it is
+  a ticket product or names a men's team (`listings.name_says_not_a_game`,
+  the name rules of DECISIONS 0026) is dropped, for entries published
+  before those rules.
+- **Revisions.** A listed game is compared with its previous publish. A new
+  start, end or STATUS raises SEQUENCE by one (RFC 5545 3.8.7.4); any
+  change to those, SUMMARY, LOCATION or URL sets LAST-MODIFIED to the
+  fetch time; an unchanged event keeps both as published. A game first
+  published tonight gets LAST-MODIFIED now, but only when every previous
+  feed was read: otherwise no LAST-MODIFIED is written for it, since a
+  guessed date would be absence shown as a value. SEQUENCE 0 is left off
+  (the RFC default). The UID never changes.
+- **The pages do not change.** Team and league pages still show only what
+  Ticketmaster lists now, with ticket links; a played game has neither a
+  ticket to sell nor a fresh listing to show. The record beside each page
+  names its feed's kept games (`kept_played_in_feed`, never deployed, and
+  outside the sitemap fingerprint, so lastmod does not move).
+- **Size.** On 2026-11-05 `all.ics` held 591 events in 400 KB (about 650
+  bytes an event; 36 KB gzipped), 557 of them starting within 120 days. A
+  feed now holds about one season's window: if all 557 are played and
+  kept, `all.ics` around 2027-03-05 carries them plus whatever is listed
+  then, about 360 KB more than an upcoming-only feed.
+
+**Enforced by** `validate_ics` check 13 (a kept event is named in its page
+record and not also listed, has started, is inside the window, is not a
+removed event, and still carries the marker and note of its STATUS) and
+`tests/test_keep_played_games.py` (two and three builds in a row over a mock
+transport, the window edges, canceled games, removals, unreadable team and
+league feeds with a readable control, and a control for each validate_ics
+refusal).
+
+Revisit if a subscriber asks for upcoming-only feeds (a separate feed, not
+a change to these), or if Ticketmaster's storage term is read more narrowly
+(docs/LICENSES-AND-ATTRIBUTION.md, Storage).
+
+## 0029 — An empty WNBA team page names the season it waits for; seller-table descriptions match the body (2026-11-05)
+
+**Why:** "phoenix mercury schedule 2027" was the site's top named query
+(Search Console, 2026-10-21 to 11-04, position about 8), while the same
+"<team> schedule" without a year ranked 60 to 95. The empty WNBA pages were
+titled just "<team> schedule". Separately, #77 fixed the page body of a team
+whose main seller is not Ticketmaster, but not its meta description: the
+Minnesota Frost's still said "every home and away game" while the page said
+Ticketmaster lists no Frost home game.
+
+The decision (`site.py`):
+
+- A WNBA team page with no listed game, in a build that fetched, is titled
+  "<team> 2027 schedule: add it to your calendar" (or "<team> 2027
+  schedule"), and its description says "Ticketmaster has not listed the
+  2027 schedule yet". The year is the build's year, or the next year from
+  October on (NEXT_SEASON_FROM_MONTH; the WNBA season is one calendar year
+  and ends in October, assumed from the league's usual calendar). No year
+  is shown for an unfetched build, for any other league, or once a game is
+  listed (the usual season label from real dates takes over).
+- A team in `sellers.PRIMARY_SELLERS` gets no year (its home games may never
+  be listed here). With no game listed, its description names the seller,
+  as the body does, and makes no calendar promise. With games listed but no
+  home game, it says "listed games" and "No home game is listed", never
+  "every home and away game".
+
+**Enforced by** `tests/test_empty_team_titles.py` and
+`tests/test_noindex_unlisted.py`; the Thorns goldens in
+`tests/golden/team_order_*.html` were re-rendered for the new descriptions.
+
+Revisit when the 2027 WNBA schedule is listed, or if the empty-page year is
+ever shown beside a body that does not say the schedule is unlisted.
+
+## 0030 — A game's SportsEvent names its teams as performers and its own Ticketmaster listing as the offer (2026-11-05)
+
+**Why:** Google's Event structured data recommends `performer` and `offers`.
+The markup had neither, so every SportsEvent drew those two warnings in the
+Rich Results Test. Both facts are already on the page: the matchup line
+names the two teams, and the "Buy tickets" link goes to the game's listing.
+
+**What changes (`structured_data.py`, checked by `validate_seo.py`):**
+
+- `performer` is the home and away teams, by the same names as `homeTeam`
+  and `awayTeam`.
+- `offers` is one `Offer` with only a `url`: the plain Ticketmaster event
+  address (`ticket_url`, never an affiliate tracking link). It is there
+  only when the page's "Buy tickets" link goes to that same listing.
+- No `price`, `priceCurrency`, `availability` or `validFrom`. The page
+  shows none of them (0013, 0024), so the markup cannot either.
+  `validate_seo` rejects an Offer with any key besides `@type` and `url`.
+- No Offer when the link goes to a home team's seller page (AXS,
+  SeatGeek, a school box office, per `sellers.PRIMARY_SELLERS`). That page
+  is the team's, not this game's.
+- No Offer for a game Ticketmaster has cancelled. The page still links
+  the listing, but there is nothing to buy, and the markup should not say
+  there is.
+- Nothing else moves. A game with no venue name, city and region still
+  gets no SportsEvent at all, because Google requires `location`, and the
+  site never fills a venue in. `eventStatus` still appears only when
+  Ticketmaster says cancelled, postponed or rescheduled.
+
+Not added: `endDate` (the feeds' end time is an estimate, 0015, and the
+page shows none), `image`, `description` and `organizer` (the page has no
+such fact). Google's event rich result is for pages about one event, so
+these league and team schedule pages are still not expected to earn it.
+This makes the markup more complete and keeps it true. It does not unlock
+a new result.
+
+**Enforced by** `tests/test_event_schema_offers.py`: required properties on
+every emitted event, the Offer only on a game's own listing, controls for a
+game with no venue, each Ticketmaster status code and a game with no URL,
+and planted price, availability, wrong-game Offer, dropped Offer, swapped
+performer and guessed status that `validate_seo` must reject.
+
+Revisit if a page ever shows a price or an on-sale date, or if the site
+gets one page per game.
+
+## 0031 — Another sport's listing is not a team's game; a mislabeled opponent loses only the wrong word (2026-11-05)
+
+**Why:** On 2026-11-05 Texas's page said its next home game was "against
+Northern Colorado Bears Football" (Ticketmaster event Z7r9jZ1AAZSFK, "Texas
+Longhorns Womens Basketball vs Northern Colorado Bears Football", Nov 7 at
+7:00 PM CT, Moody Center ATX). texaslonghorns.com lists that game as women's
+basketball vs Northern Colorado, Nov 7 at 7:00 PM CT at Moody Center: a real
+game whose opponent Ticketmaster named with the football team's name. No
+rule in 0026 looked at a sport word, so a listing of another sport would
+also have reached a women's basketball page.
+
+**What changes (`listings.py`):**
+
+- A listing whose name has a word of a sport other than the league's
+  (football, baseball, volleyball, lacrosse, wrestling, gymnastics, and the
+  tracked leagues' own sports: basketball, soccer, hockey, softball) is left
+  out and named in COVERAGE.txt. "Football Club" is soccer, and in the NWSL
+  "football" is never another sport.
+- One exception: the tracked team's own side names the league's sport, and
+  only the opponent's side ends in another sport's word. That is the team's
+  game with a mislabeled opponent. It stays, with that last word taken off
+  the opponent's side and the event name, everywhere (page, feeds, data
+  file). COVERAGE.txt names each such listing. It keeps its event id, so its
+  calendar UID does not change. This amends 0026's "none is rewritten" for
+  this one case: one wrong word is dropped, and nothing is added or guessed.
+- When the tracked side does not name the league's sport, or names another
+  sport itself, the listing is left out: nothing in the name says whose
+  game it is.
+
+The Tennessee "Season Tickets" row seen the same day is 0026's ticket
+product rule, merged in #80 after that night's build; it is not changed
+here.
+
+**Enforced by** `tests/test_other_sport.py`: the live Texas listing built
+into a page and feeds, the Tennessee season tickets in the same build, other
+sports' events and the tracked side's sport as controls, real games in the
+NWSL and WNBA kept, and a sabotage control that turns the fix off and finds
+"Northern Colorado Bears Football" back on the page.
+
+Revisit if a tracked team's own name ever contains a sport word that is not
+its sport, or if Ticketmaster's `classifications` are read from a live
+response and can say the sport directly.
+
+## 0032 — Measure tournament sessions by keyword before building for them (2026-11-05)
+
+**Why:** the published Big Ten and SEC feeds end on 2027-02-28 and hold no
+conference-tournament or NCAA-tournament listing. Tournament sessions name
+no home team, so the nightly build's team search never finds them, and
+`normalize.parse_event_name` and 0026 keep them off team pages. Whether
+Ticketmaster lists the sessions at all is unknown. The winter content plan
+(2026-11-05, decision D1, approved) says to measure first and build a
+league-page section only if the sessions are listed.
+
+**What changes (measurement only; the nightly build, the site and the feeds
+are unchanged):**
+
+- `measure_leagues.py` sets the unused `league_keyword` on the five college
+  candidates: "SEC Women's Basketball Tournament", "Big Ten Women's
+  Basketball Tournament", "ACC Women's Basketball Tournament", "Big 12
+  Women's Basketball Championship" and "Big East Women's Basketball
+  Tournament". None was read from a Ticketmaster attraction page; they are
+  guesses for a run to confirm or rule out, and the strings the site later
+  uses come from a run's results, not from these.
+- A keyword-only candidate, `ncaaw-ncaa-tournament` ("NCAA Women's
+  Basketball Championship"), searches no team (`search_teams=False`). Its
+  events are only matched against the 34 tracked Big Ten and SEC schools, so
+  "attributable to a listed team" counts the sessions that could reach a
+  team page as a home game (the plan's W3 risk).
+- Each keyword's result also counts events whose name says "tournament" or
+  "championship", since a keyword search also returns teams' regular games.
+  Still counts only: no name, id, URL, venue or price leaves the module.
+- Requests: each keyword is one request per page, at most 5 pages. "all" now
+  makes at least 100 (94 before). `ncaaw-ncaa-tournament` alone makes 1 to
+  5. `ncaaw-big-ten,ncaaw-sec,ncaaw-ncaa-tournament` makes at least 39. The
+  1,500 cap and the 5,000-a-day limit are unchanged.
+
+**Enforced by** `tests/test_measure_leagues.py`: a session counted apart from
+a team game the same keyword returns, a keyword-only candidate that makes one
+request and still matches a session at a school's arena, a control that
+switches team search back on and sees the team searched, a failed keyword
+that leaves the counts empty instead of 0, and the registered keywords.
+
+Revisit after the runs planned for about 2026-12-15 and 2027-01-12: pass if
+each conference tournament has at least one dated session listing, and copy
+the attraction names that match into the build's plan; otherwise build
+nothing for tournaments this season.

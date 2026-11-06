@@ -67,8 +67,9 @@ used (requests, bytes).
   a refused build writes it to the GitHub Actions job summary. The
   thresholds, the dated per-league override and the accepted per-event
   removals are in `config.py` (`PUBLISH_GUARD`, `PUBLISH_GUARD_OVERRIDES`,
-  `REMOVED_EVENTS`). An unreadable previous publish never blocks but is
-  reported. An event in `REMOVED_EVENTS` is also withheld from every page,
+  `REMOVED_EVENTS`). A previous feed that existed but cannot be read
+  refuses the build for its league, since it is the only copy of the played
+  games it keeps (`../docs/DECISIONS.md` 0027); a new feed (404) does not. An event in `REMOVED_EVENTS` is also withheld from every page,
   feed and data file while Ticketmaster still lists it
   (`build.without_removed_events`): that is how a Ticketmaster request to
   remove an event within 24 hours is honoured.
@@ -122,13 +123,19 @@ used (requests, bytes).
   `DTEND` is an estimate: the start plus the sport's usual game length
   (`config.GAME_DURATIONS`, overridable per league), with "End time
   estimated; not published by the ticket source." in its description
-  (`docs/DECISIONS.md` 0015); a sport with no entry gets no `DTEND`. No
-  `SEQUENCE` or `LAST-MODIFIED` is written: both need the previous
-  published data to compare against. A ticket URL that Ticketmaster has
+  (`docs/DECISIONS.md` 0015); a sport with no entry gets no `DTEND`.
+  `SEQUENCE` and `LAST-MODIFIED` come from comparing each event with the
+  previous publish (`history.py`, `../docs/DECISIONS.md` 0027). A ticket URL that Ticketmaster has
   wrapped in Impact affiliate tracking is never written to a feed: the
   event carries the decoded destination, or no ticket link when there is
   none (`normalize.feed_ticket_url`, `impact.py`), and `validate_ics.py`
   fails on any feed with a tracking link (`../docs/DECISIONS.md` 0018).
+- `history.py` — what a build carries over from the live feeds
+  (`../docs/DECISIONS.md` 0027): a played game Ticketmaster no longer lists
+  stays in each feed that had it, as published, for `KEEP_PLAYED_DAYS`
+  (120) days after it starts; a listed game whose start, end or status
+  changed gets a higher `SEQUENCE`, and any change sets `LAST-MODIFIED`.
+  The pages are not affected.
 - `impact.py` — recognises an Impact affiliate tracking link (the
   `/c/<n>/<n>/<n>` path on any host, or a host on an Impact shared domain)
   and reads its destination from the `u` parameter.
@@ -206,7 +213,9 @@ used (requests, bytes).
   all published — never for a date-TBD or time-TBA game, never with a start
   time filled in, and none on a build that fetched nothing. `eventStatus`
   only when Ticketmaster says cancelled, postponed or rescheduled, which
-  the page then shows too.
+  the page then shows too. `performer` is the two teams, and `offers` is
+  only the url of the game's own Ticketmaster listing when the page's
+  "Buy tickets" link goes there, never a price (DECISIONS 0030).
 - `sitemap.py` — `sitemap.xml`, `robots.txt` and `lastmod.json`. A page's
   `<lastmod>` is when its schedule last changed, found by comparing this
   build's content fingerprints with the live site's own `lastmod.json`;

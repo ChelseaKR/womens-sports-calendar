@@ -333,7 +333,11 @@ def _fetch_with(handler: Callable[[httpx.Request], httpx.Response]) -> PreviousP
         return REAL_FETCH_PREVIOUS_PUBLISH(BASE_URL, client=client)
 
 
-def test_a_site_that_cannot_be_read_is_reported_and_does_not_block():
+def test_a_site_that_cannot_be_read_is_reported_and_refuses_every_league():
+    """Since DECISIONS 0027 the live feeds are the only copy of the played
+    games they keep, so an unreadable previous publish refuses the build
+    instead of publishing without them (it used to pass, not compared)."""
+
     def down(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("no route")
 
@@ -341,7 +345,10 @@ def test_a_site_that_cannot_be_read_is_reported_and_does_not_block():
     assert previous.games == {} and len(previous.unreadable) == len(config.all_teams())
     assert previous.unreadable[("wnba", "minnesota-lynx")] == "request failed (ConnectError)"
     report = _run(previous, [])
-    assert report.compared is False and not report.refused
+    assert report.compared is False and report.refused
+    assert {v.league_slug for v in report.violations} == {lg.slug for lg in config.LEAGUES}
+    assert all(v.rule == guard.UNREADABLE_RULE for v in report.violations)
+    assert "re-run the pages workflow once the live site answers" in guard.render_refusal(report)
     assert "NOT compared with it" in report.note
     assert "NOT COMPARED" in "\n".join(guard.render_section(report))
 
@@ -390,11 +397,18 @@ def test_a_missing_page_is_a_new_team_and_other_failures_are_unreadable():
     assert previous.fetched_at == PREVIOUS_STAMP.isoformat()
 
 
-def test_teams_that_could_not_be_read_are_named_in_the_report_and_the_rest_are_still_compared():
+def test_teams_that_could_not_be_read_refuse_their_league_and_the_rest_are_still_compared():
     previous = _previous(wnba__indiana_fever=[_prev("A", 10), _prev("B", 20), _prev("C", 30)])
     previous.unreadable[("wnba", "seattle-storm")] = "HTTP 503"
     report = _run(previous, _feed_of(("A", 10), ("B", 20), ("C", 30)))
-    assert report.compared and not report.refused
+    assert report.compared and report.refused
+    [violation] = report.violations
+    assert violation.league_slug == "wnba" and violation.rule == guard.UNREADABLE_RULE
+    assert "ics/wnba/seattle-storm.ics (HTTP 503)" in violation.message
+    # A dated league override accepts it, and the report still says so.
+    override = GuardOverride("wnba", "test: the Storm feed is broken", date(2026, 6, 30))
+    report = _run(previous, _feed_of(("A", 10), ("B", 20), ("C", 30)), overrides=(override,))
+    assert report.compared and not report.refused and len(report.accepted) == 1
     section = "\n".join(guard.render_section(report))
     assert "WARNING: 1 team file(s) of the previous publish could not be read" in section
     assert "wnba/seattle-storm (HTTP 503)" in section
@@ -567,15 +581,15 @@ def test_main_under_github_actions_also_emits_an_error_annotation(tmp_path: Path
     assert "::error title=Publish guard refused the build::" in capsys.readouterr().err
 
 
-def test_main_warns_when_the_previous_publish_could_not_be_read(tmp_path: Path, monkeypatch, capsys):
+def test_main_refuses_when_a_previous_feed_could_not_be_read(tmp_path: Path, monkeypatch, capsys):
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     unreadable = PreviousPublish()
     unreadable.unreadable[("wnba", FEVER)] = "HTTP 503"
     rc, out = _main_with(monkeypatch, tmp_path, unreadable, {FEVER: [_raw("G1", opponent="Chicago Sky", days=10)]})
     err = capsys.readouterr().err
-    assert rc == 0 and out.exists()
-    assert "WARNING: publish guard: NOT COMPARED with the previous publish" in err
-    assert "NOT COMPARED" in (out / "COVERAGE.txt").read_text()
+    # Refused (DECISIONS 0027): the unread feed's kept played games would be lost.
+    assert rc == 1 and not out.exists()
+    assert f"ics/wnba/{FEVER}.ics (HTTP 503)" in err
 
 
 def test_the_feeds_this_guard_reads_carry_the_fields_it_relies_on(tmp_path: Path, monkeypatch):

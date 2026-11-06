@@ -12,6 +12,11 @@ archived and private.
 
 ### Added
 
+- Each game's `SportsEvent` markup names its two teams as `performer`, and,
+  when the page's "Buy tickets" link goes to the game's own Ticketmaster
+  listing, an `offers` holding only that listing's URL. No price,
+  currency or availability is ever stated. A game sold through a team's
+  seller page, or cancelled, has no offer (DECISIONS 0030).
 - Every page's footer says "Next Home Game is independent and is not
   affiliated with any league, team or Ticketmaster.", the sentence the Atom
   feeds already carry (DECISIONS 0024).
@@ -30,6 +35,11 @@ archived and private.
   The participant check now treats "Women's" and "Womens" as the same word,
   and SEC teams ignore other schools named "<direction> <School>"
   (DECISIONS 0023).
+- The `measure-leagues` workflow also counts Ticketmaster listings for the
+  Big Ten, SEC, ACC, Big 12 and Big East women's tournaments and for NCAA
+  tournament sessions, by keyword, including how many name a tournament and
+  how many would match a tracked school. Counts only; the nightly build is
+  unchanged (DECISIONS 0032).
 - A manual `measure-leagues` workflow counts, with the site's own search and
   attribution code, how many upcoming Ticketmaster events SEC, ACC, Big 12 and
   Big East women's basketball, Major League Volleyball, Unrivaled and LOVB
@@ -149,6 +159,12 @@ archived and private.
 
 ### Fixed
 
+- A women's basketball game whose opponent Ticketmaster named with another
+  sport's word no longer shows that word: Texas's Nov 7 home game was
+  "against Northern Colorado Bears Football" and is now against "Northern
+  Colorado Bears". A listing of another sport (football, baseball,
+  volleyball and so on) is left out of every page and feed and named in
+  COVERAGE.txt (DECISIONS 0031).
 - Doubleheaders and showcases no longer pass off the event's start as a
   team's tip-off. An event listing whose name names no single matchup keeps
   its time, now labeled "(event start; game time not listed)" on the page
@@ -159,6 +175,14 @@ archived and private.
   also under the 5:00 PM doubleheader. Season-ticket, parking, suite, pass
   and package listings, and matchups that name a men's team, are left out
   of every page and feed, and named in COVERAGE.txt (DECISIONS 0026).
+- Played games no longer vanish from subscribed calendars. Once Ticketmaster
+  drops a game that has started, every feed keeps its published entry (same
+  UID, canceled games still marked canceled) for 120 days after the start.
+  A game whose start, end or status changes gets a higher SEQUENCE, and any
+  change sets LAST-MODIFIED. The pages still show only listed games. A
+  previous feed that existed but cannot be read now refuses the build, so
+  the live feeds keep their played games until it can be read
+  (DECISIONS 0027).
 - 43 college games that were in the Big Ten and SEC calendars now also
   reach the 14 teams' own pages and feeds that were missing them, and Penn
   State and Oregon list their home games (0 before, 8 and 6 now).
