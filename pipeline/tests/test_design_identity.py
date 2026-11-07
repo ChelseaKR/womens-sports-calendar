@@ -194,3 +194,48 @@ def test_the_header_leagues_link_has_a_target(pages: dict[str, str]):
 
 def test_the_home_page_lists_the_leagues_before_the_all_games_feed(pages: dict[str, str]):
     assert _parse(pages["index.html"]).order == ["league-strip", "all-games-feed"]
+
+
+# The Big Shoulders faces never swap in after first paint. With
+# `font-display: swap`, a runner without Arial Narrow (CI's Linux, most
+# Android phones) paints the header in a much wider fallback, the wordmark
+# and the two header links wrap onto a second line, and when the webfont
+# arrives the header drops back to one line and moves the whole page: CLS
+# 0.261 on every Lighthouse page in CI (0035). `optional` keeps whichever
+# face is ready at first paint, and both faces are preloaded so it is
+# normally the webfont.
+def _font_faces(css: str) -> dict[str, str]:
+    faces = re.findall(r"@font-face \{(.*?)\}", css, flags=re.S)
+    return {re.search(r'font-family: "([^"]+)"', f).group(1): f for f in faces}
+
+
+def _display_faces_problems(css: str, head: str) -> list[str]:
+    problems = []
+    faces = _font_faces(css)
+    for family, file in (
+        ("Big Shoulders Display", "big-shoulders-display-latin.woff2"),
+        ("Big Shoulders Text", "big-shoulders-text-latin.woff2"),
+    ):
+        if "font-display: optional;" not in faces.get(family, ""):
+            problems.append(f"{family} is not font-display: optional")
+        if f'<link rel="preload" href="/fonts/{file}" as="font"' not in head:
+            problems.append(f"{file} is not preloaded")
+    return problems
+
+
+def _head() -> str:
+    page = site._base(
+        title="t", description="d", canonical_url="https://example.test/", base_url="https://example.test", body=""
+    )
+    return page[: page.index("</head>")]
+
+
+def test_display_faces_cannot_shift_the_layout() -> None:
+    assert _display_faces_problems(site.STYLE_CSS, _head()) == []
+
+
+def test_display_faces_control_swap_or_missing_preload_fails() -> None:
+    swapped = site.STYLE_CSS.replace("font-display: optional;", "font-display: swap;")
+    assert _display_faces_problems(swapped, _head()) != []
+    unpreloaded = _head().replace("big-shoulders-text-latin.woff2", "nothing.woff2")
+    assert _display_faces_problems(site.STYLE_CSS, unpreloaded) == ["big-shoulders-text-latin.woff2 is not preloaded"]
