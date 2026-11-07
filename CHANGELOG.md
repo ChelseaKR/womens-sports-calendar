@@ -82,6 +82,13 @@ archived and private.
 
 ### Changed
 
+- Page titles and meta descriptions follow what Search Console shows fans
+  typing (DECISIONS 0037): an empty WNBA page reads "<team> schedule 2027",
+  as "phoenix mercury schedule 2027" is typed; other empty pages name the
+  calendar and, when the page has one, the team's official ticket page; an
+  away-only page no longer says "every home and away game"; and
+  descriptions run 120 to 155 characters, with the opponent's "women's
+  basketball" suffix dropped in every spelling Ticketmaster uses.
 - Games tables: the box that scrolls sideways on a phone can now be reached
   with the keyboard and is named by its table's caption. Each row's ticket
   link now reads "Tickets (Ticketmaster)" (or the team's own seller), and the

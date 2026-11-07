@@ -24,13 +24,14 @@ def _render(league, team, games, fetched_at: str | None = "2026-11-05T08:25:00+0
 
 def test_an_empty_wnba_page_names_the_next_season_and_says_it_is_not_listed() -> None:
     title, description, html = _render(WNBA, _team(WNBA, "phoenix-mercury"), [])
-    assert title == "Phoenix Mercury 2027 schedule: add it to your calendar"
-    assert description.startswith("Phoenix Mercury 2027 schedule. Ticketmaster has not listed the 2027 schedule yet")
+    # "<team> schedule 2027": the order Search Console shows it typed (DECISIONS 0037).
+    assert title == "Phoenix Mercury schedule 2027: add it to your calendar"
+    assert description.startswith("Phoenix Mercury schedule 2027. Ticketmaster has not listed the 2027 games yet")
     assert "No upcoming games found from Ticketmaster right now." in html  # the body still says so
     assert '"SportsEvent"' not in html
     # Before October the empty page waits for this year's season.
     title, _, _ = _render(WNBA, _team(WNBA, "phoenix-mercury"), [], fetched_at="2027-03-01T08:00:00+00:00")
-    assert title.startswith("Phoenix Mercury 2027 schedule")
+    assert title.startswith("Phoenix Mercury schedule 2027")
 
 
 def test_no_year_without_a_fetch_outside_the_wnba_or_for_a_seller_table_team() -> None:
@@ -55,6 +56,9 @@ def test_minnesota_frost_with_only_away_games_never_promises_every_home_game() -
     assert "every home and away game" not in description
     assert "No home game is listed: the team's main ticket seller is SeatGeek." in description
     assert "Ticketmaster lists no upcoming Minnesota Frost home game" in html
-    # Control: a team that sells on Ticketmaster keeps the old wording.
+    # A team that sells on Ticketmaster, with only away games listed, does
+    # not claim home games either (DECISIONS 0037).
     fleet = _team(PWHL, "boston-fleet")
-    assert "every home and away game" in _render(PWHL, fleet, _away_games(PWHL, fleet))[1]
+    away_only = _render(PWHL, fleet, _away_games(PWHL, fleet))[1]
+    assert "every home and away game" not in away_only
+    assert "No home game is listed yet" in away_only
