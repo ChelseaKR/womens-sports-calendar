@@ -12,6 +12,10 @@ archived and private.
 
 ### Added
 
+- A game with a published date but no published time now gets SportsEvent
+  markup too, with its date alone as the start (DECISIONS 0030, amended
+  2026-11-06). Timed games keep their exact start with the venue's UTC
+  offset; a date-TBD game still gets no event, and no time is ever filled in.
 - Missouri women's basketball is in the seller table as Ticketmaster
   Account Manager, the school's own store, whose games never reach the
   Ticketmaster listings this site reads. Its page now says so and links

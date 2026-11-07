@@ -1243,6 +1243,35 @@ performer and guessed status that `validate_seo` must reject.
 Revisit if a page ever shows a price or an on-sale date, or if the site
 gets one page per game.
 
+**Amended 2026-11-06: a game with a published date and no published time
+is an event too.** Chelsea approved event markup for every game with a
+published date (AI-visibility decision D). Until now a time-TBA game got
+no SportsEvent, though the page and the calendar feeds both list it on its
+date.
+
+- `startDate` is the exact local start with the venue's UTC offset when
+  Ticketmaster publishes the time, as before.
+- When the time is TBA, or Ticketmaster sent neither a time nor an
+  instant, `startDate` is the local date alone (`2026-09-24`). That is the
+  same all-day entry the feeds carry (`normalize.feed_start`). The
+  placeholder instant Ticketmaster often sends with `timeTBA` is never
+  used, and no time is filled in.
+- A game whose time is published but cannot be placed in the venue's zone
+  still gets no SportsEvent. A bare date would drop a time the source
+  gave, and a guessed offset would invent one.
+- A date-TBD game still gets no SportsEvent. Its placeholder `localDate`
+  is never read as a date.
+- Everything else is unchanged: location, performers, `eventStatus` only
+  for cancelled, postponed or rescheduled, and the Offer url rules above.
+  The affiliate link and its disclosure on the page are not touched.
+
+`validate_seo` now accepts a date-only `startDate` only for a listed game
+whose time is TBA or was never sent, and only on that game's local date. A
+guessed time on a time-TBA game, a dropped time on a timed game, and the
+date-TBD game's placeholder date each match no listed game and fail.
+Enforced by `tests/test_structured_data.py` and
+`tests/test_event_schema_offers.py`.
+
 ## 0031 — Another sport's listing is not a team's game; a mislabeled opponent loses only the wrong word (2026-11-05)
 
 **Why:** On 2026-11-05 Texas's page said its next home game was "against
