@@ -23,6 +23,7 @@ JSONLD_RE = re.compile(r'<script type="application/ld\+json">(.*?)</script>', re
 ACES_PAGE = Path("wnba/las-vegas-aces/index.html")
 SCEPTRES_PAGE = Path("pwhl/toronto-sceptres/index.html")
 OFFSET_START = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}")
+DATE_ONLY = re.compile(r"\d{4}-\d{2}-\d{2}")
 # Offer properties the site never has a fact for.
 INVENTED_OFFER_KEYS = {"price", "priceCurrency", "lowPrice", "highPrice", "availability", "validFrom"}
 
@@ -77,10 +78,10 @@ def _replace_events(page: Path, edit) -> None:
 
 def test_every_event_has_googles_required_properties(fixture_dist: Path):
     events = [e for page in fixture_dist.rglob("index.html") for e in _events(page.read_text())]
-    assert len(events) == 18
+    assert len(events) == 21
     for event in events:
         assert event["name"], event
-        assert OFFSET_START.fullmatch(event["startDate"]), event
+        assert OFFSET_START.fullmatch(event["startDate"]) or DATE_ONLY.fullmatch(event["startDate"]), event
         assert event["location"]["@type"] == "Place"
         assert event["location"]["name"]
         assert event["location"]["address"]["@type"] == "PostalAddress"
@@ -212,3 +213,65 @@ def test_control_an_invented_fact_fails_validation(fixture_dist: Path, tmp_path:
     _replace_events(dist / ACES_PAGE, edit)
     with pytest.raises(validate_seo.SeoError, match=re.escape(match)):
         validate_seo.validate_dist(dist)
+
+
+# ---------------------------------------------------------------------------
+# Dated vs undated, and a date with no time (DECISIONS 0030, amended 2026-11-06)
+# ---------------------------------------------------------------------------
+
+
+def test_a_dated_timed_game_starts_at_its_exact_local_time():
+    node = structured_data.sports_event(_game(), sport="Basketball")
+    assert node is not None
+    assert node["startDate"] == "2026-06-15T19:00:00-04:00"  # 23:00Z in Indianapolis
+
+
+def test_a_dated_game_with_its_time_tba_starts_on_its_date_alone():
+    # Ticketmaster often sends a placeholder instant with timeTBA; it is not used.
+    for date_time in (None, "2026-06-16T03:59:00Z"):
+        game = _game(date_time=date_time, local_time=None, time_tba=True)
+        node = structured_data.sports_event(game, sport="Basketball")
+        assert node is not None
+        assert node["startDate"] == "2026-06-15"
+        assert node["performer"] == [node["homeTeam"], node["awayTeam"]]
+        assert node["location"]["name"] == "Gainbridge Fieldhouse"
+        assert node["offers"] == {"@type": "Offer", "url": "https://www.ticketmaster.com/event/EVT1"}
+
+
+def test_a_dated_game_sent_with_no_time_and_no_instant_starts_on_its_date():
+    node = structured_data.sports_event(_game(date_time=None, local_time=None), sport="Basketball")
+    assert node is not None and node["startDate"] == "2026-06-15"
+
+
+def test_control_a_published_time_without_an_instant_gets_no_event():
+    """A local time but no instant: the feeds leave it out, and the markup
+    neither guesses the offset nor drops the time to a bare date."""
+    game = _game(date_time=None, local_time="19:00:00")
+    assert structured_data.event_start(game) is None
+    assert structured_data.sports_event(game, sport="Basketball") is None
+
+
+@pytest.mark.parametrize("time_tba", [False, True])
+def test_control_an_undated_game_gets_no_event(time_tba: bool):
+    # The date-TBD game carries a placeholder localDate; it is never used.
+    game = _game(date_tbd=True, time_tba=time_tba, date_time=None, local_time=None)
+    assert structured_data.event_start(game) is None
+    assert structured_data.sports_event(game, sport="Basketball") is None
+    assert structured_data.sports_events([game], sport="Basketball", fetched=True) == []
+
+
+def test_a_postponed_game_with_its_time_tba_says_postponed_on_its_date():
+    game = _game(date_time=None, local_time=None, time_tba=True, status="postponed")
+    node = structured_data.sports_event(game, sport="Basketball")
+    assert node is not None
+    assert node["startDate"] == "2026-06-15"
+    assert node["eventStatus"] == "https://schema.org/EventPostponed"
+    assert "offers" in node  # postponed is not cancelled: the listing still sells
+
+
+def test_a_cancelled_game_with_its_time_tba_has_no_offer():
+    game = _game(date_time=None, local_time=None, time_tba=True, status="cancelled")
+    node = structured_data.sports_event(game, sport="Basketball")
+    assert node is not None
+    assert node["eventStatus"] == "https://schema.org/EventCancelled"
+    assert "offers" not in node
