@@ -34,7 +34,12 @@ OFF_SEASON = "2026-11-06T08:25:00+00:00"  # after the WNBA finals: empty WNBA pa
 
 # The negations an empty or away-only description may use; anything else
 # with "home" in it is a claim.
-HOME_NEGATIONS = ("No home game is listed yet", "No home game is listed", "so home games may not show up here")
+HOME_NEGATIONS = (
+    "so no next home game is listed",
+    "No home game is listed yet",
+    "No home game is listed",
+    "so home games may not show up here",
+)
 
 
 def _odd_suffix(league, team):
@@ -149,7 +154,9 @@ def test_an_empty_off_season_wnba_page_reads_as_typed():
     mercury = next(t for t in wnba.teams if t.slug == "phoenix-mercury")
     title, description, _, _ = _render(wnba, mercury, "none_off_season")
     assert title.lower().startswith("phoenix mercury schedule 2027")
-    assert description.startswith("Phoenix Mercury schedule 2027. Ticketmaster has not listed the 2027 games yet")
+    assert description.startswith(
+        "Phoenix Mercury schedule 2027. Ticketmaster has not listed the 2027 schedule yet, so no next home game is listed"
+    )
 
 
 def test_an_empty_page_names_the_official_ticket_page_only_when_it_has_one():
@@ -177,8 +184,73 @@ def test_ticketmaster_suffix_spellings_are_all_dropped_from_the_opponent():
         "South Florida Bulls Women's Basketball",
         "Rutgers Scarlet Knights Womens Basketball",
         "Rutgers Scarlet Knights Women’s Basketball",
+        "Southeast Missouri State Redhawks Women Basketball",
     ):
         assert not re.search(r"basketball", site._opponent_label("ncaaw-big-ten", raw), re.I), raw
+
+
+# ---------------------------------------------------------------------------
+# DECISIONS 0038: the 2026-11-08 Search Console pass
+# ---------------------------------------------------------------------------
+
+
+def _named(league_slug: str, team_slug: str):
+    league = config.league_by_slug(league_slug)
+    return league, next(t for t in league.teams if t.slug == team_slug)
+
+
+def test_the_longest_wnba_name_keeps_the_calendar_in_its_empty_title():
+    title = _render(*_named("wnba", "golden-state-valkyries"), "none_off_season")[0]
+    assert title == "Golden State Valkyries schedule 2027: add to your calendar"
+
+
+def test_a_womens_basketball_page_with_a_home_game_says_next_home_game():
+    iowa = _render(*_named("ncaaw-big-ten", "iowa-hawkeyes-womens-basketball"), "home_long")[0]
+    assert iowa == "Iowa women's basketball schedule 2026-27: next home game"
+    carolina = _render(*_named("ncaaw-sec", "south-carolina-gamecocks-womens-basketball"), "home_long")[0]
+    assert carolina == "South Carolina women's basketball schedule: next home game"
+
+
+def test_a_page_with_only_away_games_never_gets_the_next_home_game_title():
+    for league, team in ALL_TEAMS:
+        title, _, _, payload = _render(league, team, "away_only")
+        if payload["next_home_event_id"] is None:
+            assert "next home game" not in title, team.slug
+
+
+def test_a_name_that_says_its_league_does_not_say_it_twice():
+    league = config.league_by_slug("pwhl")
+    checked = 0
+    for team in league.teams:
+        if team.shown_name.startswith("PWHL "):
+            description = _render(league, team, "home_short")[1]
+            assert description.startswith(f"{team.shown_name} schedule"), description
+            assert "(PWHL)" not in description
+            checked += 1
+    assert checked >= 2
+
+
+def test_a_long_name_still_leads_with_the_schedule_and_season():
+    description = _render(*_named("ncaaw-sec", "south-carolina-gamecocks-womens-basketball"), "home_short")[1]
+    assert description.startswith("South Carolina women's basketball")
+    assert "schedule" in description.split(". Next home game")[0], description
+
+
+def test_control_a_next_home_game_answer_on_an_empty_page_must_be_the_negation():
+    """The negation is the only home-game wording an empty page may use."""
+    wnba, mercury = _named("wnba", "phoenix-mercury")
+    title, description, html, payload = _render(wnba, mercury, "none_off_season")
+    assert false_claims(title, description, html, payload) == []
+    lying = description.replace("so no next home game is listed", "so see the next home game")
+    assert lying != description  # the sabotage applied
+    assert any("description claims a home game" in p for p in false_claims(title, lying, html, payload))
+
+
+def test_control_the_old_suffix_pattern_misses_women_basketball():
+    raw = "Southeast Missouri State Redhawks Women Basketball"
+    old = re.sub(r"\s+wom[ae]n[\u2019']?s basketball$", "", raw, flags=re.IGNORECASE)
+    assert old == raw  # the old pattern left it in, which is the bug
+    assert site._opponent_label("ncaaw-big-ten", raw) == "Southeast Missouri State Redhawks"
 
 
 # ---------------------------------------------------------------------------
@@ -223,14 +295,15 @@ def test_control_the_old_every_home_and_away_wording_is_caught(monkeypatch: pyte
     assert any("description claims a home game" in p for p in false_claims(title, old, html, payload))
 
 
-def test_control_the_floor_fails_with_the_old_opponent_label(monkeypatch: pytest.MonkeyPatch):
-    """Without the suffix fix the Ohio State page of 2026-11-06 fell to 115
-    characters; the floor check must see that."""
+def test_control_the_old_opponent_label_costs_the_league_name(monkeypatch: pytest.MonkeyPatch):
+    """Without the suffix fix the Ohio State description has no room for
+    "(Big Ten)". It no longer falls below the floor, because the form without
+    the league catches it (DECISIONS 0038), so the difference is the league."""
     big_ten = config.league_by_slug("ncaaw-big-ten")
     ohio = next(t for t in big_ten.teams if t.slug == "ohio-state-buckeyes-womens-basketball")
     fixed = _render(big_ten, ohio, "home_odd_suffix")[1]
     monkeypatch.setattr(site, "_opponent_label", lambda league_slug, opponent: opponent)
     broken = _render(big_ten, ohio, "home_odd_suffix")[1]
     assert "Womans Basketball" in broken and "Womans Basketball" not in fixed  # the sabotage applied
+    assert "(Big Ten)" in fixed and "(Big Ten)" not in broken
     assert DESCRIPTION_MIN <= len(fixed) <= DESCRIPTION_MAX
-    assert not DESCRIPTION_MIN <= len(broken) <= DESCRIPTION_MAX, (len(broken), broken)
