@@ -796,16 +796,8 @@ def _team_title(
             TITLE_MAX,
         )
     schedule = f"{name} schedule {season}" if season else f"{name} schedule"
-    # A long women's basketball name has no room for "and tickets" beside "next
-    # home game". The question fans type wins, then the season; the description
-    # carries both the season and the ticket links (DECISIONS 0038).
     lead = (
-        [
-            f"{schedule}: next home game and tickets",
-            f"{schedule}: home games and tickets",
-            f"{schedule}: next home game",
-            f"{name} schedule: next home game",
-        ]
+        [f"{schedule}: next home game and tickets", f"{schedule}: home games and tickets"]
         if home_listed
         else [f"{schedule}: dates and tickets"]
     )

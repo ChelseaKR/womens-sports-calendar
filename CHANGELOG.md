@@ -12,11 +12,11 @@ archived and private.
 
 ### Changed
 
-- Search titles and descriptions follow the 2026-11-08 Search Console data
-  (DECISIONS 0038): women's basketball pages with a listed home game say "next
-  home game", an empty WNBA page's description says no next home game is
-  listed yet, and the home page's description names the next listed home game.
-  Also fixed: "Women Basketball" left on an opponent, "PWHL Detroit (PWHL)",
+- Search descriptions follow the 2026-11-08 Search Console data (DECISIONS
+  0038): an empty WNBA page's description says no next home game is listed
+  yet, and the home page's description names the next listed home game.
+  Women's basketball titles are held until the #94 titles can be judged. Also
+  fixed: "Women Basketball" left on an opponent, "PWHL Detroit (PWHL)",
   a Golden State Valkyries title without its calendar words, and a South
   Carolina description without "schedule".
 

@@ -204,18 +204,13 @@ def test_the_longest_wnba_name_keeps_the_calendar_in_its_empty_title():
     assert title == "Golden State Valkyries schedule 2027: add to your calendar"
 
 
-def test_a_womens_basketball_page_with_a_home_game_says_next_home_game():
+def test_the_held_womens_basketball_titles_keep_tickets_and_the_season():
+    """ "<school> women's basketball schedule <season>: next home game" is held
+    until #94's titles can be judged on 2026-12-07 (DECISIONS 0038)."""
     iowa = _render(*_named("ncaaw-big-ten", "iowa-hawkeyes-womens-basketball"), "home_long")[0]
-    assert iowa == "Iowa women's basketball schedule 2026-27: next home game"
+    assert iowa == "Iowa women's basketball schedule 2026-27 and tickets"
     carolina = _render(*_named("ncaaw-sec", "south-carolina-gamecocks-womens-basketball"), "home_long")[0]
-    assert carolina == "South Carolina women's basketball schedule: next home game"
-
-
-def test_a_page_with_only_away_games_never_gets_the_next_home_game_title():
-    for league, team in ALL_TEAMS:
-        title, _, _, payload = _render(league, team, "away_only")
-        if payload["next_home_event_id"] is None:
-            assert "next home game" not in title, team.slug
+    assert carolina == "South Carolina women's basketball schedule 2026-27"
 
 
 def test_a_name_that_says_its_league_does_not_say_it_twice():
@@ -246,11 +241,14 @@ def test_control_a_next_home_game_answer_on_an_empty_page_must_be_the_negation()
     assert any("description claims a home game" in p for p in false_claims(title, lying, html, payload))
 
 
-def test_control_the_old_suffix_pattern_misses_women_basketball():
+def test_control_the_old_suffix_pattern_is_caught(monkeypatch: pytest.MonkeyPatch):
+    """Put the old pattern back in the code: the opponent keeps the suffix, and
+    the check that every spelling is dropped sees it."""
     raw = "Southeast Missouri State Redhawks Women Basketball"
-    old = re.sub(r"\s+wom[ae]n[\u2019']?s basketball$", "", raw, flags=re.IGNORECASE)
-    assert old == raw  # the old pattern left it in, which is the bug
-    assert site._opponent_label("ncaaw-big-ten", raw) == "Southeast Missouri State Redhawks"
+    assert not re.search(r"basketball", site._opponent_label("ncaaw-big-ten", raw), re.I)
+    old = re.compile(r"\s+wom[ae]n[\u2019']?s basketball$", re.IGNORECASE)
+    monkeypatch.setattr(site, "_WOMENS_BASKETBALL_SUFFIX", old)
+    assert site._opponent_label("ncaaw-big-ten", raw) == raw  # the sabotage applied, and the check above would fail
 
 
 # ---------------------------------------------------------------------------

@@ -1671,29 +1671,21 @@ Revisit after 28 days of Search Console data on the new titles: if
 click-through on empty WNBA pages does not move, or if a query shape not
 listed here starts to dominate.
 
-## 0038 — Say "next home game" where the page has one and the title fits it; repair the descriptions that fell to a short form (2026-11-08)
+## 0038 — Search snippets answer "next home game" truthfully; women's basketball titles stay as they are until #94 can be judged (2026-11-08)
 
 **Why:** Search Console, 2026-10-11 to 11-07 (data starts 10-21): 882
 impressions, 10 clicks, 233 of the impressions with a query Google reports.
 The queries that rank near the top ask when the next game is: "next home
 game" (8 impressions, position 3.9), "next valkyries home game" (position
-8.5), "when is the next valkyries game" (11.5), "when is the next lady vols
-basketball game" (11). No college schedule query in the data names a season. But the
-women's basketball pages, at positions 5 to 11, were too long for "next home
-game and tickets" and fell to "<school> women's basketball schedule 2026-27
-and tickets". Reading the live pages also showed four template faults:
-"Golden State Valkyries" was one character over and lost its calendar words;
-"Women Basketball" escaped the opponent suffix rule, which dropped Illinois to
-a short description; South Carolina's name was too long for any form with the
-league in it and lost "schedule"; and "PWHL Detroit (PWHL)" said its league
-twice.
+8.5), "when is the next valkyries game" (11.5). Reading the live pages also
+showed four template faults: "Golden State Valkyries" was one character over
+and lost its calendar words; "Women Basketball" escaped the opponent suffix
+rule, which dropped Illinois to a short description; South Carolina's name was
+too long for any form with the league in it and lost "schedule"; and "PWHL
+Detroit (PWHL)" said its league twice.
 
 The decision (`site.py`, templates only, no per-page text):
 
-- A page with a listed home game that cannot fit "next home game and tickets"
-  or "home games and tickets" is "<team> schedule <season>: next home game",
-  else "<team> schedule: next home game". The description keeps the season and
-  "ticket links". A page with no listed home game keeps its "and tickets" forms.
 - An empty WNBA page's description answers the "next game" query with the
   truth: "Ticketmaster has not listed the 2027 schedule yet, so no next home
   game is listed". Its title still never says "home game" (0037).
@@ -1705,14 +1697,16 @@ The decision (`site.py`, templates only, no per-page text):
   the parenthetical still leads with "<team> schedule <season>". The opponent
   suffix rule also takes "Women Basketball".
 
-Not changed: 0029's year rules, 0030 (no titles or event data are involved)
-and the away-only seller wording from #95. No date goes in a title: a search
-result can show a title for days after the game has passed. The trade-off,
-measured on the 2026-11-08 listings: 27 women's basketball titles lose the word
-"tickets" and 9 lose the season. The college "tickets" queries in the
-data rank at positions 51 to 70, where a title cannot help.
+**Held, by Chelsea's call (2026-11-08):** women's basketball titles do not
+change. A proposed form, "<school> women's basketball schedule <season>: next
+home game", would have taken "tickets" from 27 titles and the season from 9 on
+the 2026-11-08 listings. #94's titles have only just gone live and have no data
+of their own, so a second title change now would leave neither measurable. On
+2026-12-07, judge #94's titles, then decide the held titles.
 
-**Enforced by** `tests/test_search_console_titles.py`.
+Not changed: 0029's year rules, 0030 (no event data is involved) and the
+away-only seller wording from #95. The "Women Basketball" fix changes
+descriptions only: a title never names the opponent.
 
-Revisit with 0037, after 28 days of data on these titles. 0037's titles went
-live on 2026-11-08, so neither pass has been measured yet.
+**Enforced by** `tests/test_search_console_titles.py`, which also pins the held
+titles.
