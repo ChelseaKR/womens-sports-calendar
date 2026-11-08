@@ -540,15 +540,13 @@ def _home_away_tag(game: Mapping[str, Any]) -> str:
     return f' <span class="home-away home-away--{label.lower()}">{label}</span>'
 
 
-def _sells_elsewhere_msg(team: Mapping[str, Any]) -> str:
-    """The empty next-game message for a team whose primary ticket seller is
-    not Ticketmaster (sellers.PRIMARY_SELLERS), as HTML; "" for any other
-    team. This pipeline reads only Ticketmaster, so for these teams the usual
-    promise that the next game will reach the calendar on its own would be
-    false. It names where the team sells tickets and links the team's
-    official ticket page (official_tickets.py), or the seller's team page
-    when no official page was verified. It never says tickets are
-    unavailable."""
+def _seller_sentences(team: Mapping[str, Any]) -> str:
+    """The two sentences that say who sells a team's tickets and where to
+    look (HTML), for a team whose primary seller is not Ticketmaster
+    (sellers.PRIMARY_SELLERS); "" for any other team. It names the seller and
+    links the team's official ticket page (official_tickets.py), or the
+    seller's team page when no official page was verified. It never says
+    tickets are unavailable."""
     seller = team_primary_seller(team["league_slug"], team["team_slug"])
     if seller is None:
         return ""
@@ -564,10 +562,20 @@ def _sells_elsewhere_msg(team: Mapping[str, Any]) -> str:
         link = _paid_link(url, text) if is_affiliate_link(seller.name, url) else f'<a href="{e(url)}">{text}</a>'
     owner_cap = owner[0].upper() + owner[1:]
     return (
-        f"No {e(team['team_name'])} games are listed by Ticketmaster right now.\n"
         f"{e(owner_cap)} main ticket seller is {e(seller.name)}, {e(seller.contrast)}, so its\n"
         f"home games may not show up here or in your calendar. Check {link} for home games."
     )
+
+
+def _sells_elsewhere_msg(team: Mapping[str, Any]) -> str:
+    """The empty next-game message for a team whose primary ticket seller is
+    not Ticketmaster, as HTML; "" for any other team. This pipeline reads
+    only Ticketmaster, so for these teams the usual promise that the next
+    game will reach the calendar on its own would be false."""
+    sentences = _seller_sentences(team)
+    if not sentences:
+        return ""
+    return f"No {e(team['team_name'])} games are listed by Ticketmaster right now.\n{sentences}"
 
 
 def _next_game_hero(team: Mapping[str, Any]) -> str:
@@ -606,7 +614,9 @@ your calendar automatically &mdash; nothing to check back for.</p>
     else:
         g = games[0]
         label = "Next game, away" if g.get("tracked_team_is_home") is False else "Next listed game"
-        note = f'<p class="next-game-note">No {e(team_name)} home game is listed by Ticketmaster right now.</p>\n'
+        sellers_note = _seller_sentences(team)
+        sellers_note = f"\n{sellers_note}" if sellers_note else ""
+        note = f'<p class="next-game-note">No {e(team_name)} home game is listed by Ticketmaster right now.{sellers_note}</p>\n'
     month_day = _month_day(g["start_local_date"])
     matchup = _matchup_text(g)
     when = _when_html(g) + _feed_note(g)
