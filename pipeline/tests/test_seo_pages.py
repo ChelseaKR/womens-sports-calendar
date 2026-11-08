@@ -75,7 +75,7 @@ def test_home_page_title_and_description_name_the_calendar_apps(fixture_dist: Pa
     html = (fixture_dist / "index.html").read_text()
     assert "<title>Next Home Game: women&#x27;s sports schedules for your calendar</title>" in html
     description = _meta(html, "description")
-    assert "Add your WNBA, NWSL, PWHL, AUSL, Big Ten or SEC team&#x27;s schedule" in description
+    assert "Find your WNBA, NWSL, PWHL, AUSL, Big Ten or SEC team&#x27;s next listed home game" in description
     assert "Google, Apple or Outlook calendar" in description
 
 

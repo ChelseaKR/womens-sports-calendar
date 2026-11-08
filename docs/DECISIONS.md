@@ -1670,3 +1670,43 @@ only.
 Revisit after 28 days of Search Console data on the new titles: if
 click-through on empty WNBA pages does not move, or if a query shape not
 listed here starts to dominate.
+
+## 0038 — Search snippets answer "next home game" truthfully; women's basketball titles stay as they are until #94 can be judged (2026-11-08)
+
+**Why:** Search Console, 2026-10-11 to 11-07 (data starts 10-21): 882
+impressions, 10 clicks, 233 of the impressions with a query Google reports.
+The queries that rank near the top ask when the next game is: "next home
+game" (8 impressions, position 3.9), "next valkyries home game" (position
+8.5), "when is the next valkyries game" (11.5). Reading the live pages also
+showed four template faults: "Golden State Valkyries" was one character over
+and lost its calendar words; "Women Basketball" escaped the opponent suffix
+rule, which dropped Illinois to a short description; South Carolina's name was
+too long for any form with the league in it and lost "schedule"; and "PWHL
+Detroit (PWHL)" said its league twice.
+
+The decision (`site.py`, templates only, no per-page text):
+
+- An empty WNBA page's description answers the "next game" query with the
+  truth: "Ticketmaster has not listed the 2027 schedule yet, so no next home
+  game is listed". Its title still never says "home game" (0037).
+- The home page's description says "Find your <leagues> team's next listed
+  home game". "listed" stays, because some teams sell where the site cannot
+  see.
+- An empty WNBA title gains "add to your calendar" as a shorter form. A name
+  containing its league skips the parenthetical. A description too long for
+  the parenthetical still leads with "<team> schedule <season>". The opponent
+  suffix rule also takes "Women Basketball".
+
+**Held, by Chelsea's call (2026-11-08):** women's basketball titles do not
+change. A proposed form, "<school> women's basketball schedule <season>: next
+home game", would have taken "tickets" from 27 titles and the season from 9 on
+the 2026-11-08 listings. #94's titles have only just gone live and have no data
+of their own, so a second title change now would leave neither measurable. On
+2026-12-07, judge #94's titles, then decide the held titles.
+
+Not changed: 0029's year rules, 0030 (no event data is involved) and the
+away-only seller wording from #95. The "Women Basketball" fix changes
+descriptions only: a title never names the opponent.
+
+**Enforced by** `tests/test_search_console_titles.py`, which also pins the held
+titles.

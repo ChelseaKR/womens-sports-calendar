@@ -780,7 +780,11 @@ def _team_title(
     if not listed:
         if awaited_season:
             return _fit(
-                [f"{name} schedule {awaited_season}: add it to your calendar", f"{name} schedule {awaited_season}"],
+                [
+                    f"{name} schedule {awaited_season}: add it to your calendar",
+                    f"{name} schedule {awaited_season}: add to your calendar",
+                    f"{name} schedule {awaited_season}",
+                ],
                 TITLE_MAX,
             )
         return _fit(
@@ -940,10 +944,11 @@ them):</p>
         ),
         description=_fit(
             [
-                f"Add your {league_names} team's schedule to Google, Apple or Outlook calendar. "
-                "Updated nightly. No account.",
-                f"Add your {short_league_names} team's schedule to Google, Apple or Outlook calendar. "
-                "Updated nightly. No account.",
+                # "next home game" is the home page's top query (DECISIONS 0038).
+                f"Find your {league_names} team's next listed home game and add its schedule to "
+                "Google, Apple or Outlook calendar. Updated nightly.",
+                f"Find your {short_league_names} team's next listed home game and add its schedule to "
+                "Google, Apple or Outlook calendar. Updated nightly.",
                 "Add your team's schedule to Google, Apple or Outlook calendar. Updated nightly. No account.",
             ],
             DESCRIPTION_MAX,
@@ -1734,10 +1739,10 @@ def _opponent_label(league_slug: str, opponent: str) -> str:
 
 
 # The suffix in every spelling Ticketmaster lists ("Womens Basketball",
-# "Women's Basketball", "Womans Basketball") and the registry's own
+# "Women's Basketball", "Womans Basketball", "Women Basketball") and the registry's own
 # ("women's basketball"): a description that kept "Mercyhurst Lakers Womans
 # Basketball" ran too long for its fuller forms.
-_WOMENS_BASKETBALL_SUFFIX = re.compile(r"\s+wom[ae]n[\u2019']?s basketball$", re.IGNORECASE)
+_WOMENS_BASKETBALL_SUFFIX = re.compile(r"\s+wom[ae]n(?:[\u2019']?s)? basketball$", re.IGNORECASE)
 
 
 def _team_description(team: Mapping[str, Any]) -> str:
@@ -1749,8 +1754,10 @@ def _team_description(team: Mapping[str, Any]) -> str:
     league = league_names_for(team["league_slug"], team.get("league_name", ""))[1]
     season = team.get("season")
     # "<team> (<league>) schedule <season>": the league is in the queries
-    # ("pwhl sirens schedule", "pwhl schedule ottawa").
-    lead = f"{name} ({league}) schedule {season}" if league and season else ""
+    # ("pwhl sirens schedule", "pwhl schedule ottawa"). A name that already
+    # says it ("PWHL Detroit") does not say it twice (DECISIONS 0038).
+    plain_lead = f"{name} schedule {season}" if season else ""
+    lead = (plain_lead if league in name else f"{name} ({league}) schedule {season}") if league and season else ""
     home = next((g for g in team["games"] if g["event_id"] == team.get("next_home_event_id")), None)
     if home is not None and not home.get("date_tbd") and home.get("away_team"):
         when = f"{home['start_display']} vs {_opponent_label(team['league_slug'], home['away_team'])}"
@@ -1764,6 +1771,9 @@ def _team_description(team: Mapping[str, Any]) -> str:
                     if lead
                     else []
                 ),
+                # A name too long for the league in parentheses still leads
+                # with "<team> schedule <season>" (DECISIONS 0038).
+                *([f"{plain_lead}. Next home game: {when}. With ticket links."] if plain_lead else []),
                 f"Next {name} home game: {when}. Add every game to your calendar, with ticket links, updated nightly.",
                 f"Next home game: {when}. Add every {name} game to your calendar, with ticket links, updated nightly.",
                 f"Next home game: {when}. Add the {name} schedule to your calendar. Updated nightly.",
@@ -1778,12 +1788,14 @@ def _team_description(team: Mapping[str, Any]) -> str:
     if not team["games"]:
         if awaited:
             # "<team> schedule 2027", the order the title uses (_team_title).
+            # "next valkyries home game" ranks here too, so the snippet answers
+            # it truthfully: none is listed (DECISIONS 0038).
             return _fit(
                 [
-                    f"{name} schedule {awaited}. Ticketmaster has not listed the {awaited} schedule yet; add it to "
-                    "your calendar and games appear as they are listed, updated nightly.",
-                    f"{name} schedule {awaited}. Ticketmaster has not listed the {awaited} games yet; add it to "
-                    "your calendar and they appear as they are listed.",
+                    f"{name} schedule {awaited}. Ticketmaster has not listed the {awaited} schedule yet, so no next "
+                    "home game is listed; add it to your calendar and games appear.",
+                    f"{name} schedule {awaited}. Ticketmaster has not listed the {awaited} schedule yet, so no next "
+                    "home game is listed; add it to your calendar.",
                     f"{name} schedule {awaited}. Ticketmaster has not listed the {awaited} schedule yet; "
                     "add it to your calendar.",
                     f"{name} schedule {awaited}. Ticketmaster has not listed it yet.",
