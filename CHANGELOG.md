@@ -16,6 +16,13 @@ archived and private.
   markup too, with its date alone as the start (DECISIONS 0030, amended
   2026-11-06). Timed games keep their exact start with the venue's UTC
   offset; a date-TBD game still gets no event, and no time is ever filled in.
+- A calendar help page at `/help/` (DECISIONS 0036): how to subscribe in
+  Apple Calendar on iPhone, iPad and Mac, Google Calendar, Outlook.com and
+  Outlook for work or school; how to unsubscribe; how often each app says it
+  updates a subscribed calendar; and why a game can be missing (one source,
+  Ticketmaster's public listings, and teams that sell elsewhere). Every
+  page's header and footer link it, and each team and league page's "Other
+  calendar apps" box points to it.
 - Missouri women's basketball is in the seller table as Ticketmaster
   Account Manager, the school's own store, whose games never reach the
   Ticketmaster listings this site reads. Its page now says so and links
