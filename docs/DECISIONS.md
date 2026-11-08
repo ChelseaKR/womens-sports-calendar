@@ -1542,3 +1542,50 @@ also removes the header links, because they are a second link to
 
 Revisit if Search Console click-through drops on pages whose OG image
 changed, or if another portfolio site takes black and lime.
+
+## 0037 — Titles and descriptions follow the searched shape and claim only what the page has (2026-11-06)
+
+**Why:** Search Console, the 28 days to 2026-11-06 (data starts 10-21;
+sc-domain:nexthomegame.com): 779 impressions and 8 clicks over 72 pages, 189
+of those impressions with a query Google reports. Almost every named query
+is "<team> schedule", "<team> schedule <season>", "<team> home games" or
+"next <team> game". The site's top query, "phoenix mercury schedule 2027"
+(18 impressions, position 8), outnumbered "phoenix mercury 2027 schedule"
+(7), but the empty WNBA pages were titled "<team> 2027 schedule", unlike the
+"<team> schedule 2026-27" of every page with games. Empty pages of teams
+that sell elsewhere (Aces, Wings, Lynx, Sparks) were titled just "<team>
+schedule". Many descriptions were 94 to 116 characters, because the
+opponent kept Ticketmaster's "Womans Basketball" or "Women's Basketball"
+suffix and pushed the fuller forms over the limit. And an away-only page of a
+team that sells on Ticketmaster said "every home and away game".
+
+The decision (`site.py`, templates only, no per-page text):
+
+- An empty WNBA page waiting for a season is "<team> schedule 2027: add it
+  to your calendar", and its description starts "<team> schedule 2027.
+  Ticketmaster has not listed the 2027 games yet". DECISIONS 0029's rules
+  for when a year is shown are unchanged.
+- Any other page with no game listed is "<team> schedule: calendar and
+  official ticket page" when the page shows a verified official ticket link
+  (the same lookup as the "Get tickets" section), else "<team> schedule: add
+  it to your calendar", else "<team> schedule". It never says "tickets",
+  "ticket links" or "home games".
+- A page with games but no home game never says "every home and away game",
+  whoever the seller is: "listed games with dates, venues and ticket links.
+  No home game is listed yet".
+- The opponent drops every spelling of the "women's basketball" suffix.
+- Descriptions aim for 120 to 155 characters: each template gained
+  middle-length forms so a long name falls to a full sentence, not a stub.
+  The 155 cap stays in `validate_seo`; the 120 floor is a test, not a build
+  failure, so a future long name cannot block the nightly deploy.
+
+**Enforced by** `tests/test_search_console_titles.py` (every configured team
+in seven scenarios: length, and no home-game, tickets, season or official
+link claim the page does not back; four controls that each assert their
+sabotage applied). The Thorns goldens in `tests/golden/team_order_*.html`
+were re-rendered for the empty-page title and the unfetched description
+only.
+
+Revisit after 28 days of Search Console data on the new titles: if
+click-through on empty WNBA pages does not move, or if a query shape not
+listed here starts to dominate.

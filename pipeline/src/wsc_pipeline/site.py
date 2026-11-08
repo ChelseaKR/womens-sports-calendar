@@ -739,7 +739,13 @@ def _team_history_block(team: Mapping[str, Any]) -> str:
 
 
 def _team_title(
-    name: str, season: str | None, *, listed: bool, home_listed: bool, awaited_season: str | None = None
+    name: str,
+    season: str | None,
+    *,
+    listed: bool,
+    home_listed: bool,
+    awaited_season: str | None = None,
+    official_ticket_page: bool = False,
 ) -> str:
     """ "New York Sirens schedule 2026-27: next home game and tickets": the
     words a fan types, in the order Search Console shows them typed
@@ -748,18 +754,28 @@ def _team_title(
     when the page backs it: "tickets" and the season when games are listed
     (every game links to its ticket seller; the site shows no prices), "next
     home game" and "home games" when a home game is listed (the page opens
-    with it). A page with nothing listed is just "<team> schedule", or
-    "<team> 2027 schedule" while it waits for that season (_awaited_season;
-    "phoenix mercury schedule 2027" was the site's top named query,
-    2026-10-21 to 11-04), and its description says that season is not listed
-    yet."""
+    with it). A page with nothing listed never says "home games" or
+    "tickets": it is "<team> schedule 2027" while it waits for that season
+    (_awaited_season; "phoenix mercury schedule 2027" had 18 impressions to
+    "phoenix mercury 2027 schedule"'s 7, 2026-10-09 to 11-06, so the year goes
+    after "schedule", as on a page with games), and otherwise "<team>
+    schedule" with the two things every such page still has: the calendar to
+    subscribe to and, when one was verified, the team's official ticket page
+    (DECISIONS 0037)."""
     if not listed:
         if awaited_season:
             return _fit(
-                [f"{name} {awaited_season} schedule: add it to your calendar", f"{name} {awaited_season} schedule"],
+                [f"{name} schedule {awaited_season}: add it to your calendar", f"{name} schedule {awaited_season}"],
                 TITLE_MAX,
             )
-        return _fit([f"{name} schedule"], TITLE_MAX)
+        return _fit(
+            [
+                *([f"{name} schedule: calendar and official ticket page"] if official_ticket_page else []),
+                f"{name} schedule: add it to your calendar",
+                f"{name} schedule",
+            ],
+            TITLE_MAX,
+        )
     schedule = f"{name} schedule {season}" if season else f"{name} schedule"
     lead = (
         [f"{schedule}: next home game and tickets", f"{schedule}: home games and tickets"]
@@ -767,6 +783,13 @@ def _team_title(
         else [f"{schedule}: dates and tickets"]
     )
     return _fit([*lead, f"{schedule} and tickets", schedule, f"{name} schedule"], TITLE_MAX)
+
+
+def _has_official_ticket_page(league_slug: str, team_slug: str) -> bool:
+    """Whether the team page shows a "Get <team> tickets" link
+    (_official_tickets_block): the same lookup, so a title never names a
+    link the page does not have."""
+    return official_tickets.link_for(official_tickets.team_page(league_slug, team_slug)) is not None
 
 
 def _about_schedule(note: str) -> str:
@@ -1447,6 +1470,8 @@ def _league_description(heading: str, league: dict[str, Any]) -> str:
             [
                 f"{heading}. No games are listed right now; add it to your calendar and "
                 "games appear as they are listed, updated nightly.",
+                f"{heading}. No games are listed right now; add it to your calendar and "
+                "games appear as they are listed.",
                 f"{heading}. No games are listed right now.",
             ],
             DESCRIPTION_MAX,
@@ -1457,6 +1482,9 @@ def _league_description(heading: str, league: dict[str, Any]) -> str:
             "your team's, with dates, times and venues, updated nightly.",
             f"{heading}: add every game, or just your team's, to your calendar, with dates, "
             "times, venues and ticket links. Updated nightly.",
+            f"{heading}: add every game, or just your team's, to your calendar, with dates, "
+            "times, venues and ticket links.",
+            f"{heading}: add every game, or just your team's, to your calendar, with dates and ticket links.",
             f"{heading}: add every game to your calendar, updated nightly.",
         ],
         DESCRIPTION_MAX,
@@ -1468,11 +1496,14 @@ def _opponent_label(league_slug: str, opponent: str) -> str:
     school ("Rutgers"), or a school outside the registry by its Ticketmaster name
     without the "Womens Basketball" suffix, not the full keyword ("Rutgers
     Scarlet Knights Womens Basketball")."""
-    name = title_name_for(league_slug, opponent)
-    for suffix in (" women's basketball", " Womens Basketball"):
-        if name.endswith(suffix):
-            return name[: -len(suffix)]
-    return name
+    return _WOMENS_BASKETBALL_SUFFIX.sub("", title_name_for(league_slug, opponent))
+
+
+# The suffix in every spelling Ticketmaster lists ("Womens Basketball",
+# "Women's Basketball", "Womans Basketball") and the registry's own
+# ("women's basketball"): a description that kept "Mercyhurst Lakers Womans
+# Basketball" ran too long for its fuller forms.
+_WOMENS_BASKETBALL_SUFFIX = re.compile(r"\s+wom[ae]n[\u2019']?s basketball$", re.IGNORECASE)
 
 
 def _team_description(team: Mapping[str, Any]) -> str:
@@ -1512,13 +1543,16 @@ def _team_description(team: Mapping[str, Any]) -> str:
     awaited = _awaited_season(team)
     if not team["games"]:
         if awaited:
+            # "<team> schedule 2027", the order the title uses (_team_title).
             return _fit(
                 [
-                    f"{name} {awaited} schedule. Ticketmaster has not listed the {awaited} schedule yet; add it to "
+                    f"{name} schedule {awaited}. Ticketmaster has not listed the {awaited} schedule yet; add it to "
                     "your calendar and games appear as they are listed, updated nightly.",
-                    f"{name} {awaited} schedule. Ticketmaster has not listed the {awaited} schedule yet; "
+                    f"{name} schedule {awaited}. Ticketmaster has not listed the {awaited} games yet; add it to "
+                    "your calendar and they appear as they are listed.",
+                    f"{name} schedule {awaited}. Ticketmaster has not listed the {awaited} schedule yet; "
                     "add it to your calendar.",
-                    f"{name} {awaited} schedule. Ticketmaster has not listed it yet.",
+                    f"{name} schedule {awaited}. Ticketmaster has not listed it yet.",
                 ],
                 DESCRIPTION_MAX,
             )
@@ -1529,6 +1563,8 @@ def _team_description(team: Mapping[str, Any]) -> str:
                 [
                     f"{name} schedule. No games are listed right now. {owner} main ticket seller is "
                     f"{seller.name}, {seller.contrast}, so home games may not show up here.",
+                    f"{name} schedule. No games are listed right now. {owner} main ticket seller is "
+                    f"{seller.name}, so home games may not show up here.",
                     f"{name} schedule. No games are listed right now. {owner} main ticket seller is {seller.name}.",
                     f"{name} schedule. No games are listed right now.",
                 ],
@@ -1539,16 +1575,28 @@ def _team_description(team: Mapping[str, Any]) -> str:
                 [
                     f"{name} schedule. No games are listed right now; add it to your calendar and "
                     "games appear as they are listed, updated nightly.",
+                    f"{name} schedule. No games are listed right now; add it to your calendar and "
+                    "games appear as they are listed.",
                     f"{name} schedule. No games are listed right now.",
                 ],
                 DESCRIPTION_MAX,
             )
+        # Not fetched this build: nothing about whether games are listed.
         return _fit(
-            [f"{name} schedule. Add it to your calendar, updated nightly.", f"{name} schedule."], DESCRIPTION_MAX
+            [
+                f"{name} schedule. Subscribe once in Google Calendar, Apple Calendar or Outlook; the calendar "
+                "is rebuilt every night from the listings.",
+                f"{name} schedule. Subscribe once in your calendar app; the calendar is rebuilt every night "
+                "from the listings.",
+                f"{name} schedule. Add it to your calendar, updated nightly.",
+                f"{name} schedule.",
+            ],
+            DESCRIPTION_MAX,
         )
     if home is None and seller is not None and team.get("fetched", True):
         # Games are listed but no home game (the Minnesota Frost sell on
         # SeatGeek): never "every home and away game".
+        schedule = f"{name} schedule {season}" if season else f"{name} schedule"
         return _fit(
             [
                 *(
@@ -1559,9 +1607,36 @@ def _team_description(team: Mapping[str, Any]) -> str:
                     if lead
                     else []
                 ),
-                f"{name} schedule: listed games with dates, venues and ticket links. No home game is listed: "
+                f"{schedule}: listed games with dates, venues and ticket links. No home game is listed: "
+                f"{owner.lower()} main ticket seller is {seller.name}.",
+                f"{schedule}: listed games with dates and ticket links. No home game is listed: "
+                f"{owner.lower()} main ticket seller is {seller.name}.",
+                f"{schedule}: listed games and ticket links. No home game is listed: "
                 f"{owner.lower()} main ticket seller is {seller.name}.",
                 f"{name} schedule. No home game is listed: {owner.lower()} main ticket seller is {seller.name}.",
+                f"{name} schedule.",
+            ],
+            DESCRIPTION_MAX,
+        )
+    if home is None:
+        # Only away games are listed (or an unfetched build's kept games):
+        # never "every home and away game" (DECISIONS 0037).
+        schedule = f"{name} schedule {season}" if season else f"{name} schedule"
+        return _fit(
+            [
+                *(
+                    [
+                        f"{lead}: listed games with dates, venues and ticket links. No home game is listed yet; "
+                        "add it to your calendar."
+                    ]
+                    if lead
+                    else []
+                ),
+                f"{schedule}: listed games with dates, venues and ticket links. No home game is listed yet; "
+                "add it to your calendar.",
+                f"{schedule}: listed games with dates and ticket links. No home game is listed yet; "
+                "add it to your calendar.",
+                f"{name} schedule and ticket links. Add it to your calendar.",
                 f"{name} schedule.",
             ],
             DESCRIPTION_MAX,
@@ -1575,6 +1650,8 @@ def _team_description(team: Mapping[str, Any]) -> str:
             ),
             f"{name} schedule: every home and away game with dates, venues and ticket links. "
             "Add it to Google, Apple or Outlook calendar, updated nightly.",
+            f"{name} schedule: every home and away game with dates, venues and ticket links. "
+            "Add it to your calendar, updated nightly.",
             f"{name} schedule with dates, venues and ticket links. Add it to your calendar, updated nightly.",
             f"{name} schedule and ticket links. Add it to your calendar.",
             f"{name} schedule.",
@@ -1854,6 +1931,7 @@ def render_team(
             listed=bool(team["games"]),
             home_listed=home_listed,
             awaited_season=_awaited_season(team),
+            official_ticket_page=_has_official_ticket_page(league_slug, team_slug),
         ),
         description=_team_description(team),
         canonical_url=page_url,

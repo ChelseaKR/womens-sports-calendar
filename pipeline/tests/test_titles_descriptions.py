@@ -168,7 +168,8 @@ def test_the_date_is_the_next_home_game_and_a_tba_time_is_not_made_up():
 def test_away_only_claims_no_home_game():
     league, team = config.LEAGUES[1], config.LEAGUES[1].teams[0]
     title, description = _head(_page(league, team, _away_games(league, team)))
-    assert "home games" not in title and "home game" not in description
+    assert "home game" not in title and "every home" not in description
+    assert re.sub(r"No home game is listed yet", "", description).count("home") == 0, description
     assert title.endswith("schedule 2026: dates and tickets")
     assert "(NWSL) schedule 2026" in description
     assert "ticket links" in description  # games are listed, each with its seller link
@@ -177,7 +178,9 @@ def test_away_only_claims_no_home_game():
 def test_a_team_with_nothing_listed_claims_no_tickets_and_says_so():
     league, team = config.LEAGUES[0], config.LEAGUES[0].teams[0]
     title, description = _head(_page(league, team, []))
-    assert title == "Minnesota Lynx schedule"
+    # The calendar and the team's verified official ticket page: the two
+    # things an empty page still has (DECISIONS 0037).
+    assert title == "Minnesota Lynx schedule: calendar and official ticket page"
     assert "tickets" not in title + description
     assert "No games are listed right now" in description
 
@@ -186,7 +189,7 @@ def test_an_unfetched_team_says_nothing_about_games():
     league, team = config.LEAGUES[0], config.LEAGUES[0].teams[0]
     html = site.render_team(team=team_data(team, league, [], fetched=False), base_url=BASE_URL)
     title, description = _head(html)
-    assert title == "Minnesota Lynx schedule"
+    assert title == "Minnesota Lynx schedule: calendar and official ticket page"
     assert "No games are listed" not in description and "ticket" not in description
 
 
