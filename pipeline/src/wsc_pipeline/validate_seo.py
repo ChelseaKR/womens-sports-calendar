@@ -17,9 +17,11 @@ build before deploy. Exits non-zero on the first site that would publish:
 5. Structured data that says more than the page's data does. Each
    SportsEvent is checked against the game in the page's payload it
    describes, from that game's raw fields rather than the code that built
-   the event: the game must be listed in the calendar feed, with neither
-   date nor time TBD, startDate must carry a UTC offset and be the same
-   instant as the game's start_utc, the home and away teams must be the
+   the event: the game must be listed in the calendar feed with a published
+   date. A startDate with a time must carry a UTC offset and be the same
+   instant as the game's start_utc, for a game whose time is not TBA; a
+   date-only startDate must be the game's local date, for a game whose time
+   is TBA or was never sent (DECISIONS 0030, amended 2026-11-06). The home and away teams must be the
    ones the event name gave in that order, location must name the venue
    with a postal address, and eventStatus may only appear when the page
    states that status. Every eligible game must be marked up (none dropped),
@@ -255,10 +257,26 @@ def _lists_no_game(dist: Path, site_path: str) -> bool:
     return data is not None and bool(data.get("fetched", True)) and not data["games"]
 
 
-def _game_key(home: object, away: object, start: str) -> tuple[str, str, datetime]:
-    """(home, away, instant); team names as the markup writes them, without
-    a theme-night suffix (structured_data.team_label)."""
-    return structured_data.team_label(str(home)), structured_data.team_label(str(away)), datetime.fromisoformat(start)
+def _game_key(home: object, away: object, start: str) -> tuple[str, str, str]:
+    """(home, away, start); team names as the markup writes them, without
+    a theme-night suffix (structured_data.team_label). A start with a time
+    is its UTC instant, so two spellings of one instant are one key; a date
+    alone stays the date."""
+    when = start if W3C_DATE.match(start) else datetime.fromisoformat(start).astimezone(UTC).isoformat()
+    return structured_data.team_label(str(home)), structured_data.team_label(str(away)), when
+
+
+def _listed_key(game: dict[str, Any]) -> tuple[str, str, str] | None:
+    """The key a listed game would be marked up under, read from its raw
+    fields: its UTC instant when its time is published, its local date when
+    the time is TBA or was never sent, None when it has no published date."""
+    if not game.get("in_calendar_feed") or game.get("date_tbd"):
+        return None
+    if game.get("start_utc") and not game.get("time_tba"):
+        return _game_key(game.get("home_team"), game.get("away_team"), game["start_utc"])
+    if game.get("start_local_date") and (game.get("time_tba") or not game.get("start_utc")):
+        return _game_key(game.get("home_team"), game.get("away_team"), game["start_local_date"])
+    return None
 
 
 def _check_performer_and_offer(page: Path, node: dict[str, Any], known: list[dict[str, Any]]) -> None:
@@ -288,30 +306,25 @@ def _check_performer_and_offer(page: Path, node: dict[str, Any], known: list[dic
         raise SeoError(f"{page}: SportsEvent {name!r} offers is not just the url of this game's own listing")
 
 
-def _check_event(page: Path, node: dict[str, Any], games: list[dict[str, Any]]) -> tuple[str, str, datetime]:
+def _check_event(page: Path, node: dict[str, Any], games: list[dict[str, Any]]) -> tuple[str, str, str]:
     """Checks one SportsEvent against the listed games it describes (the same
-    home team, away team and start instant; Ticketmaster may list one game
-    more than once) and returns that key."""
+    home team, away team and start; Ticketmaster may list one game more than
+    once) and returns that key."""
     name, start = node.get("name"), node.get("startDate")
-    if not isinstance(start, str) or not OFFSET_DATETIME.match(start):
+    if not isinstance(start, str) or not (OFFSET_DATETIME.match(start) or W3C_DATE.match(start)):
         raise SeoError(f"{page}: SportsEvent {name!r} startDate {start!r} has no UTC offset")
     home = (node.get("homeTeam") or {}).get("name")
     away = (node.get("awayTeam") or {}).get("name")
     key = _game_key(home, away, start)
-    matches = [
-        g
-        for g in games
-        if g.get("start_utc") and _game_key(g.get("home_team"), g.get("away_team"), g["start_utc"]) == key
-    ]
+    # A date-only startDate can only match a game listed by date alone, and
+    # a timed one only a game whose time is published: a guessed time on a
+    # time-TBA game, or a dropped time on a timed one, matches nothing.
+    matches = [g for g in games if _listed_key(g) == key]
     if not matches:
         raise SeoError(f"{page}: SportsEvent {name!r} at {start} matches 0 listed games")
-    known = [
-        g
-        for g in matches
-        if g["in_calendar_feed"] and not g.get("date_tbd") and not g.get("time_tba") and g.get("home_away_known")
-    ]
+    known = [g for g in matches if g.get("home_away_known")]
     if not known:
-        raise SeoError(f"{page}: SportsEvent {name!r} marks up a game without a known date, time and home side")
+        raise SeoError(f"{page}: SportsEvent {name!r} marks up a game without a known date and home side")
     if name != f"{home} vs {away}":
         raise SeoError(f"{page}: SportsEvent name {name!r} is not '<home> vs <away>'")
     location = node.get("location") or {}
@@ -372,11 +385,9 @@ def _check_events(page: Path, events: list[dict[str, Any]], games: list[dict[str
     marked = [_check_event(page, n, games) for n in events]
     if len(marked) != len(set(marked)):
         raise SeoError(f"{page}: a game is marked up twice")
-    expected = {
-        _game_key(g["home_team"], g["away_team"], g["start_utc"]) for g in games if structured_data.event_eligible(g)
-    }
+    expected = {_listed_key(g) for g in games if structured_data.event_eligible(g)}
     if set(marked) != expected:
-        missing = sorted(f"{h} vs {a} at {t.isoformat()}" for h, a, t in expected - set(marked))
+        missing = sorted(f"{h} vs {a} at {t}" for h, a, t in {k for k in expected if k} - set(marked))
         raise SeoError(f"{page}: eligible games not marked up: {missing[:5]}")
 
 

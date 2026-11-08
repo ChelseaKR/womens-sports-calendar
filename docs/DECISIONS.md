@@ -1243,6 +1243,35 @@ performer and guessed status that `validate_seo` must reject.
 Revisit if a page ever shows a price or an on-sale date, or if the site
 gets one page per game.
 
+**Amended 2026-11-06: a game with a published date and no published time
+is an event too.** Chelsea approved event markup for every game with a
+published date (AI-visibility decision D). Until now a time-TBA game got
+no SportsEvent, though the page and the calendar feeds both list it on its
+date.
+
+- `startDate` is the exact local start with the venue's UTC offset when
+  Ticketmaster publishes the time, as before.
+- When the time is TBA, or Ticketmaster sent neither a time nor an
+  instant, `startDate` is the local date alone (`2026-09-24`). That is the
+  same all-day entry the feeds carry (`normalize.feed_start`). The
+  placeholder instant Ticketmaster often sends with `timeTBA` is never
+  used, and no time is filled in.
+- A game whose time is published but cannot be placed in the venue's zone
+  still gets no SportsEvent. A bare date would drop a time the source
+  gave, and a guessed offset would invent one.
+- A date-TBD game still gets no SportsEvent. Its placeholder `localDate`
+  is never read as a date.
+- Everything else is unchanged: location, performers, `eventStatus` only
+  for cancelled, postponed or rescheduled, and the Offer url rules above.
+  The affiliate link and its disclosure on the page are not touched.
+
+`validate_seo` now accepts a date-only `startDate` only for a listed game
+whose time is TBA or was never sent, and only on that game's local date. A
+guessed time on a time-TBA game, a dropped time on a timed game, and the
+date-TBD game's placeholder date each match no listed game and fail.
+Enforced by `tests/test_structured_data.py` and
+`tests/test_event_schema_offers.py`.
+
 ## 0031 — Another sport's listing is not a team's game; a mislabeled opponent loses only the wrong word (2026-11-05)
 
 **Why:** On 2026-11-05 Texas's page said its next home game was "against
@@ -1594,3 +1623,50 @@ check (`scripts/check_a11y_coverage.py`) must include the page.
 Revisit when Apple, Google or Microsoft change these help pages (the
 `HELP_UPDATED` date marks the last read), or when a second schedule source
 is adopted under 0034.
+
+## 0037 — Titles and descriptions follow the searched shape and claim only what the page has (2026-11-06)
+
+**Why:** Search Console, the 28 days to 2026-11-06 (data starts 10-21;
+sc-domain:nexthomegame.com): 779 impressions and 8 clicks over 72 pages, 189
+of those impressions with a query Google reports. Almost every named query
+is "<team> schedule", "<team> schedule <season>", "<team> home games" or
+"next <team> game". The site's top query, "phoenix mercury schedule 2027"
+(18 impressions, position 8), outnumbered "phoenix mercury 2027 schedule"
+(7), but the empty WNBA pages were titled "<team> 2027 schedule", unlike the
+"<team> schedule 2026-27" of every page with games. Empty pages of teams
+that sell elsewhere (Aces, Wings, Lynx, Sparks) were titled just "<team>
+schedule". Many descriptions were 94 to 116 characters, because the
+opponent kept Ticketmaster's "Womans Basketball" or "Women's Basketball"
+suffix and pushed the fuller forms over the limit. And an away-only page of a
+team that sells on Ticketmaster said "every home and away game".
+
+The decision (`site.py`, templates only, no per-page text):
+
+- An empty WNBA page waiting for a season is "<team> schedule 2027: add it
+  to your calendar", and its description starts "<team> schedule 2027.
+  Ticketmaster has not listed the 2027 games yet". DECISIONS 0029's rules
+  for when a year is shown are unchanged.
+- Any other page with no game listed is "<team> schedule: calendar and
+  official ticket page" when the page shows a verified official ticket link
+  (the same lookup as the "Get tickets" section), else "<team> schedule: add
+  it to your calendar", else "<team> schedule". It never says "tickets",
+  "ticket links" or "home games".
+- A page with games but no home game never says "every home and away game",
+  whoever the seller is: "listed games with dates, venues and ticket links.
+  No home game is listed yet".
+- The opponent drops every spelling of the "women's basketball" suffix.
+- Descriptions aim for 120 to 155 characters: each template gained
+  middle-length forms so a long name falls to a full sentence, not a stub.
+  The 155 cap stays in `validate_seo`; the 120 floor is a test, not a build
+  failure, so a future long name cannot block the nightly deploy.
+
+**Enforced by** `tests/test_search_console_titles.py` (every configured team
+in seven scenarios: length, and no home-game, tickets, season or official
+link claim the page does not back; four controls that each assert their
+sabotage applied). The Thorns goldens in `tests/golden/team_order_*.html`
+were re-rendered for the empty-page title and the unfetched description
+only.
+
+Revisit after 28 days of Search Console data on the new titles: if
+click-through on empty WNBA pages does not move, or if a query shape not
+listed here starts to dominate.

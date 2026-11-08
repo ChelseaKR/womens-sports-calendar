@@ -265,7 +265,7 @@ def test_the_comets_page_says_the_2027_schedule_is_not_out_while_nothing_is_list
         '<p class="team-history">The Connecticut Sun moved to Houston and became the Houston Comets for the '
         "2027 WNBA season. The 2027 schedule is not out yet.</p>"
     ) in html
-    assert "<title>Houston Comets 2027 schedule" in html
+    assert "<title>Houston Comets schedule 2027" in html
     assert "Next home game:" not in html
 
 

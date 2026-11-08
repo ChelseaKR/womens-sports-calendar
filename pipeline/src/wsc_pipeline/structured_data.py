@@ -6,11 +6,14 @@ rendered from (site_data.py), so the markup can only say what the page
 says. The rules, each one checked again on the built site by
 validate_seo.py:
 
-- A SportsEvent is emitted only for a listed game whose date AND time are
-  both published, with the venue's UTC offset (normalize.local_start):
-  never for a date-TBD or time-TBA game, and never with a start time filled
-  in. Those games stay visible on the page as "Date TBD" or "(time TBA)"
-  and are simply not marked up.
+- A SportsEvent is emitted only for a listed game with a published date.
+  startDate is the exact start with the venue's UTC offset
+  (normalize.local_start) when the time is published too. When Ticketmaster
+  says the time is TBA (or sent no time and no instant at all), startDate is
+  the local date alone ("2026-09-24"), the same all-day entry the calendar
+  feeds carry (normalize.feed_start); no time is ever filled in. A date-TBD
+  game gets no SportsEvent at all; the page still lists it as "Date TBD"
+  (DECISIONS 0030, amended 2026-11-06).
 - homeTeam and awayTeam are set only when the event name says which side is
   at home ("Home vs Away", "Away at Home"). A listing whose two teams are
   not known in that order, or that is not a two-team game at all (a
@@ -113,13 +116,28 @@ def sports_team(*, name: str, page_url: str, sport: str, organization: str) -> d
     return node
 
 
+def event_start(game: Mapping[str, Any]) -> str | None:
+    """The SportsEvent's startDate, or None when the game has no published
+    date: the exact local start with its UTC offset when the time is
+    published, else the local date alone when the time is not (TBA, or no
+    time and no instant). A game whose time is published but whose instant
+    cannot be placed in the venue's zone gets None, not a date that drops a
+    known time."""
+    if game.get("date_tbd") or not game.get("in_calendar_feed"):
+        return None
+    exact = game.get("start_local_datetime")
+    if exact and not game.get("time_tba"):
+        return str(exact)
+    day = game.get("start_local_date")
+    if day and (game.get("time_tba") or not game.get("start_utc")):
+        return str(day)
+    return None
+
+
 def event_eligible(game: Mapping[str, Any]) -> bool:
     """True only when every fact a SportsEvent states is published."""
     return bool(
-        game.get("start_local_datetime")
-        and not game.get("date_tbd")
-        and not game.get("time_tba")
-        and game.get("in_calendar_feed")
+        event_start(game)
         and game.get("home_away_known")
         and game.get("home_team")
         and game.get("away_team")
@@ -156,7 +174,7 @@ def sports_event(game: Mapping[str, Any], *, sport: str) -> dict[str, Any] | Non
     node: dict[str, Any] = {
         "@type": "SportsEvent",
         "name": event_name(game),
-        "startDate": game["start_local_datetime"],
+        "startDate": event_start(game),
         "eventAttendanceMode": OFFLINE,
         "location": {"@type": "Place", "name": game["venue_name"], "address": address},
         "homeTeam": {"@type": "SportsTeam", "name": team_label(game["home_team"])},

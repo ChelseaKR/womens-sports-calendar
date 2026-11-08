@@ -12,6 +12,10 @@ archived and private.
 
 ### Added
 
+- A game with a published date but no published time now gets SportsEvent
+  markup too, with its date alone as the start (DECISIONS 0030, amended
+  2026-11-06). Timed games keep their exact start with the venue's UTC
+  offset; a date-TBD game still gets no event, and no time is ever filled in.
 - A calendar help page at `/help/` (DECISIONS 0036): how to subscribe in
   Apple Calendar on iPhone, iPad and Mac, Google Calendar, Outlook.com and
   Outlook for work or school; how to unsubscribe; how often each app says it
@@ -89,6 +93,13 @@ archived and private.
 
 ### Changed
 
+- Page titles and meta descriptions follow what Search Console shows fans
+  typing (DECISIONS 0037): an empty WNBA page reads "<team> schedule 2027",
+  as "phoenix mercury schedule 2027" is typed; other empty pages name the
+  calendar and, when the page has one, the team's official ticket page; an
+  away-only page no longer says "every home and away game"; and
+  descriptions run 120 to 155 characters, with the opponent's "women's
+  basketball" suffix dropped in every spelling Ticketmaster uses.
 - Games tables: the box that scrolls sideways on a phone can now be reached
   with the keyboard and is named by its table's caption. Each row's ticket
   link now reads "Tickets (Ticketmaster)" (or the team's own seller), and the

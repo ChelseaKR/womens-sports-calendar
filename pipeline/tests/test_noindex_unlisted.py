@@ -164,7 +164,10 @@ def test_an_indexed_empty_page_reads_honestly(dist: Path):
         assert "next-game--empty" in html, path
         title = re.search(r"<title>([^<]*)</title>", html)
         assert title is not None
-        assert re.search(r" schedule(: add it to your calendar)? \| ", title.group(1) + " | "), title.group(1)
+        assert re.search(
+            r" schedule( 20\d\d)?(: add it to your calendar|: calendar and official ticket page)? \| ",
+            title.group(1) + " | ",
+        ), title.group(1)
     assert "<title>AUSL schedule: add to your calendar | Next Home Game</title>" in _page(dist, AUSL)
     assert "<h1>AUSL schedule</h1>" in _page(dist, AUSL)
 
