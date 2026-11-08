@@ -56,10 +56,11 @@ def _sabotage(path: Path, old: str, new: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_only_games_with_a_known_date_and_time_are_events(fixture_dist: Path):
+def test_only_games_with_a_published_date_are_events(fixture_dist: Path):
     events = _events((fixture_dist / ACES_PAGE).read_text())
     names = sorted(e["name"] for e in events)
     assert names == [
+        "Las Vegas Aces vs Atlanta Dream",  # date published, time TBA: a date-only start
         "Las Vegas Aces vs Los Angeles Sparks",  # cancelled, still a real dated game
         "Las Vegas Aces vs Seattle Storm",
         "Phoenix Mercury vs Las Vegas Aces",  # "Aces at Mercury"
@@ -67,12 +68,12 @@ def test_only_games_with_a_known_date_and_time_are_events(fixture_dist: Path):
     ]
     data = json.loads((records_dir(fixture_dist) / "wnba/las-vegas-aces.json").read_text())
     by_id = {g["event_id"]: g for g in data["games"]}
-    # Listed on the page, but never marked up: no time, no date, not a game,
-    # or no known home side.
-    for skipped in ("FX-TIME-TBA", "FX-DATE-TBD", "FX-PACKAGE", "FX-ATTRACTIONS"):
+    # Listed on the page, but never marked up: no date, not a game, or no
+    # known home side.
+    for skipped in ("FX-DATE-TBD", "FX-PACKAGE", "FX-ATTRACTIONS"):
         assert skipped in by_id
         assert not structured_data.event_eligible(by_id[skipped]), skipped
-    assert "Atlanta Dream" not in json.dumps(events)  # the time-TBA opponent
+    assert structured_data.event_eligible(by_id["FX-TIME-TBA"])
     assert "Dallas Wings" not in json.dumps(events)  # the date-TBD opponent
 
 
@@ -80,6 +81,11 @@ def test_start_dates_carry_the_venue_offset_and_are_the_real_instant(fixture_dis
     data = json.loads((records_dir(fixture_dist) / "wnba/las-vegas-aces.json").read_text())
     for event in _events((fixture_dist / ACES_PAGE).read_text()):
         start = event["startDate"]
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", start):
+            # Date only: the game's time is TBA, and none is filled in.
+            game = next(g for g in data["games"] if g["event_id"] == "FX-TIME-TBA")
+            assert game["time_tba"] and start == game["start_local_date"] == "2026-09-24"
+            continue
         assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}", start), start
         game = next(g for g in data["games"] if g["start_local_datetime"] == start)
         assert datetime.fromisoformat(start) == datetime.fromisoformat(game["start_utc"])
@@ -191,11 +197,12 @@ def test_validator_passes_the_fixture_site_and_counts_its_events(fixture_dist: P
     # The empty Big Ten and SEC league pages, Rutgers and Georgia (empty, no
     # official link) are noindex and unlisted.
     assert pages == 5 + 3 + 1 + sum(len(lg.teams) for lg in config.LEAGUES) - 2
-    # Aces 4 + Storm 1 + Thorns 1 + Sceptres 1 on team pages; WNBA 4, NWSL 1
-    # and PWHL 1 on league pages (the Aces/Storm game once); and 5 more on the
+    # Aces 5 + Storm 1 + Thorns 1 + Sceptres 1 on team pages; WNBA 5, NWSL 1
+    # and PWHL 1 on league pages (the Aces/Storm game once); and 6 more on the
     # pages of tracked opponents, which every fetched event is matched against
-    # (build.attribute_games).
-    assert events == 18
+    # (build.attribute_games). The time-TBA Aces vs Dream game is one of each
+    # of the Aces, WNBA and Dream counts (DECISIONS 0030, amended 2026-11-06).
+    assert events == 21
     assert validate_seo.main([str(fixture_dist)]) == 0
 
 
@@ -336,3 +343,63 @@ def test_a_theme_night_suffix_is_not_part_of_the_team_name():
     assert node["name"] == "Atlanta Dream vs Chicago Sky"
     assert node["awayTeam"] == {"@type": "SportsTeam", "name": "Chicago Sky"}
     assert structured_data.team_label("(Only parentheses)") == "(Only parentheses)"
+
+
+# ---------------------------------------------------------------------------
+# A dated game with no published time (DECISIONS 0030, amended 2026-11-06)
+# ---------------------------------------------------------------------------
+
+
+def _replace_event(page: Path, name: str, edit) -> None:
+    html = page.read_text(encoding="utf-8")
+    doc_text = JSONLD_RE.search(html).group(1)
+    doc = json.loads(doc_text)
+    hits = [n for n in doc["@graph"] if n.get("@type") == "SportsEvent" and n["name"] == name]
+    assert len(hits) == 1, name
+    edit(hits[0])
+    _sabotage(page, doc_text, json.dumps(doc, separators=(",", ":")))
+
+
+def test_a_time_tba_game_is_an_event_with_its_date_alone(fixture_dist: Path):
+    events = {e["name"]: e for e in _events((fixture_dist / ACES_PAGE).read_text())}
+    dream = events["Las Vegas Aces vs Atlanta Dream"]
+    assert dream["startDate"] == "2026-09-24"
+    assert dream["homeTeam"] == {"@type": "SportsTeam", "name": "Las Vegas Aces"}
+    assert dream["performer"] == [dream["homeTeam"], dream["awayTeam"]]
+    assert dream["location"]["name"] == "Michelob Ultra Arena"
+    assert "eventStatus" not in dream
+    # The page still says the time is TBA.
+    assert "time TBA" in (fixture_dist / ACES_PAGE).read_text()
+
+
+@pytest.mark.parametrize(
+    "name,start",
+    [
+        # A time guessed for the time-TBA game.
+        ("Las Vegas Aces vs Atlanta Dream", "2026-09-24T19:00:00-07:00"),
+        # The wrong date for it.
+        ("Las Vegas Aces vs Atlanta Dream", "2026-09-25"),
+        # A published time dropped: a timed game is never date-only.
+        ("Las Vegas Aces vs Seattle Storm", "2026-09-19"),
+    ],
+)
+def test_control_a_wrong_date_only_start_fails(fixture_dist: Path, tmp_path: Path, name, start):
+    dist = _copy(fixture_dist, tmp_path / "dist")
+    _replace_event(dist / ACES_PAGE, name, lambda node: node.update(startDate=start))
+    with pytest.raises(validate_seo.SeoError, match="matches 0 listed games"):
+        validate_seo.validate_dist(dist)
+
+
+def test_control_an_event_for_a_date_tbd_game_fails(fixture_dist: Path, tmp_path: Path):
+    """The date-TBD game carries a placeholder localDate; markup that uses it
+    as the game's date must be rejected."""
+    dist = _copy(fixture_dist, tmp_path / "dist")
+
+    def to_wings(node: dict) -> None:
+        node.update(name="Las Vegas Aces vs Dallas Wings", startDate="2026-10-01")
+        node["awayTeam"] = {"@type": "SportsTeam", "name": "Dallas Wings"}
+        node["performer"] = [node["homeTeam"], node["awayTeam"]]
+
+    _replace_event(dist / ACES_PAGE, "Las Vegas Aces vs Atlanta Dream", to_wings)
+    with pytest.raises(validate_seo.SeoError, match="matches 0 listed games"):
+        validate_seo.validate_dist(dist)
