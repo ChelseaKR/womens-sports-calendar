@@ -12,6 +12,10 @@ archived and private.
 
 ### Changed
 
+- League pages open with the next game Ticketmaster lists, and their search
+  descriptions name it (DECISIONS 0040). College teams are linked and named
+  as fans search them ("Purdue women's basketball") in league rosters, the
+  "more teams" lists and the no-home-game note. Titles are unchanged.
 - Search descriptions follow the 2026-11-08 Search Console data (DECISIONS
   0038): an empty WNBA page's description says no next home game is listed
   yet, and the home page's description names the next listed home game.

@@ -94,8 +94,9 @@ class Team:
     # What a page <title>, meta description and <h1> call the team when
     # `shown_name` is too long or not what a fan searches ("Ohio State women's
     # basketball", not the Ticketmaster keyword "Ohio State Buckeyes Womens
-    # Basketball"). Not part of any feed or data file, and the rest of the
-    # page keeps `shown_name`. None: `shown_name`.
+    # Basketball"), and the league roster, "more teams" links and no-home-game
+    # note too (DECISIONS 0040). Not part of any feed or data file; the rest
+    # of the page keeps `shown_name`. None: `shown_name`.
     title_name: str | None = None
     # A college team's school ("Penn State") and its mascots ("Nittany
     # Lions", plus any short form Ticketmaster uses, such as "Vols"). With a

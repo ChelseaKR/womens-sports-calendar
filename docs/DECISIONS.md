@@ -1710,3 +1710,46 @@ descriptions only: a title never names the opponent.
 
 **Enforced by** `tests/test_search_console_titles.py`, which also pins the held
 titles.
+
+## 0040 — League pages lead with the next listed game; college teams are linked by the name a fan searches (2026-11-09)
+
+**Why:** Search Console, 2026-10-12 to 11-08: 975 impressions, 10 clicks.
+In-season pages carry most of the ranked impressions: the Big Ten team pages
+sit at positions 6 to 10 (USC 45 impressions, Michigan 43, Iowa 38), and the
+PWHL pages draw "<team> schedule 2026-27" and "pwhl schedule" queries. Team
+pages already open with the next home game (0025, 0038); league pages opened
+with a sentence about the page, and their descriptions named no game. The
+college rosters, the "more teams" lists and the no-home-game note showed the
+Ticketmaster keyword ("Purdue Boilermakers Womens Basketball"), while fans
+search "<school> women's basketball" and the page's own heading says that.
+
+The data were checked the same day: all 46 PWHL and women's basketball feeds
+hold 2026-27 games only, with no duplicate dates, no other sport and no
+cancelled listing. The PWHL's own schedule (thepwhl.com, read once,
+robots.txt allows it) opens the regular season on 2026-12-05, and the
+opening games on the site match it in date, time and venue. The known gaps
+stay as 0006 and the 2026-11-07 readiness check left them: the Minnesota
+Frost (SeatGeek) and Vancouver Goldeneyes (Ticket Leader) sell their home
+games outside Ticketmaster, and their pages say so.
+
+The decision (`site.py`, templates only):
+
+- A league page's first sentence is the next game Ticketmaster lists, with
+  both teams, the venue, the date and the venue's local time ("start time
+  not announced yet" when Ticketmaster has none). It says "Ticketmaster
+  lists" because a game sold elsewhere can come first. Its description leads
+  with "Next game: <date>, <home> vs <away>" when that form is 120 to 155
+  characters. Nothing is said when no dated game with both teams is listed,
+  or when the build did not check.
+- College schools in that sentence are named as the team pages' descriptions
+  name opponents (`_opponent_label`): "Vanderbilt vs Morehead State Eagles".
+- The league roster, the "more teams" list and the no-home-game note name a
+  college team by `Team.title_name` ("Purdue women's basketball"). Pro teams
+  are unchanged. Feeds, data files, breadcrumbs and structured data keep the
+  shown name.
+
+Not changed: every page title (0038 holds the women's basketball titles until
+2026-12-07, and "tickets" stays in them), team page descriptions, and the
+pipeline's sources.
+
+**Enforced by** `tests/test_league_next_game.py`, with three controls.
