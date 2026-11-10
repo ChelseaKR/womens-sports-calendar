@@ -575,7 +575,8 @@ def _sells_elsewhere_msg(team: Mapping[str, Any]) -> str:
     sentences = _seller_sentences(team)
     if not sentences:
         return ""
-    return f"No {e(team['team_name'])} games are listed by Ticketmaster right now.\n{sentences}"
+    name = title_name_for(team["league_slug"], team["team_name"])
+    return f"No {e(name)} games are listed by Ticketmaster right now.\n{sentences}"
 
 
 def _next_game_hero(team: Mapping[str, Any]) -> str:
@@ -616,7 +617,10 @@ your calendar automatically &mdash; nothing to check back for.</p>
         label = "Next game, away" if g.get("tracked_team_is_home") is False else "Next listed game"
         sellers_note = _seller_sentences(team)
         sellers_note = f"\n{sellers_note}" if sellers_note else ""
-        note = f'<p class="next-game-note">No {e(team_name)} home game is listed by Ticketmaster right now.{sellers_note}</p>\n'
+        # The name a fan searches ("Purdue women's basketball"), as the lede
+        # says it, not the Ticketmaster keyword (DECISIONS 0040).
+        shown = title_name_for(team["league_slug"], team_name)
+        note = f'<p class="next-game-note">No {e(shown)} home game is listed by Ticketmaster right now.{sellers_note}</p>\n'
     month_day = _month_day(g["start_local_date"])
     matchup = _matchup_text(g)
     when = _when_html(g) + _feed_note(g)
@@ -702,6 +706,7 @@ def _schedule_heading(subject: str, season: str | None) -> str:
 # off. The build fails (validate_seo) on a page that runs over, so a long name
 # is shortened by the tiers below, never cut mid-word by a search engine.
 TITLE_MAX = 60
+DESCRIPTION_MIN = 120
 DESCRIPTION_MAX = 155
 
 
@@ -1647,13 +1652,17 @@ def render_league(
     fetched = league.get("fetched", True)
     ics_https = f"{base_url}/ics/{slug}.ics"
     page_url = f"{base_url}/{slug}/"
-    # The team's real name ("Gotham FC", "UCLA Bruins Womens Basketball"),
-    # not a title-cased slug ("Gotham Fc", "Ucla Bruins ...") -- this list is
-    # the league page's only internal link to each team page.
+    # The team's real name ("Gotham FC"), not a title-cased slug ("Gotham
+    # Fc") -- this list is the league page's only internal link to each team
+    # page. A college team is linked by the name a fan searches ("UCLA
+    # women's basketball", Team.title_name), not the Ticketmaster keyword
+    # ("UCLA Bruins Womens Basketball"); the data file keeps the shown name
+    # (DECISIONS 0040).
     team_names = league.get("team_names") or {}
 
     def team_name(slug_: str) -> str:
-        return team_names.get(slug_) or slug_.replace("-", " ").title()
+        shown = team_names.get(slug_)
+        return title_name_for(slug, shown) if shown else slug_.replace("-", " ").title()
 
     team_links = "\n".join(f'<li><a href="/{e(slug)}/{e(t)}/">{e(team_name(t))}</a></li>' for t in league["teams"])
     incomplete = league.get("possibly_incomplete_teams") or []
@@ -1666,7 +1675,7 @@ def render_league(
     heading = _schedule_heading(league_names_for(slug, name)[0], season)
     body = f"""{_breadcrumb([("All leagues", "/")], name)}
 <h1>{e(heading)}</h1>
-<p class="lede">Every {e(name)} game Ticketmaster lists, with its date, time
+<p class="lede">{_next_league_game_sentence(league)}Every {e(name)} game Ticketmaster lists, with its date, time
 and venue. Add the whole league to your calendar, or pick a team below for
 just its games.</p>
 {_subscribe_block(ics_https_url=ics_https, subject=f"the {name} schedule", cal_name=calendar_name(name))}
@@ -1715,8 +1724,27 @@ def _league_description(heading: str, league: dict[str, Any]) -> str:
             ],
             DESCRIPTION_MAX,
         )
+    # The next listed game first, as a team page's description gives its next
+    # home game (DECISIONS 0038, 0040); the old wording when none is listed.
+    next_game: list[str] = []
+    nxt = _next_league_game(league)
+    if nxt is not None:
+        when = f"{nxt['start_display']}, {_league_matchup_label(league['league_slug'], nxt)}"
+        # A form under 120 characters says too little; the old wording is used
+        # instead (DECISIONS 0037's floor).
+        next_game = [
+            c
+            for c in (
+                f"{heading}. Next game: {when}. Add every game, or just your team's, to your calendar.",
+                f"{heading}. Next game: {when}. Add it to your calendar, updated nightly.",
+                f"{heading}. Next game: {when}. Add it to your calendar.",
+                f"{heading}. Next game: {when}.",
+            )
+            if len(c) >= DESCRIPTION_MIN
+        ]
     return _fit(
         [
+            *next_game,
             f"{heading}: add every game to Google Calendar, Apple Calendar or Outlook, or just "
             "your team's, with dates, times and venues, updated nightly.",
             f"{heading}: add every game, or just your team's, to your calendar, with dates, "
@@ -1967,23 +1995,88 @@ def _next_home_sentence(name: str, league_slug: str, game: Mapping[str, Any]) ->
     no opponent, venue, date or time is ever filled in. The time is the
     venue's local time with its zone, as display_start wrote it."""
     against = f" against {e(_opponent_label(league_slug, game['away_team']))}" if game.get("away_team") else ""
+    where = _where_html(game)
+    dated = _date_clause(game)
+    if dated is None:
+        return f"The next {name} home game Ticketmaster lists is{against}{where}; its date is not announced yet."
+    when, tail = dated
+    status = f" Ticketmaster lists it as {e(game['status'].lower())}." if game.get("status") else ""
+    comma = "," if against or where else ""
+    return f"The next {name} home game is{against}{where}{comma} on {when}{tail}.{status}"
+
+
+def _where_html(game: Mapping[str, Any]) -> str:
+    """ " at Galen Center in Los Angeles, CA", each part only when
+    Ticketmaster published it; "" when it published none."""
     place = ", ".join(p for p in (game.get("venue_city"), game.get("venue_state")) if p)
     if game.get("venue_name"):
-        where = f" at {e(game['venue_name'])}" + (f" in {e(place)}" if place else "")
-    else:
-        where = f" in {e(place)}" if place else ""
+        return f" at {e(game['venue_name'])}" + (f" in {e(place)}" if place else "")
+    return f" in {e(place)}" if place else ""
+
+
+def _date_clause(game: Mapping[str, Any]) -> tuple[str, str] | None:
+    """(the <time> element for "Sunday, November 8, 2026, at 5:00 PM PST",
+    the tail ", start time not announced yet" or ""), or None when the date
+    is not announced. The time is the venue's local time with its zone, as
+    display_start wrote it; none is ever filled in."""
     iso_date = None if game.get("date_tbd") else game.get("start_local_date")
     if iso_date is None:
-        return f"The next {name} home game Ticketmaster lists is{against}{where}; its date is not announced yet."
+        return None
     day = display_date(date.fromisoformat(iso_date))
     shown = str(game.get("start_display") or "")
     clock = shown[len(day) + 2 :] if shown.startswith(f"{day}, ") else ""
     machine = game.get("start_local_datetime") or iso_date
     when = f'<time datetime="{e(machine)}">{e(_full_date(iso_date))}{f", at {e(clock)}" if clock else ""}</time>'
-    tail = "" if clock else ", start time not announced yet"
+    return when, ("" if clock else ", start time not announced yet")
+
+
+def _league_matchup_label(league_slug: str, game: Mapping[str, Any]) -> str | None:
+    """ "Vanderbilt vs Morehead State Eagles" for a sentence or a snippet:
+    each side as _opponent_label names it (a registry school by its school,
+    another without Ticketmaster's "Womens Basketball" suffix). None when
+    Ticketmaster's name did not give both sides."""
+    if not (game.get("home_team") and game.get("away_team")):
+        return None
+    home = _opponent_label(league_slug, game["home_team"])
+    away = _opponent_label(league_slug, game["away_team"])
+    return f"{home} vs {away}"
+
+
+def _next_league_game(league: Mapping[str, Any]) -> Mapping[str, Any] | None:
+    """The soonest listed game with a known date and both sides named, or
+    None. league["games"] is soonest first (site_data._sort_key), date-TBD
+    games last."""
+    if not league.get("fetched", True):
+        return None
+    return next(
+        (
+            g
+            for g in league["games"]
+            if not g.get("date_tbd") and g.get("start_local_date") and g.get("home_team") and g.get("away_team")
+        ),
+        None,
+    )
+
+
+def _next_league_game_sentence(league: Mapping[str, Any]) -> str:
+    """The league page's answer-first sentence (DECISIONS 0040): "The next
+    PWHL game Ticketmaster lists is Montreal Victoire vs PWHL Hamilton at
+    Place Bell in Laval, QC, on Saturday, December 5, 2026, at 7:00 PM EST."
+    It says "Ticketmaster lists" because a game sold elsewhere can come
+    first and not be here. "" when no dated game with both sides is listed,
+    or when this build did not look: never a guessed game."""
+    game = _next_league_game(league)
+    if game is None:
+        return ""
+    slug = league["league_slug"]
+    subject = league_names_for(slug, league["league_name"])[0]
+    dated = _date_clause(game)
+    if dated is None:  # _next_league_game keeps dated games only
+        return ""
+    when, tail = dated
+    matchup = _league_matchup_label(slug, game)
     status = f" Ticketmaster lists it as {e(game['status'].lower())}." if game.get("status") else ""
-    comma = "," if against or where else ""
-    return f"The next {name} home game is{against}{where}{comma} on {when}{tail}.{status}"
+    return f"The next {e(subject)} game Ticketmaster lists is {e(matchup or '')}{_where_html(game)}, on {when}{tail}.{status}\n"
 
 
 def _team_lede(team: Mapping[str, Any]) -> str:
@@ -2043,7 +2136,7 @@ def _sibling_teams_block(league_slug: str, team_slug: str, league_name: str) -> 
     if league is None:
         return ""
     items = "\n".join(
-        f'<li><a href="/{e(league_slug)}/{e(t.slug)}/">{e(t.shown_name)}</a></li>'
+        f'<li><a href="/{e(league_slug)}/{e(t.slug)}/">{e(t.search_title_name)}</a></li>'
         for t in league.teams
         if t.slug != team_slug
     )

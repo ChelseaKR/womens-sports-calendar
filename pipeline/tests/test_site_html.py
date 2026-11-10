@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from html import unescape
 
 from wsc_pipeline.config import LEAGUES, LEAGUES_EXAMINED_NOT_INCLUDED
 from wsc_pipeline.normalize import normalize_event
@@ -261,10 +262,11 @@ def test_league_roster_links_use_real_team_names_not_title_cased_slugs():
     ncaa = next(lg for lg in LEAGUES if lg.slug == "ncaaw-big-ten")
     nwsl = next(lg for lg in LEAGUES if lg.slug == "nwsl")
     for league, real, mangled in (
-        (ncaa, "UCLA Bruins Womens Basketball", "Ucla Bruins"),
+        # A college team is linked by its searched name (DECISIONS 0040).
+        (ncaa, "UCLA women's basketball", "Ucla Bruins"),
         (nwsl, "Gotham FC", "Gotham Fc"),
     ):
-        html = render_league(league=league_data(league, []), base_url="https://nexthomegame.com")
+        html = unescape(render_league(league=league_data(league, []), base_url="https://nexthomegame.com"))
         assert f">{real}</a>" in html
         assert mangled not in html
 
