@@ -185,6 +185,10 @@ class GuardReport:
     accepted_removals: list[str] = field(default_factory=list)
     expired_overrides: list[str] = field(default_factory=list)
     unreadable: dict[TeamKey, str] = field(default_factory=dict)
+    # Teams that lost more than PublishGuard.flag_team_vanished_share of their
+    # upcoming games, but not all of them: published, and flagged in the run
+    # log, the annotations and COVERAGE.txt (DECISIONS 0042). Never refuses.
+    flagged: list[str] = field(default_factory=list)
 
     @property
     def refused(self) -> bool:
@@ -494,6 +498,13 @@ class _Evaluation:
                 "team-all",
                 f"{team.name} ({lg.slug}/{team.slug}) lost all {len(upcoming)} of its upcoming games: " + _named(rows),
             )
+        limit = self.settings.flag_team_vanished_share
+        if len(upcoming) >= self.settings.min_previous_upcoming and len(rows) / len(upcoming) > limit:
+            self.report.flagged.append(
+                f"{team.name} ({lg.slug}/{team.slug}) lost {len(rows)} of its {len(upcoming)} upcoming games "
+                f"({len(rows) / len(upcoming):.0%}; the flag is at more than {limit:.0%}). Published anyway; "
+                "check whether Ticketmaster renamed the team or its keyword stopped matching: " + _named(rows)
+            )
         return None
 
     def _league_rule(
@@ -711,6 +722,7 @@ def render_section(report: GuardReport) -> list[str]:
             f"  WARNING: {len(report.unreadable)} team file(s) of the previous publish could not be read, so "
             f"those teams were NOT compared: {unread}"
         )
+    lines.extend(f"  FLAGGED: {message}" for message in report.flagged)
     lines.extend(_render_vanished(report))
     lines.extend(_render_changes(report))
     lines.extend(f"  ACCEPTED BY OVERRIDE ({v.override_reason}): {v.message}" for v in report.accepted)
@@ -721,7 +733,8 @@ def render_section(report: GuardReport) -> list[str]:
 
 def announce(report: GuardReport, *, github_actions: bool) -> None:
     """One-line messages for the run log (stderr) about what the guard could
-    not check or accepted; `::warning` annotations under GitHub Actions."""
+    not check, accepted or flagged; `::warning` annotations under GitHub
+    Actions."""
     messages: list[str] = []
     if not report.compared:
         messages.append(f"NOT COMPARED with the previous publish: {report.note}")
@@ -731,6 +744,7 @@ def announce(report: GuardReport, *, github_actions: bool) -> None:
             "those teams were not compared"
         )
     messages.extend(f"accepted by override: {v.message} ({v.override_reason})" for v in report.accepted)
+    messages.extend(f"FLAGGED: {message}" for message in report.flagged)
     messages.extend(report.expired_overrides)
     for message in messages:
         print(f"WARNING: publish guard: {message}", file=sys.stderr)

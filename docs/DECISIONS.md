@@ -1850,3 +1850,46 @@ slugs) and
 now renders the renamed teams under their former names, since no configured
 team is named "PWHL <city>" any more. The Boston Fleet golden page was
 re-rendered for its "more teams" list only (new names and addresses).
+
+## 0042 — The publish guard flags a team that loses more than half its upcoming games (2026-11-14)
+
+**Why:** on 2026-11-10 the PWHL named its expansion teams, and Ticketmaster
+renamed most of their listings the next day. The site still searched the old
+names, so the 2026-11-12 build lost 18 of PWHL Detroit's upcoming games and
+16 of PWHL San Jose's (nightly run 43182099078), and the next night more.
+Each team kept a game or two still listed under its old name, so the guard's
+team rule (all of a team's games, ADR 0006) never fired, and the loss sat in
+COVERAGE.txt for three nights without anyone seeing it. The fix for the names
+is DECISIONS 0041; this one is about noticing the next time.
+
+**Decision (owner, 2026-11-14: "Yes, flag it"):** flag, do not refuse.
+
+- A team that had at least `min_previous_upcoming` (3) upcoming games and lost
+  more than `flag_team_vanished_share` (0.5) of them, but not all, is
+  flagged. The build still publishes. The guard writes a `FLAGGED:` line,
+  naming the team, the count, the share and the vanished games, to the run
+  log, as a `::warning` annotation under GitHub Actions, and in COVERAGE.txt,
+  which `pages.yml` copies into the job summary. The line suggests checking
+  for a renamed team or a keyword that stopped matching.
+- Why not refuse: ADR 0006's refusals stop every league's nightly update, not
+  one team's, and its rules are "deliberately slow to fire". A short list can
+  lose most of its games for ordinary reasons (a playoff series that ends
+  early drops its "if necessary" games). A team that loses everything is
+  still refused, as before.
+- Exactly half is not flagged; the share must be over it, like the league
+  rule. A team whose fetch was cut short is not flagged (its missing games
+  are not known to be gone), and a team below the minimum is not flagged.
+
+What a flag does not do: nobody is emailed. A successful run with a warning
+annotation is visible on the Actions run page and in its summary only. If
+that is not enough, the next step is an issue opened by the workflow, like
+the freshness alarm's (ADR 0003), which needs `issues: write` on the pages
+workflow.
+
+**Enforced by** `tests/test_publish_guard.py`: the 2026-11-12 shape (18 of
+20 gone) is flagged and published; the annotation; the threshold at 10, 11
+and 19 of 20; below the minimum; all gone is refused and not flagged; a
+truncated fetch is not flagged; a control with the share at 1.0; and an end
+to end pair of builds whose COVERAGE.txt carries the flag. Disabling the
+rule fails 6 of these.
+

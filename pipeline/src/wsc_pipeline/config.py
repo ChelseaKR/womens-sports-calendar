@@ -692,6 +692,20 @@ class PublishGuard:
 
     Smaller drops are listed in COVERAGE.txt but never block.
 
+    One more check FLAGS a build without refusing it: a team that had at
+    least `min_previous_upcoming` upcoming games and lost more than
+    `flag_team_vanished_share` of them, but not all (all is the team rule
+    above). The build publishes, and the guard writes a warning to the run
+    log, a `::warning` annotation under GitHub Actions and a FLAGGED line in
+    COVERAGE.txt, which the pages workflow copies into the job summary. This
+    is the rename case of 2026-11-12: Ticketmaster renamed the PWHL expansion
+    teams' listings, PWHL Detroit lost 18 of its upcoming games and PWHL San
+    Jose 16, and each kept a game or two under its old name, so the team rule
+    never fired (DECISIONS 0042). It flags rather than refuses, by the
+    owner's choice on 2026-11-14: a refusal freezes every league's nightly
+    update for one team, and a team can lose most of a short list for
+    ordinary reasons (a playoff series that ends early).
+
     These numbers were chosen, not measured: there is no history of
     night-to-night listing churn to measure them against (the site is
     stateless; the only record is the live site). They are deliberately
@@ -715,6 +729,7 @@ class PublishGuard:
     settle_hours: int = 24
     min_previous_upcoming: int = 3
     max_league_vanished_share: float = 0.5
+    flag_team_vanished_share: float = 0.5
 
 
 PUBLISH_GUARD = PublishGuard()
