@@ -87,7 +87,12 @@ def _feed_of(*ids_and_days: tuple[str, float], team: str = FEVER, league: str = 
 
 def test_the_default_thresholds_are_the_documented_ones():
     """docs/adr/0006 and config.PublishGuard's docstring quote these."""
-    assert PublishGuard(settle_hours=24, min_previous_upcoming=3, max_league_vanished_share=0.5) == config.PUBLISH_GUARD
+    assert (
+        PublishGuard(
+            settle_hours=24, min_previous_upcoming=3, max_league_vanished_share=0.5, flag_team_vanished_share=0.5
+        )
+        == config.PUBLISH_GUARD
+    )
     assert config.PUBLISH_GUARD_OVERRIDES == ()
     assert config.REMOVED_EVENTS == ()
 
@@ -799,3 +804,104 @@ def test_no_job_summary_is_written_outside_github_actions(tmp_path: Path, monkey
     rc, _out = _main_with(monkeypatch, tmp_path, _real_now_previous(), other_league)
     assert rc == 1
     assert not list(tmp_path.glob("*.md"))
+
+
+# --- a team loses most, but not all, of its games: flagged, never refused (DECISIONS 0042) ----------------
+
+
+def _rename_case(kept: int, total: int = 20) -> tuple[PreviousPublish, list[Game]]:
+    """The 2026-11-12 shape: Ticketmaster renamed a team's listings, its
+    search found only the games still under the old name, and the rest of
+    the league kept its games."""
+    previous = _previous(
+        wnba__indiana_fever=[_prev(f"F{i}", 10 + i) for i in range(total)],
+        wnba__new_york_liberty=[_prev(f"L{i}", 12 + i) for i in range(30)],
+    )
+    fresh = _feed_of(*[(f"F{i}", 10 + i) for i in range(kept)]) + _feed_of(
+        *[(f"L{i}", 12 + i) for i in range(30)], team=LIBERTY
+    )
+    return previous, fresh
+
+
+def test_a_team_losing_most_of_its_games_is_flagged_and_still_published():
+    previous, fresh = _rename_case(kept=2)
+    report = _run(previous, fresh)
+    assert not report.refused, "a flag never refuses the build"
+    (message,) = report.flagged
+    for needle in ("indiana-fever", "lost 18 of its 20 upcoming games", "90%", "Published anyway", "F2 (Event F2"):
+        assert needle in message
+    section = "\n".join(guard.render_section(report))
+    assert f"  FLAGGED: {message}" in section
+    assert len(report.vanished) == 18  # still listed game by game, as before
+
+
+def test_the_flag_is_announced_as_a_warning_annotation(capsys: pytest.CaptureFixture[str]):
+    previous, fresh = _rename_case(kept=2)
+    report = _run(previous, fresh)
+    guard.announce(report, github_actions=True)
+    err = capsys.readouterr().err
+    assert "WARNING: publish guard: FLAGGED: Indiana Fever (wnba/indiana-fever) lost 18" in err
+    assert "::warning title=Publish guard::FLAGGED: Indiana Fever (wnba/indiana-fever) lost 18" in err
+
+
+@pytest.mark.parametrize(("kept", "flagged"), [(2, True), (1, True), (10, False), (9, True), (19, False)])
+def test_the_flag_fires_only_above_half(kept: int, flagged: bool):
+    """Exactly half gone (10 of 20) is not flagged; 11 of 20 is."""
+    previous, fresh = _rename_case(kept=kept)
+    report = _run(previous, fresh)
+    assert not report.refused
+    assert bool(report.flagged) is flagged
+
+
+def test_a_team_with_fewer_than_the_minimum_games_is_not_flagged():
+    previous = _previous(
+        wnba__indiana_fever=[_prev("A", 10), _prev("B", 20)],
+        wnba__new_york_liberty=[_prev(f"L{i}", 12 + i) for i in range(6)],
+    )
+    kept = _feed_of(("B", 20)) + _feed_of(*[(f"L{i}", 12 + i) for i in range(6)], team=LIBERTY)
+    report = _run(previous, kept)
+    assert report.flagged == [] and not report.refused
+
+
+def test_a_team_losing_everything_is_refused_not_flagged():
+    previous, fresh = _rename_case(kept=0)
+    report = _run(previous, fresh)
+    assert [v.rule for v in report.violations] == ["team-all"]
+    assert report.flagged == []
+
+
+def test_a_team_whose_fetch_was_cut_short_is_not_flagged():
+    previous, fresh = _rename_case(kept=2)
+    report = _run(previous, fresh, truncated={"wnba": {FEVER}})
+    assert report.flagged == [] and not report.refused
+
+
+def test_control_with_the_flag_share_at_one_the_rename_case_passes_silently():
+    """Negative control: the flag above is the new threshold's doing."""
+    previous, fresh = _rename_case(kept=2)
+    report = _run(
+        previous,
+        fresh,
+        settings=PublishGuard(
+            settle_hours=24, min_previous_upcoming=3, max_league_vanished_share=0.5, flag_team_vanished_share=1.0
+        ),
+    )
+    assert report.flagged == [] and not report.refused
+    assert "FLAGGED" not in "\n".join(guard.render_section(report))
+
+
+def test_a_build_that_flags_publishes_and_its_coverage_report_says_so(tmp_path: Path, monkeypatch):
+    """End to end: the second build keeps 1 of the Fever's 5 games, publishes,
+    and COVERAGE.txt (which pages.yml copies into the job summary) carries the
+    flag."""
+    live = tmp_path / "live"
+    _build(live, {FEVER: _five_fever_games(), LIBERTY: _liberty_games()}, monkeypatch, None)
+    with httpx.Client(transport=httpx.MockTransport(_serve(live))) as client:
+        previous = REAL_FETCH_PREVIOUS_PUBLISH(BASE_URL, client=client)
+
+    out = tmp_path / "next"
+    coverage = _build(out, {FEVER: _five_fever_games()[:1], LIBERTY: _liberty_games()}, monkeypatch, previous)
+    assert coverage.publish_guard is not None and not coverage.publish_guard.refused
+    text = (out / "COVERAGE.txt").read_text()
+    assert "FLAGGED: Indiana Fever (wnba/indiana-fever) lost 4 of its 5 upcoming games (80%" in text
+    assert (out / "ics" / "wnba" / f"{FEVER}.ics").is_file()

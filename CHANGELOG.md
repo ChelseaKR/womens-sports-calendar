@@ -23,6 +23,15 @@ archived and private.
   new one, as for the Houston Comets. Each page says what the team used to
   be called, and its official ticket link goes to the team's new ticket page.
 
+### Added
+
+- The nightly publish guard flags a team that loses more than half of its
+  upcoming games (and has at least three) without losing all of them: a
+  FLAGGED line in the coverage report and the job summary, and a warning
+  annotation on the run. The build still publishes (DECISIONS 0042). This is
+  how the PWHL expansion teams' renamed listings went unnoticed from
+  2026-11-12.
+
 ### Changed
 
 - The home page's list of every team names college teams as fans search

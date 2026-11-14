@@ -73,7 +73,15 @@ deploy stays live) when, for a league with no active override:
 | team lost everything | a team had at least 3 upcoming games before and every one vanished | `min_previous_upcoming = 3` |
 
 Smaller losses are listed in `COVERAGE.txt` (the "Publish guard" section) and
-never block. Vanished games for a team whose fetch was cut short (Ticketmaster
+never block.
+
+Amended 2026-11-14 (DECISIONS 0042): one smaller loss is **flagged**, not
+refused. A team with at least 3 upcoming games that loses more than half of
+them, but not all, gets a `FLAGGED:` line in `COVERAGE.txt` (and so the job
+summary), the run log and a `::warning` annotation
+(`flag_team_vanished_share = 0.5`). The build still publishes. This is the
+rename case of 2026-11-12, when two PWHL teams lost most of their games and
+kept one or two under their old names. Vanished games for a team whose fetch was cut short (Ticketmaster
 results are read in date order, and a truncated read leaves out the later
 ones) are listed separately and not counted.
 
@@ -156,7 +164,8 @@ team whose upcoming games mostly or wholly vanish between two nights.
 
 Not guarded: a team losing one or two games while its league keeps games
 (see "Why the team rule needs three games"), a team with three or more losing
-fewer than all of them, or a league losing half or
+fewer than all of them (flagged, not refused, when it is more than half,
+since DECISIONS 0042), or a league losing half or
 less of its games, in one night; games that Ticketmaster changes rather than
 removes (a wrong venue, a moved time); a slow decline across many nights
 (each night compared only with the last); an event id that changes while the
