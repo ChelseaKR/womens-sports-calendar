@@ -59,6 +59,15 @@ step produces the game list. Broadcaster is never populated — no licensed
 source carries it — and every league's calendar note says plainly that its
 own schedule was not used and why, rather than silently thinning out.
 
+*Addendum 2026-11-14 (owner decision, Chelsea):* light reads of thepwhl.com's
+team and ticket pages are allowed, never its schedules. An agent or the
+maintainer may now and then fetch a PWHL team's home page or ticket page, with
+an honest user agent and only while robots.txt allows it, to confirm a team's
+name or check an official ticket link (0019, 0041). Nothing read there is
+published as data, and its schedule pages and the HockeyTech feed stay unused:
+`docs/LICENSES-AND-ATTRIBUTION.md`'s PWHL verdict is unchanged for them. This
+is an owner risk decision about the terms' clause (xi), not a licence.
+
 ## 0007 — Domain: nexthomegame.com (2026-09-14)
 
 [moved to private strategy notes] This resolves the domain
@@ -1775,22 +1784,36 @@ found by the opponents' searches. Games between two renamed teams were in no
 calendar at all. Hamilton's 2026-12-05 opener at Montréal ("La Victoire De
 Montréal vs Havoc de Hamilton") was missing from Hamilton's page and feed.
 
-The decision (`config.py`, the 0017 rename path without a new address):
+The decision (`config.py`, the 0017 rename path with a new address, as the
+Comets moved in 0033; Chelsea chose new addresses on 2026-11-14):
 
-- Each team keeps its slug, so its page and feed URLs, and every
-  subscriber's calendar, stay where they are. `name` becomes the new name
-  (the Ticketmaster keyword and the name every page, title, calendar name
-  and link shows), and `search_names` keeps the working name ("PWHL
-  Detroit"), searched and recognized while any listing uses it, plus the
-  French name where Ticketmaster has used one. That is 7 more Discovery
-  requests a night. No Detroit French name has been seen, so none is
-  searched. UIDs come from the Ticketmaster event id, so no event is
-  duplicated in a subscriber's calendar.
-- No new address. Moving `/pwhl/pwhl-detroit/` to `/pwhl/detroit-clutch/`
-  would put the name in the URL, but this host can only point an old page at
-  a new one with a noindex notice page (0033), and the old pages already rank
-  for "pwhl detroit" and "pwhl san jose" queries. Revisit if Search Console
-  shows the new names searched and these pages not shown for them.
+- Each team moves to a slug of its new name, the same path thepwhl.com uses:
+  `detroit-clutch`, `hamilton-havoc`, `san-jose-sea-lions`,
+  `vegas-vanguards`. Its old slug (`pwhl-detroit` and so on) becomes a
+  `former_slugs` entry. The build writes the same feed, byte for byte and
+  with the same UIDs, at the old path too, so a calendar subscribed to
+  `/ics/pwhl/pwhl-detroit.ics` keeps getting every game and nobody
+  subscribed to both sees one twice. The old page is the noindex notice
+  ("Detroit Clutch has a new page address", the note below, and "A calendar
+  you already subscribed to keeps working at its old address.") with a meta
+  refresh to the new page. The sitemap lists only the new page. On the
+  first build after the move the live site has no `detroit-clutch.ics`, so
+  the publish guard and the played-games history read the old feed as the
+  previous publish (0033's `guard.fetch_previous_publish` change), and the
+  team is not treated as new. Old feeds are never dead: a former slug is
+  kept for as long as anyone might subscribe to it.
+- `name` becomes the new name (the Ticketmaster keyword and the name every
+  page, title, calendar name and link shows), and `search_names` keeps the
+  working name ("PWHL Detroit"), searched and recognized while any listing
+  uses it, plus the French name where Ticketmaster has used one. That is 7
+  more Discovery requests a night. No Detroit French name has been seen, so
+  none is searched.
+- Search: the old pages had a few impressions for "pwhl detroit" and "pwhl
+  san jose" queries. GitHub Pages cannot send a 301, so the notice's meta
+  refresh is the only pointer; Google usually follows an instant refresh
+  like a redirect, but that is not guaranteed. The notice and the team page
+  both still name "PWHL Detroit" in the note. Check Search Console after the
+  2026-12-05 opener for the new and old addresses.
 - Each team page says, in `Team.history_note`, "PWHL Detroit is now the
   Detroit Clutch. The league announced the name on November 10, 2026." (and
   the same for the other three), so a fan who searched the old name sees why
@@ -1799,25 +1822,31 @@ The decision (`config.py`, the 0017 rename path without a new address):
   Vanguards move to the end.
 - The four official ticket links (0019) move to the addresses the old ones
   now redirect to, each fetched 2026-11-14 with HTTP 200, no redirect and a
-  ticket page title ("Tickets | Detroit Clutch | PWHL - ..."). The Vegas AXS
-  seller row is unchanged and was not re-checked.
+  ticket page title ("Tickets | Detroit Clutch | PWHL - ..."), under the
+  light-read allowance recorded at 0006. The Vegas AXS seller row moves to
+  the new slug unchanged; its AXS page was not re-checked. `measure_gap.py`'s
+  rows move to the new slugs.
 - The home page's list of every team names a college team as its own pages
   title it ("Iowa women's basketball"), as the league rosters and "more
   teams" lists have since 0040. Pro teams are unchanged except for the four
   new names.
 
-Not changed: any slug, feed path or UID; every other team; the publish
-guard's rules; `measure_gap.py`'s Wikipedia rows (they name the season
-article's cities, not the teams). The guard gap above is recorded here, not
-fixed: a rename that leaves one game under the old name looks like ordinary
-churn to it.
+Not changed: any UID or existing feed path (each old path is still
+published); every other team; the publish guard's rules; `measure_gap.py`'s
+Wikipedia city names. The guard gap above is not fixed here: a rename that
+leaves one game under the old name looks like ordinary churn to it. Chelsea
+asked on 2026-11-14 for the build to flag it, as a separate change.
 
 **Enforced by** `tests/test_pwhl_expansion_names.py` (every name shape seen on
 2026-11-14 recognized, other teams of the same cities not, the home flag,
 the searched names, a negative control with the old registry that keeps only
-the old-name game, the page's note and title, and the ticket links) and
+the old-name game, the page's note and title, the ticket links, each old
+feed byte-identical to the new one, each old page a noindex notice outside
+the sitemap, and the first build after the move reading the old feed),
+`tests/test_team_identity.py` (88 pinned slugs, the four old ones as former
+slugs) and
 `tests/test_internal_links.py` (home page names, with a control).
 `tests/test_search_console_titles.py`'s "a name that says its league" check
 now renders the renamed teams under their former names, since no configured
 team is named "PWHL <city>" any more. The Boston Fleet golden page was
-re-rendered for its "more teams" list only.
+re-rendered for its "more teams" list only (new names and addresses).

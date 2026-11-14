@@ -209,7 +209,7 @@ def test_the_home_page_names_each_team_as_its_own_page_titles_it(dist: Path):
         for t in lg.teams:
             assert f'<li><a href="/{lg.slug}/{t.slug}/">{site.e(t.search_title_name)}</a></li>' in home, t.slug
     assert "Womens Basketball</a>" not in home
-    assert '<a href="/pwhl/pwhl-detroit/">Detroit Clutch</a>' in home
+    assert '<a href="/pwhl/detroit-clutch/">Detroit Clutch</a>' in home
 
 
 def test_control_without_the_title_names_the_home_page_shows_the_keywords(monkeypatch: pytest.MonkeyPatch):

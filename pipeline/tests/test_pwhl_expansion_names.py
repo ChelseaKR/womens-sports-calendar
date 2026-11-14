@@ -17,8 +17,12 @@ carried on 2026-11-14; none is claimed to be a live listing.
 from __future__ import annotations
 
 import dataclasses
+import shutil
+from pathlib import Path
 
+import httpx
 import pytest
+from icalendar import Calendar
 
 from wsc_pipeline import build as build_module
 from wsc_pipeline import config, site, site_data
@@ -26,17 +30,27 @@ from wsc_pipeline.normalize import normalize_event, team_is_participant_as_any
 from wsc_pipeline.official_tickets import OFFICIAL_TEAM_TICKETS
 from wsc_pipeline.site_data import team_data
 
-from .conftest import make_raw_event
+from .conftest import REAL_FETCH_PREVIOUS_PUBLISH, make_raw_event
+from .fixture_site import build_fixture_site
 
 PWHL = config.league_by_slug("pwhl")
 BASE_URL = "https://nexthomegame.com"
 
 RENAMED = {
     # slug: (new name, former name, French name or None)
-    "pwhl-detroit": ("Detroit Clutch", "PWHL Detroit", None),
-    "pwhl-hamilton": ("Hamilton Havoc", "PWHL Hamilton", "Havoc de Hamilton"),
-    "pwhl-san-jose": ("San Jose Sea Lions", "PWHL San Jose", "Sea Lions de San José"),
-    "pwhl-las-vegas": ("Vegas Vanguards", "PWHL Las Vegas", "Vanguards de Vegas"),
+    "detroit-clutch": ("Detroit Clutch", "PWHL Detroit", None),
+    "hamilton-havoc": ("Hamilton Havoc", "PWHL Hamilton", "Havoc de Hamilton"),
+    "san-jose-sea-lions": ("San Jose Sea Lions", "PWHL San Jose", "Sea Lions de San José"),
+    "vegas-vanguards": ("Vegas Vanguards", "PWHL Las Vegas", "Vanguards de Vegas"),
+}
+
+
+# new slug: the slug the team published under before (its former slug).
+FORMER_SLUG = {
+    "detroit-clutch": "pwhl-detroit",
+    "hamilton-havoc": "pwhl-hamilton",
+    "san-jose-sea-lions": "pwhl-san-jose",
+    "vegas-vanguards": "pwhl-las-vegas",
 }
 
 
@@ -49,34 +63,34 @@ def _accepts(team: config.Team, name: str) -> bool:
 
 
 @pytest.mark.parametrize("slug", sorted(RENAMED))
-def test_each_team_keeps_its_slug_and_takes_its_new_name(slug: str):
+def test_each_team_moves_to_its_new_slug_and_keeps_the_old_one_as_former(slug: str):
     new, former, french = RENAMED[slug]
     team = _team(slug)
-    assert team.slug == slug, "a published slug never changes (DECISIONS 0017)"
+    assert team.slug == slug
     assert team.name == new
     assert team.shown_name == new
     assert team.search_title_name == new
     expected = (new, former, french) if french else (new, former)
     assert team.all_names == expected
-    assert team.former_slugs == ()
+    assert team.former_slugs == (FORMER_SLUG[slug],), "the old feed and page stay published (DECISIONS 0017, 0033)"
 
 
 @pytest.mark.parametrize(
     ("slug", "name"),
     [
-        ("pwhl-detroit", "Detroit Clutch vs. New York Sirens"),
-        ("pwhl-detroit", "Ottawa Charge vs. Detroit Clutch"),
-        ("pwhl-detroit", "Battle On Bay Street: Detroit Clutch at Toronto Sceptres"),
-        ("pwhl-detroit", "PWHL Las Vegas vs. PWHL Detroit"),
-        ("pwhl-hamilton", "Hamilton Havoc vs. Ottawa Charge"),
-        ("pwhl-hamilton", "La Victoire De Montréal vs Havoc de Hamilton"),
-        ("pwhl-hamilton", "Toronto Sceptres vs. PWHL Hamilton"),
-        ("pwhl-san-jose", "San Jose Sea Lions vs. Minnesota Frost"),
-        ("pwhl-san-jose", "La Victoire De Montréal vs Sea Lions de San José"),
-        ("pwhl-san-jose", "PWHL Hamilton vs. PWHL San Jose"),
-        ("pwhl-las-vegas", "Vegas Vanguards vs. Boston Fleet"),
-        ("pwhl-las-vegas", "La Victoire De Montréal V Vanguards de Vegas"),
-        ("pwhl-las-vegas", "PWHL Las Vegas vs. Minnesota Frost"),
+        ("detroit-clutch", "Detroit Clutch vs. New York Sirens"),
+        ("detroit-clutch", "Ottawa Charge vs. Detroit Clutch"),
+        ("detroit-clutch", "Battle On Bay Street: Detroit Clutch at Toronto Sceptres"),
+        ("detroit-clutch", "PWHL Las Vegas vs. PWHL Detroit"),
+        ("hamilton-havoc", "Hamilton Havoc vs. Ottawa Charge"),
+        ("hamilton-havoc", "La Victoire De Montréal vs Havoc de Hamilton"),
+        ("hamilton-havoc", "Toronto Sceptres vs. PWHL Hamilton"),
+        ("san-jose-sea-lions", "San Jose Sea Lions vs. Minnesota Frost"),
+        ("san-jose-sea-lions", "La Victoire De Montréal vs Sea Lions de San José"),
+        ("san-jose-sea-lions", "PWHL Hamilton vs. PWHL San Jose"),
+        ("vegas-vanguards", "Vegas Vanguards vs. Boston Fleet"),
+        ("vegas-vanguards", "La Victoire De Montréal V Vanguards de Vegas"),
+        ("vegas-vanguards", "PWHL Las Vegas vs. Minnesota Frost"),
     ],
 )
 def test_every_name_ticketmaster_uses_is_recognized(slug: str, name: str):
@@ -86,11 +100,11 @@ def test_every_name_ticketmaster_uses_is_recognized(slug: str, name: str):
 @pytest.mark.parametrize(
     ("slug", "name"),
     [
-        ("pwhl-detroit", "Detroit Red Wings vs. Toronto Maple Leafs"),
-        ("pwhl-hamilton", "Hamilton Tiger-Cats vs. Toronto Argonauts"),
-        ("pwhl-san-jose", "San Jose Sharks vs. Vegas Golden Knights"),
-        ("pwhl-las-vegas", "Vegas Golden Knights vs. San Jose Sharks"),
-        ("pwhl-san-jose", "Ottawa Charge vs. Toronto Sceptres"),
+        ("detroit-clutch", "Detroit Red Wings vs. Toronto Maple Leafs"),
+        ("hamilton-havoc", "Hamilton Tiger-Cats vs. Toronto Argonauts"),
+        ("san-jose-sea-lions", "San Jose Sharks vs. Vegas Golden Knights"),
+        ("vegas-vanguards", "Vegas Golden Knights vs. San Jose Sharks"),
+        ("san-jose-sea-lions", "Ottawa Charge vs. Toronto Sceptres"),
     ],
 )
 def test_the_new_names_loosen_nothing_else(slug: str, name: str):
@@ -101,12 +115,12 @@ def test_the_new_names_loosen_nothing_else(slug: str, name: str):
 @pytest.mark.parametrize(
     ("slug", "name", "home"),
     [
-        ("pwhl-detroit", "Detroit Clutch vs. New York Sirens", True),
-        ("pwhl-detroit", "Ottawa Charge vs. Detroit Clutch", False),
-        ("pwhl-san-jose", "San Jose Sea Lions vs. Minnesota Frost", True),
-        ("pwhl-san-jose", "La Victoire De Montréal vs Sea Lions de San José", False),
-        ("pwhl-hamilton", "La Victoire De Montréal vs Havoc de Hamilton", False),
-        ("pwhl-las-vegas", "Vegas Vanguards vs. Boston Fleet", True),
+        ("detroit-clutch", "Detroit Clutch vs. New York Sirens", True),
+        ("detroit-clutch", "Ottawa Charge vs. Detroit Clutch", False),
+        ("san-jose-sea-lions", "San Jose Sea Lions vs. Minnesota Frost", True),
+        ("san-jose-sea-lions", "La Victoire De Montréal vs Sea Lions de San José", False),
+        ("hamilton-havoc", "La Victoire De Montréal vs Havoc de Hamilton", False),
+        ("vegas-vanguards", "Vegas Vanguards vs. Boston Fleet", True),
     ],
 )
 def test_the_home_flag_reads_the_new_names(slug: str, name: str, home: bool):
@@ -181,9 +195,9 @@ def test_the_renamed_teams_games_reach_their_own_pages_and_feeds(monkeypatch: py
         }
     )
     games = _fetch(monkeypatch, client)
-    assert _kept(games, "pwhl-detroit") == ["EVT-CLUTCH-HOME", "EVT-CLUTCH-SJ", "EVT-OLD"]
-    assert _kept(games, "pwhl-san-jose") == ["EVT-CLUTCH-SJ", "EVT-SJ-HOME"]
-    assert _kept(games, "pwhl-las-vegas") == ["EVT-OLD"]
+    assert _kept(games, "detroit-clutch") == ["EVT-CLUTCH-HOME", "EVT-CLUTCH-SJ", "EVT-OLD"]
+    assert _kept(games, "san-jose-sea-lions") == ["EVT-CLUTCH-SJ", "EVT-SJ-HOME"]
+    assert _kept(games, "vegas-vanguards") == ["EVT-OLD"]
     assert _kept(games, "new-york-sirens") == ["EVT-CLUTCH-HOME"]
 
 
@@ -207,8 +221,8 @@ def test_without_the_new_names_the_games_are_lost(monkeypatch: pytest.MonkeyPatc
         }
     )
     games = _fetch(monkeypatch, client)
-    assert _kept(games, "pwhl-detroit") == ["EVT-OLD"]
-    assert _kept(games, "pwhl-san-jose") == []
+    assert _kept(games, "detroit-clutch") == ["EVT-OLD"]
+    assert _kept(games, "san-jose-sea-lions") == []
     assert _kept(games, "new-york-sirens") == ["EVT-CLUTCH-HOME"]
 
 
@@ -239,10 +253,61 @@ def test_the_team_page_carries_the_new_name_and_says_what_it_was(slug: str):
 @pytest.mark.parametrize("slug", sorted(RENAMED))
 def test_the_official_ticket_link_is_the_new_address(slug: str):
     url = OFFICIAL_TEAM_TICKETS[("pwhl", slug)].url
-    path = {
-        "pwhl-detroit": "detroit-clutch",
-        "pwhl-hamilton": "hamilton-havoc",
-        "pwhl-san-jose": "san-jose-sea-lions",
-        "pwhl-las-vegas": "vegas-vanguards",
-    }[slug]
-    assert url == f"https://www.thepwhl.com/en/teams/{path}/tickets"
+    # The new slugs are the team paths thepwhl.com uses.
+    assert url == f"https://www.thepwhl.com/en/teams/{slug}/tickets"
+
+
+# --- the old addresses keep working, as the Connecticut Sun's did (DECISIONS 0033) ------------------
+
+
+@pytest.fixture(scope="module")
+def dist(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    out = tmp_path_factory.mktemp("pwhl-names") / "dist"
+    build_fixture_site(out)
+    return out
+
+
+@pytest.mark.parametrize("slug", sorted(RENAMED))
+def test_the_old_feed_is_the_new_feed_byte_for_byte(dist: Path, slug: str):
+    """A subscriber to /ics/pwhl/pwhl-detroit.ics keeps getting the team's
+    games under the same UIDs, and nobody subscribed to both sees a game
+    twice."""
+    old = (dist / "ics" / "pwhl" / f"{FORMER_SLUG[slug]}.ics").read_bytes()
+    assert old == (dist / "ics" / "pwhl" / f"{slug}.ics").read_bytes()
+    assert RENAMED[slug][0].encode() in old
+
+
+@pytest.mark.parametrize("slug", sorted(RENAMED))
+def test_the_old_page_is_a_noindex_notice_for_the_new_page(dist: Path, slug: str):
+    new, former, _french = RENAMED[slug]
+    notice = (dist / "pwhl" / FORMER_SLUG[slug] / "index.html").read_text()
+    assert '<meta name="robots" content="noindex">' in notice
+    assert f'<meta http-equiv="refresh" content="0; url=/pwhl/{slug}/">' in notice
+    assert f"{new} has a new page address" in notice
+    assert f"{former} is now the {new}." in notice
+    sitemap_xml = (dist / "sitemap.xml").read_text()
+    assert f"https://nexthomegame.com/pwhl/{slug}/" in sitemap_xml
+    assert f"/pwhl/{FORMER_SLUG[slug]}/" not in sitemap_xml
+
+
+@pytest.mark.parametrize("slug", sorted(RENAMED))
+def test_the_first_build_after_the_move_reads_the_old_feed_as_the_previous_publish(
+    dist: Path, tmp_path: Path, slug: str
+):
+    """The live site has no detroit-clutch.ics until the first build after
+    the move. The guard and the played-games history (DECISIONS 0027) must
+    read the old feed, or that build would treat the team as new."""
+    live = tmp_path / "live"
+    shutil.copytree(dist, live)
+    (live / "ics" / "pwhl" / f"{slug}.ics").unlink()  # as live before the move
+    old_feed = (live / "ics" / "pwhl" / f"{FORMER_SLUG[slug]}.ics").read_bytes()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        target = live / request.url.path.lstrip("/")
+        return httpx.Response(200, content=target.read_bytes()) if target.is_file() else httpx.Response(404)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        previous = REAL_FETCH_PREVIOUS_PUBLISH(BASE_URL, client=client)
+    key = ("pwhl", slug)
+    assert key in previous.games and key not in previous.new_teams and key not in previous.unreadable
+    assert len(previous.feeds[f"ics/pwhl/{slug}.ics"]) == len(Calendar.from_ical(old_feed).walk("VEVENT"))

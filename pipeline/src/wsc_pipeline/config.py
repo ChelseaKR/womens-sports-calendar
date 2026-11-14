@@ -380,18 +380,23 @@ LEAGUES: tuple[League, ...] = (
             # pages, read 2026-11-14). Ticketmaster renamed most of their
             # listings the next day, and from the 2026-11-12 build their own
             # pages and feeds lost every game listed under the new name
-            # (DECISIONS 0041). Each team keeps its slug, so every published
-            # page and feed URL stays put (DECISIONS 0017). The old name stays
-            # searched while any listing uses it, and the French name
-            # Ticketmaster gives the Victoire's home games is searched too.
+            # (DECISIONS 0041). Each team moves to a slug of its new name, and
+            # its old slug is a former slug, as for the Comets (DECISIONS
+            # 0033): the same feed, byte for byte, stays published at the old
+            # address, and the old page is a notice pointing to the new one.
+            # The old name stays searched while any listing uses it, and the
+            # French name Ticketmaster gives the Victoire's home games is
+            # searched too.
             Team(
-                slug="pwhl-detroit",
+                slug="detroit-clutch",
+                former_slugs=("pwhl-detroit",),
                 name="Detroit Clutch",
                 search_names=("PWHL Detroit",),
                 history_note="PWHL Detroit is now the Detroit Clutch. The league announced the name on November 10, 2026.",
             ),
             Team(
-                slug="pwhl-hamilton",
+                slug="hamilton-havoc",
+                former_slugs=("pwhl-hamilton",),
                 name="Hamilton Havoc",
                 search_names=("PWHL Hamilton", "Havoc de Hamilton"),
                 history_note="PWHL Hamilton is now the Hamilton Havoc. The league announced the name on November 10, 2026.",
@@ -407,7 +412,8 @@ LEAGUES: tuple[League, ...] = (
                 "Ottawa Charge",
             ),
             Team(
-                slug="pwhl-san-jose",
+                slug="san-jose-sea-lions",
+                former_slugs=("pwhl-san-jose",),
                 name="San Jose Sea Lions",
                 search_names=("PWHL San Jose", "Sea Lions de San José"),
                 history_note=(
@@ -420,7 +426,8 @@ LEAGUES: tuple[League, ...] = (
                 "Vancouver Goldeneyes",
             ),
             Team(
-                slug="pwhl-las-vegas",
+                slug="vegas-vanguards",
+                former_slugs=("pwhl-las-vegas",),
                 name="Vegas Vanguards",
                 search_names=("PWHL Las Vegas", "Vanguards de Vegas"),
                 history_note=(

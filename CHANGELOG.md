@@ -18,9 +18,10 @@ archived and private.
   Detroit and San Jose pages and feeds had lost every home game, and games
   between two renamed teams were in no calendar. Each team is searched under
   its new name, its old "PWHL <city>" name and the French name Ticketmaster
-  uses, and keeps its page and feed address. Each page says what the team
-  used to be called, and its official ticket link goes to the team's new
-  ticket page.
+  uses. Each moves to a new address (/pwhl/detroit-clutch/ and so on); its
+  old feed is still published, byte for byte, and its old page points to the
+  new one, as for the Houston Comets. Each page says what the team used to
+  be called, and its official ticket link goes to the team's new ticket page.
 
 ### Changed
 

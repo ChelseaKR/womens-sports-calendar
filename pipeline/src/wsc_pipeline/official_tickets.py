@@ -135,13 +135,13 @@ OFFICIAL_TEAM_TICKETS: dict[tuple[str, str], OfficialTicketPage] = {
     ("nwsl", "washington-spirit"): OfficialTicketPage("https://washingtonspirit.com/tickets/", _NWSL_CLUB_SITE),
     # PWHL: the league hosts each team's ticket page.
     ("pwhl", "boston-fleet"): OfficialTicketPage("https://www.thepwhl.com/en/teams/boston-fleet/tickets", _PWHL_LINKED),
-    ("pwhl", "pwhl-detroit"): OfficialTicketPage(
+    ("pwhl", "detroit-clutch"): OfficialTicketPage(
         "https://www.thepwhl.com/en/teams/detroit-clutch/tickets", _PWHL_RENAMED
     ),
-    ("pwhl", "pwhl-hamilton"): OfficialTicketPage(
+    ("pwhl", "hamilton-havoc"): OfficialTicketPage(
         "https://www.thepwhl.com/en/teams/hamilton-havoc/tickets", _PWHL_RENAMED
     ),
-    ("pwhl", "pwhl-las-vegas"): OfficialTicketPage(
+    ("pwhl", "vegas-vanguards"): OfficialTicketPage(
         "https://www.thepwhl.com/en/teams/vegas-vanguards/tickets", _PWHL_RENAMED
     ),
     ("pwhl", "minnesota-frost"): OfficialTicketPage(
@@ -156,7 +156,7 @@ OFFICIAL_TEAM_TICKETS: dict[tuple[str, str], OfficialTicketPage] = {
     ("pwhl", "ottawa-charge"): OfficialTicketPage(
         "https://www.thepwhl.com/en/teams/ottawa-charge/tickets", _PWHL_LINKED
     ),
-    ("pwhl", "pwhl-san-jose"): OfficialTicketPage(
+    ("pwhl", "san-jose-sea-lions"): OfficialTicketPage(
         "https://www.thepwhl.com/en/teams/san-jose-sea-lions/tickets", _PWHL_RENAMED
     ),
     ("pwhl", "seattle-torrent"): OfficialTicketPage(

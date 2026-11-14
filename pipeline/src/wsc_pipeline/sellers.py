@@ -201,7 +201,7 @@ PRIMARY_SELLERS: dict[tuple[str, str], Seller] = {
             "its page assets, not a stated partnership). Checked 2026-11-05."
         ),
     ),
-    ("pwhl", "pwhl-las-vegas"): Seller(
+    ("pwhl", "vegas-vanguards"): Seller(
         name="AXS",
         team_page_url="https://www.axs.com/events/1579186/pwhl-las-vegas-season-2026-27-tickets",
         evidence=(
