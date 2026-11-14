@@ -864,13 +864,19 @@ ends &ldquo;{e(TIME_TBA_SUFFIX.strip())}&rdquo;. Its note reads
 def _teams_by_league_block(leagues: list[dict[str, Any]]) -> str:
     """The home page's links to every team's page, grouped by league, so a
     team page is one click from the home page. Empty when the summary names
-    no teams (a caller that does not pass them)."""
+    no teams (a caller that does not pass them). A college team is named as
+    a fan searches it ("Iowa women's basketball", Team.title_name), as the
+    league rosters and "more teams" lists already name it (DECISIONS 0040,
+    0041); a pro team keeps its name."""
     groups = []
     for lg in leagues:
         teams = lg.get("teams") or []
         if not teams:
             continue
-        items = "\n".join(f'<li><a href="/{e(lg["slug"])}/{e(t["slug"])}/">{e(t["name"])}</a></li>' for t in teams)
+        items = "\n".join(
+            f'<li><a href="/{e(lg["slug"])}/{e(t["slug"])}/">{e(title_name_for(lg["slug"], t["name"]))}</a></li>'
+            for t in teams
+        )
         groups.append(
             f'<h3 id="teams-{e(lg["slug"])}">{e(lg["name"])} teams</h3>\n<ul class="team-roster" '
             f'aria-labelledby="teams-{e(lg["slug"])}">\n{items}\n</ul>'

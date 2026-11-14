@@ -374,13 +374,34 @@ LEAGUES: tuple[League, ...] = (
         name="PWHL",
         country_codes=("US", "CA"),
         teams=(
-            *_teams(
-                "Boston Fleet",
-                "PWHL Detroit",
-                "PWHL Hamilton",
-                "PWHL Las Vegas",
-                "Minnesota Frost",
+            *_teams("Boston Fleet"),
+            # The four 2026-27 expansion teams were "PWHL <city>" until the
+            # league announced their names on 2026-11-10 (thepwhl.com's team
+            # pages, read 2026-11-14). Ticketmaster renamed most of their
+            # listings the next day, and from the 2026-11-12 build their own
+            # pages and feeds lost every game listed under the new name
+            # (DECISIONS 0041). Each team moves to a slug of its new name, and
+            # its old slug is a former slug, as for the Comets (DECISIONS
+            # 0033): the same feed, byte for byte, stays published at the old
+            # address, and the old page is a notice pointing to the new one.
+            # The old name stays searched while any listing uses it, and the
+            # French name Ticketmaster gives the Victoire's home games is
+            # searched too.
+            Team(
+                slug="detroit-clutch",
+                former_slugs=("pwhl-detroit",),
+                name="Detroit Clutch",
+                search_names=("PWHL Detroit",),
+                history_note="PWHL Detroit is now the Detroit Clutch. The league announced the name on November 10, 2026.",
             ),
+            Team(
+                slug="hamilton-havoc",
+                former_slugs=("pwhl-hamilton",),
+                name="Hamilton Havoc",
+                search_names=("PWHL Hamilton", "Havoc de Hamilton"),
+                history_note="PWHL Hamilton is now the Hamilton Havoc. The league announced the name on November 10, 2026.",
+            ),
+            *_teams("Minnesota Frost"),
             # Ticketmaster also names the Victoire's home games in French, "La
             # Victoire De Montréal v PWHL Hamilton" (the 2026-27 home opener,
             # live 2026-11-04), which "Montreal Victoire" is not a phrase of.
@@ -389,10 +410,29 @@ LEAGUES: tuple[League, ...] = (
             *_teams(
                 "New York Sirens",
                 "Ottawa Charge",
-                "PWHL San Jose",
+            ),
+            Team(
+                slug="san-jose-sea-lions",
+                former_slugs=("pwhl-san-jose",),
+                name="San Jose Sea Lions",
+                search_names=("PWHL San Jose", "Sea Lions de San José"),
+                history_note=(
+                    "PWHL San Jose is now the San Jose Sea Lions. The league announced the name on November 10, 2026."
+                ),
+            ),
+            *_teams(
                 "Seattle Torrent",
                 "Toronto Sceptres",
                 "Vancouver Goldeneyes",
+            ),
+            Team(
+                slug="vegas-vanguards",
+                former_slugs=("pwhl-las-vegas",),
+                name="Vegas Vanguards",
+                search_names=("PWHL Las Vegas", "Vanguards de Vegas"),
+                history_note=(
+                    "PWHL Las Vegas is now the Vegas Vanguards. The league announced the name on November 10, 2026."
+                ),
             ),
         ),
         schedule_source_used=False,

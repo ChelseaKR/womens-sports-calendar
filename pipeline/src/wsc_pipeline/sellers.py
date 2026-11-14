@@ -201,13 +201,15 @@ PRIMARY_SELLERS: dict[tuple[str, str], Seller] = {
             "its page assets, not a stated partnership). Checked 2026-11-05."
         ),
     ),
-    ("pwhl", "pwhl-las-vegas"): Seller(
+    ("pwhl", "vegas-vanguards"): Seller(
         name="AXS",
         team_page_url="https://www.axs.com/events/1579186/pwhl-las-vegas-season-2026-27-tickets",
         evidence=(
             "thepwhl.com/en/teams/las-vegas/tickets links axs.com only, "
             "including this season page (no AXS team page found). Checked "
-            "2026-11-05."
+            "2026-11-05. That address now redirects to "
+            "thepwhl.com/en/teams/vegas-vanguards/tickets (2026-11-14, "
+            "DECISIONS 0041); this AXS link was not re-checked."
         ),
     ),
     ("ausl", "chicago-bandits"): Seller(

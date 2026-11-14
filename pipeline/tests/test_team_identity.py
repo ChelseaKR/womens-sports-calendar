@@ -77,17 +77,22 @@ PUBLISHED_SLUGS: dict[str, tuple[str, ...]] = {
     ),
     "pwhl": (
         "boston-fleet",
-        "pwhl-detroit",
-        "pwhl-hamilton",
-        "pwhl-las-vegas",
+        "pwhl-detroit",  # a former slug of detroit-clutch since DECISIONS 0041
+        "pwhl-hamilton",  # a former slug of hamilton-havoc since DECISIONS 0041
+        "pwhl-las-vegas",  # a former slug of vegas-vanguards since DECISIONS 0041
         "minnesota-frost",
         "montreal-victoire",
         "new-york-sirens",
         "ottawa-charge",
-        "pwhl-san-jose",
+        "pwhl-san-jose",  # a former slug of san-jose-sea-lions since DECISIONS 0041
         "seattle-torrent",
         "toronto-sceptres",
         "vancouver-goldeneyes",
+        # First published by the expansion teams' names (DECISIONS 0041).
+        "detroit-clutch",
+        "hamilton-havoc",
+        "san-jose-sea-lions",
+        "vegas-vanguards",
     ),
     "ausl": (
         "chicago-bandits",
@@ -207,8 +212,14 @@ def test_the_published_slug_list_has_every_team_configured_today():
     """So a slug that is configured but was never pinned cannot slip through:
     add it to PUBLISHED_SLUGS the day it first publishes."""
     assert {k: set(v) for k, v in PUBLISHED_SLUGS.items()} == _configured_slugs()
-    assert sum(len(v) for v in PUBLISHED_SLUGS.values()) == 84
-    assert _former_slugs() == {("wnba", "connecticut-sun")}
+    assert sum(len(v) for v in PUBLISHED_SLUGS.values()) == 88
+    assert _former_slugs() == {
+        ("wnba", "connecticut-sun"),
+        ("pwhl", "pwhl-detroit"),
+        ("pwhl", "pwhl-hamilton"),
+        ("pwhl", "pwhl-las-vegas"),
+        ("pwhl", "pwhl-san-jose"),
+    }
 
 
 def test_every_published_slug_still_gets_a_feed_a_page_and_a_data_file(tmp_path: Path):

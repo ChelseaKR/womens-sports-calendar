@@ -10,7 +10,23 @@ archived and private.
 
 ## [Unreleased]
 
+### Fixed
+
+- The four PWHL expansion teams go by the names the league announced on
+  2026-11-10: Detroit Clutch, Hamilton Havoc, San Jose Sea Lions and Vegas
+  Vanguards (DECISIONS 0041). Since Ticketmaster renamed their listings, the
+  Detroit and San Jose pages and feeds had lost every home game, and games
+  between two renamed teams were in no calendar. Each team is searched under
+  its new name, its old "PWHL <city>" name and the French name Ticketmaster
+  uses. Each moves to a new address (/pwhl/detroit-clutch/ and so on); its
+  old feed is still published, byte for byte, and its old page points to the
+  new one, as for the Houston Comets. Each page says what the team used to
+  be called, and its official ticket link goes to the team's new ticket page.
+
 ### Changed
+
+- The home page's list of every team names college teams as fans search
+  them ("Iowa women's basketball"), as the league pages already do.
 
 - League pages open with the next game Ticketmaster lists, and their search
   descriptions name it (DECISIONS 0040). College teams are linked and named

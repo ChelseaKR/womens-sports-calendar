@@ -10,6 +10,7 @@ sabotage applied and that the check catches it."""
 
 from __future__ import annotations
 
+import dataclasses
 import re
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -214,9 +215,16 @@ def test_the_held_womens_basketball_titles_keep_tickets_and_the_season():
 
 
 def test_a_name_that_says_its_league_does_not_say_it_twice():
+    # Since the 2026-11-10 names (DECISIONS 0041) no configured team is named
+    # "PWHL <city>", so each renamed team is rendered under its former name,
+    # which it still carries as its first search name.
     league = config.league_by_slug("pwhl")
     checked = 0
-    for team in league.teams:
+    for configured in league.teams:
+        former = next((n for n in configured.search_names if n.startswith("PWHL ")), None)
+        if former is None:
+            continue
+        team = dataclasses.replace(configured, name=former, history_note=None)
         if team.shown_name.startswith("PWHL "):
             description = _render(league, team, "home_short")[1]
             assert description.startswith(f"{team.shown_name} schedule"), description

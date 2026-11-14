@@ -114,14 +114,14 @@ SEC = "ncaaw-sec"
 WIKI_SOURCES: tuple[WikiSource, ...] = (
     _pwhl("minnesota-frost", "Minnesota", gap=True),
     _pwhl("vancouver-goldeneyes", "Vancouver", gap=True),
-    _pwhl("pwhl-las-vegas", "Las Vegas", gap=True),
+    _pwhl("vegas-vanguards", "Las Vegas", gap=True),
     _pwhl("boston-fleet", "Boston"),
-    _pwhl("pwhl-detroit", "Detroit"),
-    _pwhl("pwhl-hamilton", "Hamilton"),
+    _pwhl("detroit-clutch", "Detroit"),
+    _pwhl("hamilton-havoc", "Hamilton"),
     _pwhl("montreal-victoire", "Montreal"),
     _pwhl("new-york-sirens", "New York"),
     _pwhl("ottawa-charge", "Ottawa"),
-    _pwhl("pwhl-san-jose", "San Jose"),
+    _pwhl("san-jose-sea-lions", "San Jose"),
     _pwhl("seattle-torrent", "Seattle"),
     _pwhl("toronto-sceptres", "Toronto"),
     _cbb(

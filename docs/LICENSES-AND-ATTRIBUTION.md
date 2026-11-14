@@ -96,6 +96,10 @@ too little Ticketmaster coverage across its 96 clubs.)
   matches `docs/DECISIONS.md` 0003 and the research doc §0 item 1 — accepting
   this ToS as a contract risk was explicitly rejected in favour of the
   Ticketmaster-only design (research §6 Rank 1).
+- *Addendum 2026-11-14 (owner decision, `docs/DECISIONS.md` 0006):* light
+  reads of thepwhl.com team and ticket pages are allowed, to confirm a team
+  name or an official ticket link; schedules and the HockeyTech feed remain
+  NOT USED.
 
 ### NWSL
 

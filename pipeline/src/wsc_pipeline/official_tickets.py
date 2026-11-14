@@ -14,7 +14,8 @@ Rules for an entry:
   league's own site links as that team's ticket page. Each entry says
   where the link was found ("evidence").
 - It was fetched on CHECKED_ON (SEC_CHECKED_ON for the SEC, COMETS_CHECKED_ON
-  for the Houston Comets) and returned HTTP 200 with a ticket page's title.
+  for the Houston Comets, PWHL_RENAMED_CHECKED_ON for the four PWHL
+  expansion teams) and returned HTTP 200 with a ticket page's title.
   A candidate that 404'd, redirected somewhere else (a football ticket
   page), or served a placeholder title ("@title") is left out.
 - A team with no entry gets no link. Rutgers has none: its "TicketCentral"
@@ -73,6 +74,14 @@ _SCHOOL_WBB = (
 COMETS_CHECKED_ON = "2026-11-05"
 # The SEC schools' pages were found and fetched later than the rest.
 SEC_CHECKED_ON = "2026-11-02"
+# The four PWHL expansion teams' pages moved when the league named the teams
+# (DECISIONS 0041): each old address now redirects to the new one.
+PWHL_RENAMED_CHECKED_ON = "2026-11-14"
+_PWHL_RENAMED = (
+    "The team's ticket page on thepwhl.com, where its old address now redirects; fetched "
+    + PWHL_RENAMED_CHECKED_ON
+    + " with HTTP 200, no redirect and a ticket page title."
+)
 _SEC_SCHOOL_WBB = (
     "Linked from the school's official athletics site (women's basketball or main menu), read " + SEC_CHECKED_ON + "."
 )
@@ -126,9 +135,15 @@ OFFICIAL_TEAM_TICKETS: dict[tuple[str, str], OfficialTicketPage] = {
     ("nwsl", "washington-spirit"): OfficialTicketPage("https://washingtonspirit.com/tickets/", _NWSL_CLUB_SITE),
     # PWHL: the league hosts each team's ticket page.
     ("pwhl", "boston-fleet"): OfficialTicketPage("https://www.thepwhl.com/en/teams/boston-fleet/tickets", _PWHL_LINKED),
-    ("pwhl", "pwhl-detroit"): OfficialTicketPage("https://www.thepwhl.com/en/teams/detroit/tickets", _PWHL_LINKED),
-    ("pwhl", "pwhl-hamilton"): OfficialTicketPage("https://www.thepwhl.com/en/teams/hamilton/tickets", _PWHL_LINKED),
-    ("pwhl", "pwhl-las-vegas"): OfficialTicketPage("https://www.thepwhl.com/en/teams/las-vegas/tickets", _PWHL_LINKED),
+    ("pwhl", "detroit-clutch"): OfficialTicketPage(
+        "https://www.thepwhl.com/en/teams/detroit-clutch/tickets", _PWHL_RENAMED
+    ),
+    ("pwhl", "hamilton-havoc"): OfficialTicketPage(
+        "https://www.thepwhl.com/en/teams/hamilton-havoc/tickets", _PWHL_RENAMED
+    ),
+    ("pwhl", "vegas-vanguards"): OfficialTicketPage(
+        "https://www.thepwhl.com/en/teams/vegas-vanguards/tickets", _PWHL_RENAMED
+    ),
     ("pwhl", "minnesota-frost"): OfficialTicketPage(
         "https://www.thepwhl.com/en/teams/minnesota-frost/tickets", _PWHL_LINKED
     ),
@@ -141,7 +156,9 @@ OFFICIAL_TEAM_TICKETS: dict[tuple[str, str], OfficialTicketPage] = {
     ("pwhl", "ottawa-charge"): OfficialTicketPage(
         "https://www.thepwhl.com/en/teams/ottawa-charge/tickets", _PWHL_LINKED
     ),
-    ("pwhl", "pwhl-san-jose"): OfficialTicketPage("https://www.thepwhl.com/en/teams/san-jose/tickets", _PWHL_LINKED),
+    ("pwhl", "san-jose-sea-lions"): OfficialTicketPage(
+        "https://www.thepwhl.com/en/teams/san-jose-sea-lions/tickets", _PWHL_RENAMED
+    ),
     ("pwhl", "seattle-torrent"): OfficialTicketPage(
         "https://www.thepwhl.com/en/teams/seattle-torrent/tickets", _PWHL_LINKED
     ),
