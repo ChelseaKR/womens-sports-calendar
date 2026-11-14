@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from wsc_pipeline import build as build_module
-from wsc_pipeline import config
+from wsc_pipeline import config, site
 from wsc_pipeline.site import SCHEDULE_PATH, SITE_NAV
 
 from .fixture_site import BASE_URL, build_fixture_site
@@ -198,3 +198,32 @@ def test_control_without_the_strip_a_team_page_does_not_link_the_week_ahead_page
     without_nav = page.replace(SITE_NAV, "")
     assert without_nav != page, "sabotage target not found: site nav"
     assert SCHEDULE_PATH not in HREF.findall(without_nav)
+
+
+def test_the_home_page_names_each_team_as_its_own_page_titles_it(dist: Path):
+    """A college team is linked by the name a fan searches ("Iowa women's
+    basketball"), as the league rosters already do (DECISIONS 0040, 0041); a
+    pro team by its shown name, the renamed PWHL teams by their new names."""
+    home = _pages(dist)["/"]
+    for lg in config.LEAGUES:
+        for t in lg.teams:
+            assert f'<li><a href="/{lg.slug}/{t.slug}/">{site.e(t.search_title_name)}</a></li>' in home, t.slug
+    assert "Womens Basketball</a>" not in home
+    assert '<a href="/pwhl/pwhl-detroit/">Detroit Clutch</a>' in home
+
+
+def test_control_without_the_title_names_the_home_page_shows_the_keywords(monkeypatch: pytest.MonkeyPatch):
+    """Negative control: the names above come from title_name_for."""
+    monkeypatch.setattr(site, "title_name_for", lambda league_slug, shown: shown)
+    league = config.league_by_slug("ncaaw-big-ten")
+    block = site._teams_by_league_block(
+        [
+            {
+                "slug": league.slug,
+                "name": league.name,
+                "teams": [{"slug": t.slug, "name": t.shown_name} for t in league.teams],
+            }
+        ]
+    )
+    assert "Iowa Hawkeyes Womens Basketball</a>" in block
+    assert "Iowa women&#x27;s basketball</a>" not in block

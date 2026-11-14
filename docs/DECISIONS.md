@@ -1753,3 +1753,71 @@ Not changed: every page title (0038 holds the women's basketball titles until
 pipeline's sources.
 
 **Enforced by** `tests/test_league_next_game.py`, with three controls.
+
+## 0041 — The four PWHL expansion teams take the names the league gave them, at the same addresses (2026-11-14)
+
+**Why:** on 2026-11-10 the PWHL named its four expansion teams the Detroit
+Clutch, the Hamilton Havoc, the San Jose Sea Lions and the Vegas Vanguards
+(each team's page on thepwhl.com, robots.txt allows it, read 2026-11-14;
+`/en/teams/detroit-clutch` and so on). Ticketmaster renamed most of their
+listings the next day, in English and, for the Victoire's home games, in
+French ("Havoc de Hamilton", "Sea Lions de San José", "Vanguards de Vegas").
+The site still searched for "PWHL Detroit" and the other working names, so
+from the 2026-11-12 build every game listed under a new name left the team's
+own page and feed. That night's publish guard listed 18 Detroit, 16 San
+Jose, 4 Hamilton and 3 Las Vegas games as vanished, and the next night's
+more; the guard did not refuse either build, because each team kept at least
+one game under its old name (its team rule fires only when all of a team's
+games vanish). On the 2026-11-14 live build the Detroit page listed 2 games
+and San Jose's 4, all away, both saying no home game was listed, while the
+PWHL calendar carried 14 "Detroit Clutch" and 14 "San Jose Sea Lions" games
+found by the opponents' searches. Games between two renamed teams were in no
+calendar at all. Hamilton's 2026-12-05 opener at Montréal ("La Victoire De
+Montréal vs Havoc de Hamilton") was missing from Hamilton's page and feed.
+
+The decision (`config.py`, the 0017 rename path without a new address):
+
+- Each team keeps its slug, so its page and feed URLs, and every
+  subscriber's calendar, stay where they are. `name` becomes the new name
+  (the Ticketmaster keyword and the name every page, title, calendar name
+  and link shows), and `search_names` keeps the working name ("PWHL
+  Detroit"), searched and recognized while any listing uses it, plus the
+  French name where Ticketmaster has used one. That is 7 more Discovery
+  requests a night. No Detroit French name has been seen, so none is
+  searched. UIDs come from the Ticketmaster event id, so no event is
+  duplicated in a subscriber's calendar.
+- No new address. Moving `/pwhl/pwhl-detroit/` to `/pwhl/detroit-clutch/`
+  would put the name in the URL, but this host can only point an old page at
+  a new one with a noindex notice page (0033), and the old pages already rank
+  for "pwhl detroit" and "pwhl san jose" queries. Revisit if Search Console
+  shows the new names searched and these pages not shown for them.
+- Each team page says, in `Team.history_note`, "PWHL Detroit is now the
+  Detroit Clutch. The league announced the name on November 10, 2026." (and
+  the same for the other three), so a fan who searched the old name sees why
+  the page changed.
+- The PWHL roster is in alphabetical order of the new names, so the Vegas
+  Vanguards move to the end.
+- The four official ticket links (0019) move to the addresses the old ones
+  now redirect to, each fetched 2026-11-14 with HTTP 200, no redirect and a
+  ticket page title ("Tickets | Detroit Clutch | PWHL - ..."). The Vegas AXS
+  seller row is unchanged and was not re-checked.
+- The home page's list of every team names a college team as its own pages
+  title it ("Iowa women's basketball"), as the league rosters and "more
+  teams" lists have since 0040. Pro teams are unchanged except for the four
+  new names.
+
+Not changed: any slug, feed path or UID; every other team; the publish
+guard's rules; `measure_gap.py`'s Wikipedia rows (they name the season
+article's cities, not the teams). The guard gap above is recorded here, not
+fixed: a rename that leaves one game under the old name looks like ordinary
+churn to it.
+
+**Enforced by** `tests/test_pwhl_expansion_names.py` (every name shape seen on
+2026-11-14 recognized, other teams of the same cities not, the home flag,
+the searched names, a negative control with the old registry that keeps only
+the old-name game, the page's note and title, and the ticket links) and
+`tests/test_internal_links.py` (home page names, with a control).
+`tests/test_search_console_titles.py`'s "a name that says its league" check
+now renders the renamed teams under their former names, since no configured
+team is named "PWHL <city>" any more. The Boston Fleet golden page was
+re-rendered for its "more teams" list only.
