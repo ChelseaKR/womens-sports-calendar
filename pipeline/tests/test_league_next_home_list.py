@@ -1,8 +1,8 @@
 """A league page's "Next home game for each team" list, behind
-site_data.LEAGUE_NEXT_HOME_LIST (off until its wording is approved).
+site_data.LEAGUE_NEXT_HOME_LIST (on since 2026-11-15, wording approved).
 
-Off, the league payload has no `next_home_by_team` and the page has no list,
-so pages and sitemap lastmod are as before. On, every team is listed A to Z,
+Turned off, the league payload has no `next_home_by_team` and the page has
+no list, so pages are as before the list. On, every team is listed A to Z,
 linked to its page, with the game its own page leads with (team_data's
 next_home_event_id), or "no home game listed by Ticketmaster". A build that
 fetched nothing gets no list: not checked is never "none listed"."""
@@ -33,12 +33,23 @@ def _list(html: str) -> list[str]:
     ]
 
 
-def test_off_by_default_and_the_payload_is_unchanged():
-    assert site_data.LEAGUE_NEXT_HOME_LIST is False
+def test_on_by_default():
+    assert site_data.LEAGUE_NEXT_HOME_LIST is True
+    payload = league_data(PWHL, _games())
+    assert "next_home_by_team" in payload
+    assert len(_list(site.render_league(league=payload, base_url=BASE_URL))) == len(PWHL.teams)
+
+
+def test_control_it_can_be_turned_off(monkeypatch):
+    """Negative control: with the flag off there is no key and no list, and
+    the payload is the one an explicit next_home_list=False builds."""
+    monkeypatch.setattr(site_data, "LEAGUE_NEXT_HOME_LIST", False)
     payload = league_data(PWHL, _games())
     assert "next_home_by_team" not in payload
     assert payload == league_data(PWHL, _games(), next_home_list=False)
-    assert _list(site.render_league(league=payload, base_url=BASE_URL)) == []
+    html = site.render_league(league=payload, base_url=BASE_URL)
+    assert _list(html) == []
+    assert "Next home game for each team" not in html
 
 
 def test_on_lists_every_team_a_to_z_with_its_pages_next_home_game():
@@ -59,9 +70,11 @@ def test_on_lists_every_team_a_to_z_with_its_pages_next_home_game():
     assert html.count('id="league-next-home-heading"') == 1
 
 
-def test_the_module_flag_turns_it_on(monkeypatch):
+def test_the_argument_overrides_the_module_flag(monkeypatch):
+    monkeypatch.setattr(site_data, "LEAGUE_NEXT_HOME_LIST", False)
+    assert "next_home_by_team" in league_data(PWHL, _games(), next_home_list=True)
     monkeypatch.setattr(site_data, "LEAGUE_NEXT_HOME_LIST", True)
-    assert "next_home_by_team" in league_data(PWHL, _games())
+    assert "next_home_by_team" not in league_data(PWHL, _games(), next_home_list=False)
 
 
 def test_a_build_that_fetched_nothing_gets_no_list():

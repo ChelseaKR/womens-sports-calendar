@@ -57,10 +57,12 @@ archived and private.
 
 ### Added
 
-- A "Next home game for each team" list for league pages: each team, A to Z,
-  with the game its own page leads with. It is off
-  (`site_data.LEAGUE_NEXT_HOME_LIST`) until its wording is approved; while
-  off, no page changes.
+- League pages list the next home game for each team, under the team
+  roster: each team, A to Z, linked to its page, with the game that page
+  leads with (date and time as the games table shows them, the status in
+  words, the opponent when Ticketmaster names one), or "no home game listed
+  by Ticketmaster". A build that fetched nothing shows no list.
+  `site_data.LEAGUE_NEXT_HOME_LIST` turns it off.
 - The nightly publish guard flags a team that loses more than half of its
   upcoming games (and has at least three) without losing all of them: a
   FLAGGED line in the coverage report and the job summary, and a warning

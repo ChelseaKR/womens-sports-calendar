@@ -215,11 +215,11 @@ def season_label(games: list[Game]) -> str | None:
 
 
 # A league page's "Next home game for each team" list (site.render_league):
-# each team's next home game, the one its own page leads with. Off until its
-# wording is approved; while off, no league payload carries
-# `next_home_by_team`, so the league pages and their sitemap lastmod are
-# exactly as before.
-LEAGUE_NEXT_HOME_LIST = False
+# each team's next home game, the one its own page leads with. On since
+# 2026-11-15 (wording approved by Chelsea). Set False to drop it: no league
+# payload then carries `next_home_by_team`, and the league pages are as they
+# were before the list.
+LEAGUE_NEXT_HOME_LIST = True
 
 
 def league_data(
