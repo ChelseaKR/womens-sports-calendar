@@ -115,8 +115,8 @@ def test_no_price_or_price_promise_on_any_page():
 
 def test_table_headers_present_with_scope():
     html = _pages()["league"]
-    assert '<th scope="col">Date</th>' in html
-    assert '<th scope="col">Tickets</th>' in html
+    assert '<th scope="col" role="columnheader">Date</th>' in html
+    assert '<th scope="col" role="columnheader">Tickets</th>' in html
     assert "Price" not in html
 
 

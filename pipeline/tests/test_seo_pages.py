@@ -155,7 +155,10 @@ def test_hero_says_so_when_no_home_game_is_listed():
 
 def test_home_and_away_are_labelled_only_when_known(fixture_dist: Path):
     html = (fixture_dist / "wnba/las-vegas-aces/index.html").read_text()
-    rows = {m.group(1).strip(): m.group(0) for m in re.finditer(r"<tr><td>.*?</td><td>([^<]+).*?</tr>", html)}
+    rows = {
+        m.group(1).strip(): m.group(0)
+        for m in re.finditer(r'<tr role="row"><td role="cell">.*?</td><td role="cell">([^<]+).*?</tr>', html)
+    }
     assert 'home-away--away">Away' in rows["Seattle Storm vs Las Vegas Aces"]
     assert 'home-away--home">Home' in rows["Las Vegas Aces vs Seattle Storm"]
     assert 'home-away--away">Away' in rows["Phoenix Mercury vs Las Vegas Aces"]
@@ -174,7 +177,9 @@ def test_dates_are_machine_marked_only_as_far_as_known(fixture_dist: Path):
     # the row no longer says it is missing from it.
     assert '<time datetime="2026-09-24">Thu, Sep 24, 2026 (time TBA)</time></span>' in html
     assert "(time TBA)</time></span> (not yet in the calendar feed)" not in html
-    assert '<span class="game-date">Date TBD</span> (date TBD &mdash; not yet in the calendar feed)' in html
+    # The date-TBD row says "Date TBD" once, then why it is not in the feed.
+    assert '<span class="game-date">Date TBD</span> (not yet in the calendar feed)' in html
+    assert "(date TBD &mdash;" not in html
     assert '<time datetime="2026-10-01">' not in html  # the TBD game's placeholder date is never marked
 
 

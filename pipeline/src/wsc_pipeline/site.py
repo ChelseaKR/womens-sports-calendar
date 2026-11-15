@@ -513,14 +513,15 @@ def _when_html(game: Mapping[str, Any]) -> str:
 
 
 def _feed_note(game: Mapping[str, Any]) -> str:
-    """Why a listed game is not in the calendar feed: its date is TBD, or (a
+    """Says a listed game is not in the calendar feed: its date is TBD, or (a
     rare listing) it has a local time but no exact start. A game whose date
     is known and whose time is not announced IS in the feed, as an all-day
-    event (normalize.feed_start), so it gets no note."""
+    event (normalize.feed_start), so it gets no note. The note always
+    follows the game's shown date, which for a date-TBD game already reads
+    "Date TBD" (normalize.display_start), so it does not say so again: it
+    used to read "Date TBD (date TBD &mdash; not yet in the calendar feed)"."""
     if game["in_calendar_feed"]:
         return ""
-    if game.get("date_tbd") or not game.get("start_local_date"):
-        return " (date TBD &mdash; not yet in the calendar feed)"
     return " (not yet in the calendar feed)"
 
 
@@ -654,6 +655,31 @@ def _games_table_wrap_open(caption_id: str) -> str:
     return f'<div class="games-table-wrap" role="region" tabindex="0" aria-labelledby="{e(caption_id)}">'
 
 
+# The games tables carry their table roles explicitly. Below 45rem (the
+# 42rem table plus main's padding) the stylesheet lays each row out as a
+# block, one game under another, in the table's own order: date, (league,)
+# matchup, venue, ticket link (STYLE_CSS, "games table on a phone"). Scrolled
+# sideways instead, a 375px phone showed the date and half the matchup, and
+# the ticket link was off screen with nothing to say it was there. Some
+# browsers stop exposing a table as one once its display changes; the roles
+# keep each cell announced with its column header there, and the visually
+# hidden <thead> keeps the headers. The th scope stays for every other browser.
+#
+# In forced colors (Windows contrast themes) every background is dropped:
+# the lime ticket button was bare text with no underline, the only link that
+# looked like neither a link nor a button, and the date chip lost its box.
+# STYLE_CSS's forced-colors block gives both a system-colored border; the
+# subscribe buttons already have one.
+_TR = '<tr role="row">'
+_TD = '<td role="cell">'
+
+
+def _games_table_head(columns: tuple[str, ...]) -> str:
+    """A games table's <thead>: one column header per name, in order."""
+    cells = "\n".join(f'<th scope="col" role="columnheader">{e(c)}</th>' for c in columns)
+    return f'<thead role="rowgroup">\n{_TR}\n{cells}\n</tr>\n</thead>'
+
+
 def _games_table(
     games: list[dict[str, Any]], *, buy_link_subject: str, fetched: bool = True, home_away: bool = False
 ) -> str:
@@ -670,25 +696,19 @@ def _games_table(
         )
         tag = _home_away_tag(g) if home_away else ""
         rows.append(
-            "<tr>"
-            f'<td><span class="game-date">{_when_html(g)}</span>{date_note}</td>'
-            f"<td>{e(matchup)}{tag}{_game_labels_html(g)}</td>"
-            f"<td>{e(_venue_text(g))}</td>"
-            f"<td>{buy}</td>"
-            "</tr>"
+            _TR
+            + _TD
+            + f'<span class="game-date">{_when_html(g)}</span>{date_note}</td>'
+            + f"{_TD}{e(matchup)}{tag}{_game_labels_html(g)}</td>"
+            + f"{_TD}{e(_venue_text(g))}</td>"
+            + f"{_TD}{buy}</td>"
+            + "</tr>"
         )
     return f"""{_games_table_wrap_open("games-caption")}
-<table class="games-table">
+<table class="games-table" role="table">
 <caption id="games-caption" class="sr-caption">Upcoming {e(buy_link_subject)} games, from Ticketmaster</caption>
-<thead>
-<tr>
-<th scope="col">Date</th>
-<th scope="col">Matchup</th>
-<th scope="col">Venue</th>
-<th scope="col">Tickets</th>
-</tr>
-</thead>
-<tbody>
+{_games_table_head(("Date", "Matchup", "Venue", "Tickets"))}
+<tbody role="rowgroup">
 {"".join(rows)}
 </tbody>
 </table>
@@ -826,6 +846,24 @@ def _about_schedule(note: str) -> str:
 """
 
 
+def _alphabetical(teams: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """(slug, shown name) pairs in A-Z order of the shown name, for every
+    list of team links (the home page, a league's roster, a team page's
+    "more teams"). The registry (config.LEAGUES) keeps the order teams were
+    added in, which is no order a reader can scan: the WNBA list began
+    Minnesota, Golden State, Las Vegas. Display order only; the fetch, the
+    feeds and the data files keep the registry order.
+
+    Words every name ends with ("women's basketball") are left out of the
+    comparison, so "Michigan" comes before "Michigan State" and "Texas"
+    before "Texas A&M", as a fan would look for them."""
+    words = [name.casefold().split() for _, name in teams]
+    shared = 0
+    while len(words) > 1 and all(len(w) > shared + 1 for w in words) and len({w[-1 - shared] for w in words}) == 1:
+        shared += 1
+    return sorted(teams, key=lambda pair: (pair[1].casefold().split()[: len(pair[1].split()) - shared], pair[0]))
+
+
 def _breadcrumb(trail: list[tuple[str, str]], current: str) -> str:
     """The visible trail: links for the ancestors, then the current page as
     plain text."""
@@ -873,10 +911,8 @@ def _teams_by_league_block(leagues: list[dict[str, Any]]) -> str:
         teams = lg.get("teams") or []
         if not teams:
             continue
-        items = "\n".join(
-            f'<li><a href="/{e(lg["slug"])}/{e(t["slug"])}/">{e(title_name_for(lg["slug"], t["name"]))}</a></li>'
-            for t in teams
-        )
+        named = _alphabetical([(t["slug"], title_name_for(lg["slug"], t["name"])) for t in teams])
+        items = "\n".join(f'<li><a href="/{e(lg["slug"])}/{e(slug)}/">{e(name)}</a></li>' for slug, name in named)
         groups.append(
             f'<h3 id="teams-{e(lg["slug"])}">{e(lg["name"])} teams</h3>\n<ul class="team-roster" '
             f'aria-labelledby="teams-{e(lg["slug"])}">\n{items}\n</ul>'
@@ -1558,29 +1594,21 @@ def _schedule_day(day: Mapping[str, Any]) -> str:
             _buy_link(g, matchup, short=True) or '<span class="ticket-unavailable">no ticket link published yet</span>'
         )
         rows.append(
-            "<tr>"
-            f'<td><span class="game-date">{_when_html(g)}</span></td>'
-            f'<td><a href="/{e(g["league_slug"])}/">{e(g["league_name"])}</a></td>'
-            f"<td>{e(matchup)}</td>"
-            f"<td>{e(_venue_text(g))}</td>"
-            f"<td>{buy}</td>"
-            "</tr>"
+            _TR
+            + f'{_TD}<span class="game-date">{_when_html(g)}</span></td>'
+            + f'{_TD}<a href="/{e(g["league_slug"])}/">{e(g["league_name"])}</a></td>'
+            + f"{_TD}{e(matchup)}</td>"
+            + f"{_TD}{e(_venue_text(g))}</td>"
+            + f"{_TD}{buy}</td>"
+            + "</tr>"
         )
     return f"""<section class="schedule-day" aria-labelledby="day-{e(day["date"])}">
 <h2 id="day-{e(day["date"])}">{e(label)}</h2>
 {_games_table_wrap_open(f"games-caption-{day['date']}")}
-<table class="games-table">
+<table class="games-table" role="table">
 <caption id="games-caption-{e(day["date"])}" class="sr-caption">Games on {e(label)}, from Ticketmaster</caption>
-<thead>
-<tr>
-<th scope="col">Date and time</th>
-<th scope="col">League</th>
-<th scope="col">Matchup</th>
-<th scope="col">Venue</th>
-<th scope="col">Tickets</th>
-</tr>
-</thead>
-<tbody>
+{_games_table_head(("Date and time", "League", "Matchup", "Venue", "Tickets"))}
+<tbody role="rowgroup">
 {"".join(rows)}
 </tbody>
 </table>
@@ -1670,7 +1698,10 @@ def render_league(
         shown = team_names.get(slug_)
         return title_name_for(slug, shown) if shown else slug_.replace("-", " ").title()
 
-    team_links = "\n".join(f'<li><a href="/{e(slug)}/{e(t)}/">{e(team_name(t))}</a></li>' for t in league["teams"])
+    team_links = "\n".join(
+        f'<li><a href="/{e(slug)}/{e(t)}/">{e(name)}</a></li>'
+        for t, name in _alphabetical([(t, team_name(t)) for t in league["teams"]])
+    )
     incomplete = league.get("possibly_incomplete_teams") or []
     incomplete_note = (
         _possibly_incomplete_note(", ".join(team_name(t) for t in incomplete)) + "\n" if incomplete else ""
@@ -1984,13 +2015,16 @@ def _full_date(iso_date: str) -> str:
 
 
 def _checked_on(team: Mapping[str, Any]) -> str:
-    """When this build read Ticketmaster, as "as of <date>" (the UTC date the
-    freshness note also gives), or "right now" when no fetch time was
-    recorded. Never a date that was not the check's."""
+    """When this build read Ticketmaster, as "as of <date>", or "right now"
+    when no fetch time was recorded. Never a date that was not the check's.
+    The date is the Pacific one, as the page's freshness note states it
+    (_freshness_note): it was the UTC date, so a build run after 4 PM
+    Pacific said "as of" the next day above a note that said "Listings as
+    of" today."""
     fetched_at = team.get("fetched_at")
     if not fetched_at:
         return "right now"
-    when = datetime.fromisoformat(str(fetched_at)).astimezone(UTC)
+    when = datetime.fromisoformat(str(fetched_at)).astimezone(PACIFIC)
     return f'as of <time datetime="{e(when.date().isoformat())}">{e(_full_date(when.date().isoformat()))}</time>'
 
 
@@ -2141,11 +2175,8 @@ def _sibling_teams_block(league_slug: str, team_slug: str, league_name: str) -> 
     league = next((lg for lg in config.LEAGUES if lg.slug == league_slug), None)
     if league is None:
         return ""
-    items = "\n".join(
-        f'<li><a href="/{e(league_slug)}/{e(t.slug)}/">{e(t.search_title_name)}</a></li>'
-        for t in league.teams
-        if t.slug != team_slug
-    )
+    others = _alphabetical([(t.slug, t.search_title_name) for t in league.teams if t.slug != team_slug])
+    items = "\n".join(f'<li><a href="/{e(league_slug)}/{e(slug)}/">{e(name)}</a></li>' for slug, name in others)
     if not items:
         return ""
     return f"""<section class="more-teams" aria-labelledby="more-teams-heading">
@@ -2739,6 +2770,24 @@ table.games-table tbody tr:last-child td { border-bottom: 0; }
   color: var(--muted); white-space: nowrap;
 }
 .home-away--home { color: var(--ink); border-color: var(--ink); }
+/* ---- games table on a phone: one game per block (see site._TR) ---- */
+@media (max-width: 45rem) {
+  table.games-table { min-width: 0; }
+  table.games-table, table.games-table tbody, table.games-table tr, table.games-table td { display: block; }
+  table.games-table thead {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+  }
+  table.games-table tbody tr { padding: 0.65rem 0.85rem; border-bottom: 1px solid var(--border); }
+  table.games-table tbody tr:last-child { border-bottom: 0; }
+  table.games-table td { padding: 0.1rem 0; border-bottom: 0; }
+  table.games-table td:first-child { padding-top: 0; }
+}
+
+/* ---- forced colors: backgrounds drop, so borders keep the shapes ---- */
+@media (forced-colors: active) {
+  a.next-game-cta, .skip-link { border: 2px solid LinkText; }
+  .next-game-date { border: 2px solid CanvasText; }
+}
 
 /* ---- help page ---- */
 /* A feed address is one long unbroken token: let it wrap at 320px. */

@@ -12,6 +12,21 @@ archived and private.
 
 ### Fixed
 
+- On a phone, the games tables on team, league and "This week" pages list
+  one game under another (date, matchup, venue, ticket link) instead of
+  scrolling sideways: at 375 px the ticket link was off screen with nothing
+  to say it was there. The tables keep their column headers for screen
+  readers, and the accessibility check now fails any box that scrolls
+  sideways at 320 px.
+- In a forced-colors (Windows contrast) theme, the next game's ticket button
+  keeps a button outline and the date chip its box; both had lost every
+  edge.
+- Team lists (home page, league rosters, "More ... team schedules") are in
+  A to Z order. The WNBA and AUSL lists were in the order teams were added.
+- A team page's "as of" date is the Pacific date the "Listings as of" line
+  beside it gives; a build run in the Pacific evening said the next day.
+- A game with no date reads "Date TBD (not yet in the calendar feed)", no
+  longer "Date TBD (date TBD — not yet in the calendar feed)".
 - The four PWHL expansion teams go by the names the league announced on
   2026-11-10: Detroit Clutch, Hamilton Havoc, San Jose Sea Lions and Vegas
   Vanguards (DECISIONS 0041). Since Ticketmaster renamed their listings, the

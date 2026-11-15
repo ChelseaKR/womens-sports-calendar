@@ -13,7 +13,9 @@
 //                     every stop shows a visible focus indicator, and no
 //                     focused element is fully covered by other content.
 //   A11Y-09           reflow: at 320x256 CSS px the page does not scroll
-//                     horizontally.
+//                     horizontally, and neither does any box in it (a
+//                     games table once fit only by scrolling its own box
+//                     sideways, which hid its ticket links on a phone).
 //   A11Y-08           reduced motion: with prefers-reduced-motion: reduce,
 //                     no element has a running animation or a non-zero
 //                     animation/transition duration.
@@ -70,6 +72,12 @@ const SABOTAGE = [
     name: "fixed-width content",
     expect: "reflow:",
     apply: (html) => html.replace("</main>", '<div style="width: 900px">wide</div></main>'),
+  },
+  {
+    name: "a box that scrolls sideways",
+    expect: "reflow: a box scrolls sideways",
+    apply: (html) =>
+      html.replace("</main>", '<div class="planted" style="overflow-x: auto"><div style="width: 900px">wide</div></div></main>'),
   },
   {
     name: "transition outside reduced-motion",
@@ -210,13 +218,26 @@ async function checkPage(browser, url) {
   }
 
   const narrow = await openPage(browser, url, { width: 320, height: 256 });
-  const reflow = await narrow.evaluate(() => ({
-    scrollWidth: document.documentElement.scrollWidth,
-    clientWidth: document.documentElement.clientWidth,
-  }));
+  const reflow = await narrow.evaluate(() => {
+    const sideways = [];
+    for (const el of document.body.querySelectorAll("*")) {
+      const overflowX = getComputedStyle(el).overflowX;
+      if ((overflowX === "auto" || overflowX === "scroll") && el.scrollWidth > el.clientWidth + 1) {
+        sideways.push(`<${el.tagName.toLowerCase()} class="${el.className}"> (${el.scrollWidth}px in ${el.clientWidth}px)`);
+      }
+    }
+    return {
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+      sideways,
+    };
+  });
   await narrow.close();
   if (reflow.scrollWidth > reflow.clientWidth + 1) {
     problems.push(`reflow: ${reflow.scrollWidth}px of content in a ${reflow.clientWidth}px viewport at 320 CSS px`);
+  }
+  for (const box of reflow.sideways) {
+    problems.push(`reflow: a box scrolls sideways at 320 CSS px: ${box}`);
   }
 
   const calm = await openPage(browser, url, { width: 1280, height: 800 }, true);
