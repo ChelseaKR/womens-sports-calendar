@@ -12,6 +12,23 @@ archived and private.
 
 ### Fixed
 
+- A postponed home game no longer leads a team page's "Next home game" box,
+  opening sentence and search description while a later home game is
+  listed: Ticketmaster may still show the date it was moved from. It leads
+  only when it is the only home game listed, with its status, as before.
+  League pages no longer name a cancelled or postponed game as "the next
+  game", and a team with no home game listed no longer leads its "Next game,
+  away" box with a cancelled one.
+- A ticket link's name says the game's status: a screen reader's list of
+  links reads each link alone, and a link to a cancelled game said nothing
+  of it ("... 7:00 PM PDT (Cancelled)"). A game with no date reads
+  ", date TBD" where it read "on Date TBD", in the table and in the
+  next-game button ("Buy tickets for A vs B, date TBD, from AXS ...").
+- The calendar feeds are smaller: each venue time zone's block now lists the
+  clock changes for the years its games fall in, not every change from 1970
+  to 2038 (about 0.6 KB a zone instead of 2.7 KB). The live Ottawa Charge
+  feed was 24.6 KB for 23 games, about 8 KB of it its three zones' time-zone
+  blocks. Events, UIDs and times are unchanged.
 - On a phone, the games tables on team, league and "This week" pages list
   one game under another (date, matchup, venue, ticket link) instead of
   scrolling sideways: at 375 px the ticket link was off screen with nothing
@@ -40,6 +57,12 @@ archived and private.
 
 ### Added
 
+- League pages list the next home game for each team, under the team
+  roster: each team, A to Z, linked to its page, with the game that page
+  leads with (date and time as the games table shows them, the status in
+  words, the opponent when Ticketmaster names one), or "no home game listed
+  by Ticketmaster". A build that fetched nothing shows no list.
+  `site_data.LEAGUE_NEXT_HOME_LIST` turns it off.
 - The nightly publish guard flags a team that loses more than half of its
   upcoming games (and has at least three) without losing all of them: a
   FLAGGED line in the coverage report and the job summary, and a warning

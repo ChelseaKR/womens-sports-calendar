@@ -20,7 +20,7 @@ from icalendar import Calendar, Timezone
 
 from wsc_pipeline import build as build_module
 from wsc_pipeline.coverage import MAX_NAMED_GAMES, BuildCoverage, compute_league_coverage, render_report
-from wsc_pipeline.ics import build_calendar, make_uid
+from wsc_pipeline.ics import _vtimezone, build_calendar, make_uid
 from wsc_pipeline.normalize import normalize_event, zone_for, zone_problem
 from wsc_pipeline.site_data import records_dir
 
@@ -94,6 +94,9 @@ def test_every_zone_the_database_knows_gets_a_vtimezone():
         try:
             Timezone.from_tzid(name)
         except ValueError:
+            disagreements.append(name)
+        # The block a feed writes, over the years its games fall in.
+        if _vtimezone(name, years=(2026, 2027)) is None:
             disagreements.append(name)
     assert disagreements == []
 

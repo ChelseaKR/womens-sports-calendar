@@ -119,10 +119,7 @@ def team_data(
         d = game_to_dict(g)
         d["tracked_team_is_home"] = tracked_team_is_home(team, g)
         game_dicts.append(d)
-    next_home = next(
-        (d for d in game_dicts if d["tracked_team_is_home"] is True and d["status"] != "Cancelled"),
-        None,
-    )
+    next_home = next_home_game(game_dicts)
     return {
         "team_slug": team.slug,
         "team_name": team.shown_name,
@@ -140,6 +137,23 @@ def team_data(
         "next_home_event_id": next_home["event_id"] if next_home else None,
         "games": game_dicts,
     }
+
+
+# A game Ticketmaster lists with one of these statuses is not the next game
+# to go to: a cancelled one is off, and a postponed one still shows the date
+# it was moved from (ics.FEED_STATUS). "Rescheduled" stays a candidate: its
+# listing carries the current date.
+NOT_NEXT_STATUSES = frozenset({"Cancelled", "Postponed"})
+
+
+def next_home_game(game_dicts: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """The soonest listed home game (game_dicts soonest first, each with
+    `tracked_team_is_home`) that is going ahead as listed. A cancelled game
+    never is. A postponed one is the answer only when it is the only home
+    game listed, so the page still names it, with its status, rather than
+    saying no home game is listed. None when no game is known to be at home."""
+    home = [d for d in game_dicts if d.get("tracked_team_is_home") is True and d.get("status") != "Cancelled"]
+    return next((d for d in home if d.get("status") not in NOT_NEXT_STATUSES), home[0] if home else None)
 
 
 def nothing_listed(payload: dict[str, Any]) -> bool:
@@ -200,17 +214,30 @@ def season_label(games: list[Game]) -> str | None:
     return f"{first}-{last}"
 
 
+# A league page's "Next home game for each team" list (site.render_league):
+# each team's next home game, the one its own page leads with. On since
+# 2026-11-15 (wording approved by Chelsea). Set False to drop it: no league
+# payload then carries `next_home_by_team`, and the league pages are as they
+# were before the list.
+LEAGUE_NEXT_HOME_LIST = True
+
+
 def league_data(
     league: League,
     games: list[Game],
     *,
     fetched: bool = True,
     possibly_incomplete_teams: set[str] | frozenset[str] = frozenset(),
+    next_home_list: bool | None = None,
 ) -> dict[str, Any]:
+    """`next_home_list` overrides LEAGUE_NEXT_HOME_LIST (None reads it). When
+    on and the build fetched, `next_home_by_team` maps every team's slug to
+    its team page's `next_home_event_id` (team_data, from the same games), so
+    the list and each team page can never name different games."""
     # Once per event: a game between two tracked teams arrives as one Game
     # per team's search (see normalize.unique_by_event_id).
     league_games = unique_by_event_id(g for g in games if g.league_slug == league.slug)
-    return {
+    payload = {
         "league_slug": league.slug,
         "league_name": league.name,
         "season": season_label(league_games) if fetched else None,
@@ -223,6 +250,11 @@ def league_data(
         "team_names": {t.slug: t.shown_name for t in league.teams},
         "games": [game_to_dict(g) for g in sorted(league_games, key=_sort_key)],
     }
+    if fetched and (LEAGUE_NEXT_HOME_LIST if next_home_list is None else next_home_list):
+        payload["next_home_by_team"] = {
+            t.slug: team_data(t, league, games, fetched=fetched)["next_home_event_id"] for t in league.teams
+        }
+    return payload
 
 
 def _sort_key(game: Game) -> tuple[bool, bool, date | None, bool, datetime | None, str]:
