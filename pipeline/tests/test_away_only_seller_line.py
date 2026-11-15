@@ -72,7 +72,8 @@ def test_minnesota_and_vancouver_name_their_seller(league_slug, team_slug, selle
 
 
 def test_a_ticketmaster_team_page_is_byte_identical_to_what_main_rendered():
-    # The golden was rendered by origin/main's site.py before this change.
+    # The golden was rendered by origin/main's site.py before this change, and
+    # re-rendered on 2026-11-14 for the games table's explicit table roles.
     golden = (GOLDEN / "away_only_ticketmaster_boston_fleet.html").read_bytes()
     assert ("pwhl", "boston-fleet") not in sellers.PRIMARY_SELLERS
     assert _page("pwhl", "boston-fleet").encode() == golden

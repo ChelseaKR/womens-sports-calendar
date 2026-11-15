@@ -47,7 +47,7 @@ def test_the_scroll_box_is_a_focusable_region_named_by_the_caption(name):
 
 def test_a_table_ticket_link_is_short_and_names_the_seller_and_the_game():
     html = _pages()["league"]
-    rows = re.findall(r"<tbody>.*?</tbody>", html, re.S)
+    rows = re.findall(r'<tbody role="rowgroup">.*?</tbody>', html, re.S)
     assert rows
     links = re.findall(r"<a [^>]*>(.*?)</a>", rows[0])
     tickets = [t for t in links if t.startswith("Tickets")]
