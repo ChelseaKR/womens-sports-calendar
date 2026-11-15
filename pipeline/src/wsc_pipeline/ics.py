@@ -24,7 +24,7 @@ plain destination; validate_ics refuses a feed that carries one anyway.
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 
@@ -266,14 +266,25 @@ def _add_events(
     for vevent in kept:
         ordered.append((_kept_sort_key(vevent), len(ordered), vevent, _kept_tzid(vevent)))
     ordered.sort(key=lambda row: (row[0], row[1]))
+    spans = _zone_years((when, tzid) for when, _, _, tzid in ordered)
     tzids_seen: set[str] = set()
     for _, _, component, tzid in ordered:
         if tzid and tzid not in tzids_seen:
             tzids_seen.add(tzid)
-            vtz = _vtimezone(tzid)
+            vtz = _vtimezone(tzid, years=spans[tzid])
             if vtz is not None:
                 cal.add_component(vtz)
         cal.add_component(component)
+
+
+def _zone_years(starts: Iterable[tuple[datetime, str | None]]) -> dict[str, tuple[int, int]]:
+    """Each venue zone's first and last start year (UTC), for _vtimezone."""
+    spans: dict[str, tuple[int, int]] = {}
+    for when, tzid in starts:
+        if tzid:
+            low, high = spans.get(tzid, (when.year, when.year))
+            spans[tzid] = (min(low, when.year), max(high, when.year))
+    return spans
 
 
 def _kept_sort_key(vevent: Component) -> datetime:
@@ -289,8 +300,26 @@ def _kept_tzid(vevent: Component) -> str | None:
     return str(tzid) if tzid else None
 
 
-def _vtimezone(tzid: str) -> Timezone | None:
+# How far a VTIMEZONE's transitions reach either side of the years its
+# feed's events fall in: a year before the first (a UTC start in early
+# January can be the venue's December 31) and two after the last (an
+# estimated DTEND can cross New Year). icalendar's default, 1970 to 2038,
+# wrote about 2.7 KB of past clock changes per zone into every feed, about
+# a third of a team feed's bytes; the window keeps each block near 0.6 KB.
+VTIMEZONE_YEARS_BEFORE = 1
+VTIMEZONE_YEARS_AFTER = 2
+
+
+def _vtimezone(tzid: str, *, years: tuple[int, int]) -> Timezone | None:
     """The VTIMEZONE block for tzid, or None when the zone is unknown.
+
+    `years` is the first and last year (UTC) of the starts written in this
+    zone; the block carries the zone's transitions from the start of
+    VTIMEZONE_YEARS_BEFORE years before the first to the end of
+    VTIMEZONE_YEARS_AFTER years after the last, which covers every DTSTART
+    and DTEND in the feed. The TZID is still the IANA name, and a feed is
+    replaced whole on every refresh, so no subscriber holds one of its
+    events outside the window.
 
     Timezone.from_tzid raises ValueError on a name it cannot resolve; it
     does not return None. zone_for is the one place that decides whether a
@@ -299,8 +328,13 @@ def _vtimezone(tzid: str) -> Timezone | None:
     one event must never stop the nightly build for every league (#22)."""
     if zone_for(tzid) is None:
         return None
+    first, last = years
     try:
-        return Timezone.from_tzid(tzid)
+        return Timezone.from_tzid(
+            tzid,
+            first_date=date(first - VTIMEZONE_YEARS_BEFORE, 1, 1),
+            last_date=date(last + VTIMEZONE_YEARS_AFTER, 12, 31),
+        )
     except ValueError:
         return None
 

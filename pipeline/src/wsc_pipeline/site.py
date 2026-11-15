@@ -47,7 +47,7 @@ from .sellers import (
     team_primary_seller,
     with_affiliate,
 )
-from .site_data import kept_out_of_search, schedule_window
+from .site_data import NOT_NEXT_STATUSES, kept_out_of_search, schedule_window
 from .team_shops import shop_links_on, team_shop_url
 
 CSS_PATH = "/style.css"
@@ -416,13 +416,16 @@ def _buy_link(game: Mapping[str, Any], matchup: str, *, css_class: str = "", sho
     if not buy:
         return None
     official = f", the official seller for {buy['home_team']} home games" if buy.get("home_team") else ""
+    when = _link_when(game)
     if short:
-        hidden = f" for {matchup} on {game['start_display']}"
+        hidden = f" for {matchup}{when}"
         if official:
             hidden += f"; {buy['seller']} is the official seller for {buy['home_team']} home games"
         text_html = f'{e(SHORT_TICKET_TEXT)} ({e(buy["seller"])})<span class="sr-only">{e(hidden)}</span>'
     else:
-        text_html = e(f"Buy tickets for {matchup} on {game['start_display']} from {buy['seller']}{official}")
+        text_html = e(
+            f"Buy tickets for {matchup}{when}{',' if game.get('date_tbd') else ''} from {buy['seller']}{official}"
+        )
     # An affiliate link is marked as one for search engines (Google asks that
     # paid and affiliate links say so) and for the reader, with the visible
     # "Paid link" label right after it (the footer note is not enough on its
@@ -439,6 +442,17 @@ def _buy_link(game: Mapping[str, Any], matchup: str, *, css_class: str = "", sho
 
 # The visible text of a games-table row's ticket link (_buy_link short=True).
 SHORT_TICKET_TEXT = "Tickets"
+
+
+def _link_when(game: Mapping[str, Any]) -> str:
+    """When the game is, as a ticket link's name says it: " on <date and
+    time>", ", date TBD" when no date is announced (it read "on Date TBD"),
+    and the Ticketmaster status in parentheses when there is one. A screen
+    reader's list of links hears each link alone, away from the row's
+    "Cancelled", so a link to a cancelled game said nothing of it."""
+    when = ", date TBD" if game.get("date_tbd") else f" on {game['start_display']}"
+    status = game.get("status")
+    return f"{when} ({status})" if status else when
 
 
 def _matchup_text(game: Mapping[str, Any]) -> str:
@@ -614,7 +628,9 @@ your calendar automatically &mdash; nothing to check back for.</p>
     if home is not None:
         g, label = home, "Next home game"
     else:
-        g = games[0]
+        # A cancelled or postponed game is not the next one to go to; it
+        # leads only when every listed game is one.
+        g = next((x for x in games if x.get("status") not in NOT_NEXT_STATUSES), games[0])
         label = "Next game, away" if g.get("tracked_team_is_home") is False else "Next listed game"
         sellers_note = _seller_sentences(team)
         sellers_note = f"\n{sellers_note}" if sellers_note else ""
@@ -1698,10 +1714,8 @@ def render_league(
         shown = team_names.get(slug_)
         return title_name_for(slug, shown) if shown else slug_.replace("-", " ").title()
 
-    team_links = "\n".join(
-        f'<li><a href="/{e(slug)}/{e(t)}/">{e(name)}</a></li>'
-        for t, name in _alphabetical([(t, team_name(t)) for t in league["teams"]])
-    )
+    teams_az = _alphabetical([(t, team_name(t)) for t in league["teams"]])
+    team_links = "\n".join(f'<li><a href="/{e(slug)}/{e(t)}/">{e(name)}</a></li>' for t, name in teams_az)
     incomplete = league.get("possibly_incomplete_teams") or []
     incomplete_note = (
         _possibly_incomplete_note(", ".join(team_name(t) for t in incomplete)) + "\n" if incomplete else ""
@@ -1720,7 +1734,7 @@ just its games.</p>
 <ul class="team-roster">
 {team_links}
 </ul>
-{_official_tickets_block(official_tickets.league_page(slug), subject=name, owner="the league's")}<h2>Upcoming games</h2>
+{_league_next_home_block(league, teams_az)}{_official_tickets_block(official_tickets.league_page(slug), subject=name, owner="the league's")}<h2>Upcoming games</h2>
 {incomplete_note}{_freshness_note(league)}{_games_table(league["games"], buy_link_subject=name, fetched=fetched)}
 <p class="league-week-link"><a href="{SCHEDULE_PATH}">The week ahead in every league, day by day</a></p>
 {_other_apps_block(ics_https_url=ics_https)}{_about_schedule(league["schedule_source_note"])}"""
@@ -1743,6 +1757,42 @@ just its games.</p>
         paid_links=paid_links,
         jsonld=structured_data.script_block(nodes),
     )
+
+
+LEAGUE_NEXT_HOME_HEADING = "Next home game for each team"
+LEAGUE_NO_HOME_GAME = "no home game listed by Ticketmaster"
+
+
+def _league_next_home_block(league: Mapping[str, Any], teams_az: list[tuple[str, str]]) -> str:
+    """A league page's "Next home game for each team" list
+    (site_data.LEAGUE_NEXT_HOME_LIST): each team, A to Z, linked to its page,
+    with the game that page leads with, its date and time as the games table
+    shows them (a status in words, "Date TBD" when there is no date) and the
+    opponent when Ticketmaster named one. A team with none says so. "" when
+    the payload has no `next_home_by_team`: the flag is off, or the build
+    fetched nothing, which is never "none listed"."""
+    by_team = league.get("next_home_by_team")
+    if by_team is None:
+        return ""
+    slug = league["league_slug"]
+    games = {g["event_id"]: g for g in league["games"]}
+    rows = []
+    for team_slug, team_name in teams_az:
+        link = f'<a href="/{e(slug)}/{e(team_slug)}/">{e(team_name)}</a>'
+        game = games.get(by_team.get(team_slug) or "")
+        if game is None:
+            rows.append(f"<li>{link}: {e(LEAGUE_NO_HOME_GAME)}</li>")
+            continue
+        vs = f" vs {e(_opponent_label(slug, game['away_team']))}" if game.get("away_team") else ""
+        rows.append(f'<li>{link}: <span class="game-date">{_when_html(game)}</span>{vs}</li>')
+    items = "\n".join(rows)
+    return f"""<section class="league-next-home" aria-labelledby="league-next-home-heading">
+<h2 id="league-next-home-heading">{e(LEAGUE_NEXT_HOME_HEADING)}</h2>
+<ul>
+{items}
+</ul>
+</section>
+"""
 
 
 def _league_description(heading: str, league: dict[str, Any]) -> str:
@@ -2083,16 +2133,22 @@ def _league_matchup_label(league_slug: str, game: Mapping[str, Any]) -> str | No
 
 
 def _next_league_game(league: Mapping[str, Any]) -> Mapping[str, Any] | None:
-    """The soonest listed game with a known date and both sides named, or
-    None. league["games"] is soonest first (site_data._sort_key), date-TBD
-    games last."""
+    """The soonest listed game with a known date and both sides named that
+    is going ahead as listed, or None. league["games"] is soonest first
+    (site_data._sort_key), date-TBD games last. A cancelled or postponed game
+    (site_data.NOT_NEXT_STATUSES) is never "the next game": the lede and the
+    search description used to name a cancelled game as the next one."""
     if not league.get("fetched", True):
         return None
     return next(
         (
             g
             for g in league["games"]
-            if not g.get("date_tbd") and g.get("start_local_date") and g.get("home_team") and g.get("away_team")
+            if not g.get("date_tbd")
+            and g.get("start_local_date")
+            and g.get("home_team")
+            and g.get("away_team")
+            and g.get("status") not in NOT_NEXT_STATUSES
         ),
         None,
     )
@@ -2630,8 +2686,8 @@ nav[aria-label="breadcrumb"] {
 @media (min-width: 30rem) { .team-roster { columns: 2; } }
 
 /* ---- team page: this week, and the other teams in the league; home page team lists ---- */
-.this-week ul { list-style: none; margin: 0 0 0.75rem; padding: 0; }
-.this-week li { padding: 0.4rem 0; border-bottom: 1px solid var(--border); }
+.this-week ul, .league-next-home ul { list-style: none; margin: 0 0 0.75rem; padding: 0; }
+.this-week li, .league-next-home li { padding: 0.4rem 0; border-bottom: 1px solid var(--border); }
 .more-teams, .all-teams { margin-top: 2rem; }
 .all-teams h3 { margin: 1.5rem 0 0.5rem; }
 

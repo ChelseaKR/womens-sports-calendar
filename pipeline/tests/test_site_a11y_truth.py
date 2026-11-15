@@ -57,7 +57,10 @@ def test_a_table_ticket_link_is_short_and_names_the_seller_and_the_game():
         # The seller stays visible (DECISIONS 0013, 0018): Ticketmaster, or the
         # home team's own seller where one is known.
         assert re.fullmatch(r"Tickets \((Ticketmaster|Jump|AXS|SeatGeek)\)", visible), visible
-        assert re.fullmatch(r'Tickets \([^)]+\)<span class="sr-only"> for .+ vs .+ on [^<]+</span>', text), text
+        # "on <date and time>", or ", date TBD" for a game with no date.
+        assert re.fullmatch(
+            r'Tickets \([^)]+\)<span class="sr-only"> for .+ vs .+(?: on |, date TBD)[^<]*</span>', text
+        ), text
     assert "Buy tickets for" not in rows[0]
     assert ".sr-only" in site.STYLE_CSS
 
