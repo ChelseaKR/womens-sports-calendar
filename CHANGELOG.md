@@ -17,6 +17,17 @@ archived and private.
   how to reach her. Every statement on it comes from what the site already
   says elsewhere (DECISIONS 0043).
 
+### Security
+
+- A game's ticket link is shown only when it is an https address on a
+  listed host: Ticketmaster's own sites and the official seller and ticket
+  pages this repository already records. Any other link is left out and the
+  game is still listed, on the pages, in the structured data and in the
+  calendar feeds, including the played games a feed keeps. The feed
+  validator refuses a build that carries any other link, and the coverage
+  report counts the links left out. Every link in the live feeds on
+  2026-11-17 already met the rule (DECISIONS 0044).
+
 ### Fixed
 
 - A postponed home game no longer leads a team page's "Next home game" box,

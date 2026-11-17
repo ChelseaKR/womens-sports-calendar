@@ -130,6 +130,9 @@ used (requests, bytes).
   event carries the decoded destination, or no ticket link when there is
   none (`normalize.feed_ticket_url`, `impact.py`), and `validate_ics.py`
   fails on any feed with a tracking link (`../docs/DECISIONS.md` 0018).
+  A ticket link is kept only when it is an https address on a listed host
+  (`ticket_hosts.py`, `../docs/DECISIONS.md` 0044): on the pages, in the
+  feeds, and in the played games a feed keeps.
 - `history.py` — what a build carries over from the live feeds
   (`../docs/DECISIONS.md` 0027): a played game Ticketmaster no longer lists
   stays in each feed that had it, as published, for `KEEP_PLAYED_DAYS`

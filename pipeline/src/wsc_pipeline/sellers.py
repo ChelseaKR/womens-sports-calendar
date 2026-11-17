@@ -45,7 +45,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from urllib.parse import quote, urlparse
 
-from . import config, impact, official_tickets
+from . import config, impact, official_tickets, ticket_hosts
 from .normalize import Game, team_is_participant
 
 
@@ -475,7 +475,8 @@ def _affiliate_templates() -> dict[str, str]:
 AFFILIATE_LINK_TEMPLATES: dict[str, str] = _affiliate_templates()
 FANATICS_TEMPLATE: str | None = impact_template(FANATICS_IMPACT_LINK, setting="sellers.FANATICS_IMPACT_LINK")
 
-# Labels for the hosts Ticketmaster Discovery event URLs point at.
+# Labels for the hosts Ticketmaster Discovery event URLs point at. Every one
+# is a listed domain (ticket_hosts.LISTED_DOMAINS; test_ticket_hosts.py).
 _HOST_LABELS = {
     "ticketmaster.com": "Ticketmaster",
     "ticketmaster.ca": "Ticketmaster",
@@ -585,7 +586,10 @@ def buy_link(game: Game) -> dict[str, str] | None:
             "seller": seller.name,
             "home_team": team.name,
         }
-    if game.ticket_url:
+    # Only a link on a listed host (ticket_hosts.py, DECISIONS 0044).
+    # normalize_event already leaves any other out; this holds for a Game
+    # built another way too.
+    if game.ticket_url and ticket_hosts.is_allowed(game.ticket_url):
         label = seller_label_for_url(game.ticket_url)
         return {"url": with_affiliate(game.ticket_url, label), "seller": label, "home_team": ""}
     return None

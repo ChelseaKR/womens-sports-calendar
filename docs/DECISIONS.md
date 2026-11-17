@@ -1948,3 +1948,76 @@ name the address in their own text.
 Revisit when the site starts earning (the earning paragraph switches on its
 own, but the page's date must move), when a second data source passes 0003,
 or when the maker or the contact address changes.
+
+## 0044 — A ticket link is an https address on a listed host, or the game is listed without one (2026-11-17)
+
+**Why:** the security review of 2026-11-17 (outside this repo). A game's
+ticket link is the `url` Ticketmaster's Discovery API sends, and the site
+shows it on the pages, in the structured data and in every calendar feed.
+The only check was that it began `http://` or `https://`. Discovery lists
+events from more than one platform, so the site was vouching for any web
+address a listing carried. Nothing here reports that one ever did: on
+2026-11-17 the six live league feeds held 619 events, every link https, 569
+on `www.ticketmaster.com` and 50 on `www.ticketmaster.ca`.
+
+**Decision:**
+
+- **The list** (`pipeline/src/wsc_pipeline/ticket_hosts.py`): any
+  subdomain of `ticketmaster.com`, `ticketmaster.ca` and `livenation.com`
+  (Ticketmaster's own sites), and of `gofevo.com` (`sellers.py` already
+  labels it: a few Discovery events' own link is a team's group offer
+  there); and exactly the hosts this repository already records as a
+  team's or league's official seller or ticket page (0013, 0019:
+  `sellers.PRIMARY_SELLERS`, `official_tickets`; 99 hosts today, such as
+  `axs.com`, `seatgeek.com`, `gophersports.evenue.net`, `storm.wnba.com`).
+  A recorded host is exact: `gophersports.evenue.net` is listed,
+  `evenue.net` is not. Adding a seller with its evidence, as 0013 asks,
+  adds its host.
+- **The rule:** https, the default port, no user name or password, an
+  ordinary host name, printable ASCII with no backslash. Plain `http` is
+  left out, on Ticketmaster's hosts too. An address is never rewritten to
+  https or to another host: that would be a guess.
+- **Anything else is left out, and the game stays.** The game is on its
+  pages and in its feeds as before, with no "Buy tickets" link, no `URL`
+  and no "Buy:" line, and no `offers` in its structured data. That is how
+  a game with no link from Ticketmaster already reads.
+- **A tracking link is judged by where it goes** (0018). Its plain
+  destination must be on the list, and the link itself must be on one of
+  Impact's shared domains (`impact.IMPACT_SHARED_DOMAINS`) or on a listed
+  host. A tracking-link path on any other host is still recognised, so it
+  can never reach a feed, but the link is now left out instead of being
+  shown under its destination's name. A tracking link with no destination
+  to read is left out.
+- **The feeds, including the played games they keep** (0027). A kept game
+  is a copy of what an earlier build published, so `history.kept_played`
+  takes an unlisted link out of the copy (its `URL` and its "Buy:" line)
+  and changes nothing else. `validate_ics` (check 14) refuses a build in
+  which any event's `URL` or "Buy:" address is not an https address on a
+  listed host, before deploy.
+- **Checked where the link is used as well as where it is read:**
+  `normalize.feed_ticket_url` and `sellers.buy_link` apply the list again,
+  so a game built without `normalize_event` is held to it too.
+- **Counted, not named.** The coverage report says per league how many
+  games are listed without the link Ticketmaster sent. It gives a count and
+  never the address. If Ticketmaster starts using another site of its own,
+  the count shows it, and the fix is one line in `ticket_hosts.py`.
+- **Not changed:** which seller a game links to (0013); the affiliate
+  rules (0018); `sellers.seller_label_for_url`, whose labels still cannot
+  be a recorded seller's name, so an event link can never take a seller's
+  affiliate template; the Discovery query.
+
+**Enforced by** `tests/test_ticket_hosts.py`: listed links are kept as they
+are; 28 others are left out (another host, `http`, a look-alike domain, a
+port, a user name, a backslash, a tab, a recorded seller's other
+subdomain), each first shown to differ from the listed one; every seller
+page and official ticket page this repository records, and the two hosts in
+the live feeds, pass; a game with a link elsewhere is on the page, in the
+record and in the feed without it; a game built another way cannot carry
+one; a kept played game loses an unlisted link and keeps a listed one,
+through two real builds; and the deploy gate refuses a feed changed to
+carry one. `tests/test_affiliate_feed_guard.py` and
+`tests/test_security_hardening.py` are updated for the two behaviours that
+changed (`http`, and a tracking link on a host that is not Impact's).
+
+Revisit when Ticketmaster's event links move to a host not listed (the
+coverage count), or when a second data source passes 0003.

@@ -19,6 +19,7 @@ from datetime import date, datetime, time
 from typing import Any, Protocol
 from zoneinfo import ZoneInfo
 
+from . import ticket_hosts
 from .impact import plain_url
 
 # "Home vs Away" (Ticketmaster's convention) or "Away at Home" / "Away @
@@ -95,6 +96,10 @@ class Game:
     # Ticketmaster's dates.status.code ("onsale", "offsale", "cancelled",
     # "postponed", "rescheduled"), lowercased; None when it sent none.
     status_code: str | None = None
+    # True when Ticketmaster sent a ticket link and it was left out
+    # (safe_ticket_url); False when it sent none or the link was kept. Only
+    # the coverage report reads it.
+    ticket_link_left_out: bool = False
 
 
 @dataclass(frozen=True)
@@ -522,6 +527,8 @@ def normalize_event(
     address = venue.get("address") or {}
     country = venue.get("country") or {}
     status = _text((dates.get("status") or {}).get("code"))
+    sent_url = raw.get("url")
+    ticket_url = safe_ticket_url(sent_url)
 
     return Game(
         event_id=event_id,
@@ -540,7 +547,7 @@ def normalize_event(
         date_tbd=date_tbd,
         time_tba=time_tba,
         price=_parse_price(raw.get("priceRanges")),
-        ticket_url=safe_ticket_url(raw.get("url")),
+        ticket_url=ticket_url,
         raw_event_name=raw.get("name", ""),
         home_away_known=matchup.home_away_known,
         event_title=matchup.event_title,
@@ -549,6 +556,7 @@ def normalize_event(
         venue_postal_code=_text(venue.get("postalCode")),
         venue_country=_text(country.get("countryCode")),
         status_code=status.lower() if status else None,
+        ticket_link_left_out=bool(sent_url) and ticket_url is None,
     )
 
 
@@ -688,20 +696,19 @@ def zone_problem(tzid: str | None) -> str | None:
 
 
 def safe_ticket_url(url: object) -> str | None:
-    """The event's ticket URL only if it is an http(s) URL, else None.
+    """The event's ticket URL only if it is an https address on a host this
+    site lists (ticket_hosts.py, DECISIONS 0044), else None.
 
     The URL comes from a third party and is rendered as a link (`href`) on
     every page and as the `URL` of every calendar entry. html.escape() stops
     it breaking out of the attribute, but not a `javascript:`, `data:` or
-    `vbscript:` URL, which runs in the reader's browser when clicked. An
-    unusable URL is absence (the page says there is no Ticketmaster
-    listing), never a guessed or rewritten link -- rewriting would also
-    strip Ticketmaster's affiliate tracking.
+    `vbscript:` URL, which runs in the reader's browser when clicked, and
+    not an ordinary web address on a host that is not a ticket seller's. An
+    unusable URL is absence (the game is listed with no ticket link), never
+    a guessed or rewritten link -- rewriting would also strip Ticketmaster's
+    affiliate tracking.
     """
-    if not isinstance(url, str):
-        return None
-    scheme, separator, rest = url.partition("://")
-    if separator and scheme.lower() in ("http", "https") and rest and not rest.startswith("/"):
+    if isinstance(url, str) and ticket_hosts.is_allowed(url):
         return url
     return None
 
@@ -711,5 +718,9 @@ def feed_ticket_url(game: Game) -> str | None:
     carry: the game's own URL, or, when Ticketmaster has wrapped it in Impact
     affiliate tracking, the plain address it forwards to (impact.plain_url).
     None when there is no URL, or no plain address to give: never a
-    tracking link, and never a guess (DECISIONS 0018)."""
-    return plain_url(game.ticket_url) if game.ticket_url else None
+    tracking link, and never a guess (DECISIONS 0018). And only an https
+    address on a listed host (ticket_hosts.py, DECISIONS 0044): checked
+    here again, so a Game built without normalize_event cannot put another
+    address in a feed."""
+    url = plain_url(game.ticket_url) if game.ticket_url else None
+    return url if url and ticket_hosts.is_listed_https(url) else None

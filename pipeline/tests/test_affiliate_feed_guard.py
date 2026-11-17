@@ -50,6 +50,13 @@ TRACKING_LINKS = (
     "https://go.brandclicks.example/c/1234567/264167/4272",
 )
 
+# The links on Impact's shared domains, and the one on a host of its own. A
+# ticket link is shown only when it goes through the first kind (or a listed
+# host): a tracking-link path on any other host is recognised, so it can
+# never reach a feed, and is left out (ticket_hosts.py, DECISIONS 0044).
+IMPACT_HOSTED = TRACKING_LINKS[:3]
+CUSTOM_HOSTED = TRACKING_LINKS[3]
+
 WNBA = next(lg for lg in LEAGUES if lg.slug == "wnba")
 ACES = next(t for t in WNBA.teams if t.slug == "las-vegas-aces")
 
@@ -136,7 +143,19 @@ def _event_lines(game) -> tuple[str | None, list[str]]:
     return (str(url) if url is not None else None), str(vevent.get("description")).split("\n")
 
 
-@pytest.mark.parametrize("tracking", TRACKING_LINKS)
+def test_a_tracking_link_on_a_host_that_is_not_impacts_is_left_out_everywhere():
+    """The address names Ticketmaster as its destination, but the link
+    itself goes to a host this site does not list."""
+    game = _away_game(wrap(TM_EVENT, CUSTOM_HOSTED))
+    assert impact.plain_url(wrap(TM_EVENT, CUSTOM_HOSTED)) == TM_EVENT  # it reads as Ticketmaster's
+    assert game.ticket_url is None
+    assert feed_ticket_url(game) is None
+    assert sellers.buy_link(game) is None
+    url, lines = _event_lines(game)
+    assert url is None and not any(line.startswith("Buy:") for line in lines)
+
+
+@pytest.mark.parametrize("tracking", IMPACT_HOSTED)
 def test_a_feed_carries_the_destination_not_the_tracking_link(tracking):
     wrapped = _away_game(wrap(TM_EVENT, tracking))
     assert wrapped.ticket_url != TM_EVENT  # the game itself keeps what Ticketmaster sent
@@ -173,12 +192,12 @@ def assert_no_tracking_link_in_feeds(files: dict[str, bytes]) -> int:
 
 def _wrapped_fixture_events() -> dict[str, list[dict]]:
     """The fixture site's listings with every event URL wrapped, cycling
-    through the kinds of tracking host."""
+    through Impact's shared tracking hosts."""
     wrapped = copy.deepcopy(fixture_site.RAW_EVENTS_BY_TEAM)
     n = 0
     for events in wrapped.values():
         for raw in events:
-            raw["url"] = wrap(raw["url"], TRACKING_LINKS[n % len(TRACKING_LINKS)])
+            raw["url"] = wrap(raw["url"], IMPACT_HOSTED[n % len(IMPACT_HOSTED)])
             n += 1
     return wrapped
 
@@ -230,9 +249,9 @@ def test_negative_control_a_feed_that_keeps_the_tracking_link_is_caught(tmp_path
 
 
 def test_a_wrapped_ticketmaster_link_is_labelled_by_its_destination_and_marked_paid(monkeypatch):
-    game = _away_game(wrap(TM_EVENT, TRACKING_LINKS[3]))
+    game = _away_game(wrap(TM_EVENT, TRACKING_LINKS[1]))
     buy = sellers.buy_link(game)
-    assert buy == {"url": wrap(TM_EVENT, TRACKING_LINKS[3]), "seller": "Ticketmaster", "home_team": ""}
+    assert buy == {"url": wrap(TM_EVENT, TRACKING_LINKS[1]), "seller": "Ticketmaster", "home_team": ""}
     assert sellers.is_affiliate_link(buy["seller"], buy["url"])
     assert not sellers.is_affiliate_link("Ticketmaster", TM_EVENT)
     assert sellers.any_paid_buy_link([game]) and not sellers.any_paid_buy_link([_away_game(TM_EVENT)])

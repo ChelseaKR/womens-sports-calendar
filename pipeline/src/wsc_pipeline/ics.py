@@ -426,6 +426,10 @@ def _event(
     return event
 
 
+# What starts the description line that carries the ticket link.
+BUY_LINE_PREFIX = "Buy: "
+
+
 def _add_start_and_end(event: Event, game: Game, start: datetime | date, duration: timedelta | None) -> None:
     """DTSTART (a UTC start shown in the venue's zone, or an all-day date)
     and, for a timed event with a known game length, the estimated DTEND."""
@@ -454,7 +458,7 @@ def _description_lines(game: Game, status: FeedStatus | None, *, all_day: bool, 
     # as a value. validate_ics refuses any feed whose events mention one.
     ticket_url = feed_ticket_url(game)
     if ticket_url:
-        lines.append(f"Buy: {ticket_url}")
+        lines.append(f"{BUY_LINE_PREFIX}{ticket_url}")
     return lines
 
 
