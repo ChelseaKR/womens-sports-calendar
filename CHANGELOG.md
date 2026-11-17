@@ -10,6 +10,13 @@ archived and private.
 
 ## [Unreleased]
 
+### Added
+
+- An about page, `/about/`, linked from every page's footer: what the site
+  covers, where its games come from, who makes it, how it earns money and
+  how to reach her. Every statement on it comes from what the site already
+  says elsewhere (DECISIONS 0043).
+
 ### Fixed
 
 - A postponed home game no longer leads a team page's "Next home game" box,

@@ -76,6 +76,7 @@ def render(*, base_url: str, feed_keys: Iterable[str] = ()) -> str:
         "",
         f"- [Privacy]({base_url}/privacy/): what the site collects and the affiliate-link disclosure",
         f"- [Accessibility]({base_url}/accessibility/)",
+        f"- [About]({base_url}/about/): what the site covers, where its games come from, who makes it and how it earns",
         f"- [Terms of use]({base_url}/terms/): who runs the site and the limits of its schedules",
         f"- [Calendar help]({base_url}/help/): subscribing in Apple Calendar, Google Calendar and Outlook, "
         "unsubscribing, refresh timing, and why a game can be missing",

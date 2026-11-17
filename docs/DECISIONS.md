@@ -1893,3 +1893,58 @@ truncated fetch is not flagged; a control with the share at 1.0; and an end
 to end pair of builds whose COVERAGE.txt carries the flag. Disabling the
 rule fails 6 of these.
 
+
+## 0043 — An /about/ page that says who makes the site and how it earns, from what the site already says (2026-11-17)
+
+**Why:** Ticketmaster's affiliate program (via Impact) has turned the site
+down twice: Ticketmaster in September 2026, Impact's general Marketplace
+application on 2026-10-20. Neither gave a reason. Impact's own help pages
+name "limited traffic or audience" and media properties that "can't be
+verified" as common reasons. The site had a privacy page, terms, help and
+an accessibility statement, but no page that says plainly what it is, who
+makes it and how it earns. Chelsea decided on 2026-11-16 to add one and then
+reapply to Ticketmaster once, with no other ticket seller (0024 stands), and
+to stop money work if there is no approval by 2027-03-31. The page's text
+waits on her approval in the pull request.
+
+The decision:
+
+- One new page, `/about/`, with its own title ("About | Next Home Game"),
+  H1 ("About Next Home Game") and description. It is in the sitemap, dated
+  by `site.ABOUT_UPDATED` like the other site pages, in `llms.txt`, and in
+  `make a11y`'s coverage list. The footer's page line starts with "About".
+  The header keeps its three links.
+- Nothing on the page is new information. Each part comes from the code or
+  from a page that already says it:
+  - what it covers: the league list and team counts from `config.LEAGUES`;
+  - where the games come from: the footer's own Ticketmaster Discovery API
+    and Terms of Use links and its "no league's own schedule" and "no
+    ticket prices" sentences, plus the terms page's "can be wrong or late";
+  - independence: `feeds.INDEPENDENCE_LINE` (0024);
+  - who makes it: "one person", named as `/terms/` already names her
+    (`site.OPERATOR_NAME`, which both pages now read);
+  - how it earns: the terms page's affiliate paragraph, on the same switch
+    (`_any_paid`), so it says "commission" exactly when a link can earn
+    one (0018);
+  - analytics: one sentence when the build has a GA4 ID (0012), and a link
+    to `/privacy/` in both states;
+  - contact: the email address the footer, `/terms/` and `/help/` already
+    publish.
+- What the page never says: that the site is untracked, or anything that
+  reads as a promise of no measurement (GA4 runs on the pages); and no
+  postal address. The site publishes an email address and nothing more.
+
+**Enforced by** `tests/test_about_page.py`: the league list equals
+`config.LEAGUES`; the source links equal the footer's; the name equals the
+terms page's; the earning paragraph follows the paid-link switch both ways;
+the analytics sentence appears only with an ID; no "untracked" phrasing in
+any of the four states (with a control); no street address or postcode
+(with a control); every page's footer links `/about/` (with a control that
+removing the link leaves none); and the sitemap, `llms.txt` and the
+accessibility coverage check include the page.
+`tests/test_removal_contact.py` now counts `/about/` among the pages that
+name the address in their own text.
+
+Revisit when the site starts earning (the earning paragraph switches on its
+own, but the page's date must move), when a second data source passes 0003,
+or when the maker or the contact address changes.
