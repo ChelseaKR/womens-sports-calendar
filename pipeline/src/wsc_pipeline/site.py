@@ -55,6 +55,7 @@ PRIVACY_PATH = "/privacy/"
 ACCESSIBILITY_PATH = "/accessibility/"
 TERMS_PATH = "/terms/"
 HELP_PATH = "/help/"
+ABOUT_PATH = "/about/"
 # The status line docs/a11y/STATEMENT.md opens with. The page renders this
 # exact sentence and tests/test_accessibility_page.py asserts the two agree,
 # so the published statement and the committed one cannot drift apart.
@@ -70,13 +71,17 @@ ACCESSIBILITY_CONTACT_URL = "https://chelseakr.com/contact"
 # REMOVED_EVENTS (config.py, ADR 0006) is the switch a request is honoured with.
 REMOVAL_CONTACT_EMAIL: str | None = "chelsea@chelseakr.com"
 _EMAIL_SHAPE = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$")
-# The "Updated" date printed on /privacy/, /accessibility/, /terms/ and /help/, and their
-# sitemap <lastmod>: one value each, so the two cannot disagree. Change it
+# The "Updated" date printed on /privacy/, /accessibility/, /terms/, /help/ and /about/,
+# and their sitemap <lastmod>: one value each, so the two cannot disagree. Change it
 # whenever that page's text changes.
 PRIVACY_UPDATED = date(2026, 11, 5)
 ACCESSIBILITY_UPDATED = date(2026, 11, 5)
 TERMS_UPDATED = date(2026, 11, 3)
 HELP_UPDATED = date(2026, 11, 6)
+ABOUT_UPDATED = date(2026, 11, 17)
+# Who makes the site, as /about/ says it. /terms/ already names her; a test
+# holds the two pages to the same name.
+OPERATOR_NAME = "Chelsea Kelly-Reif"
 # One-click subscribe links. Each takes the feed's webcal:// address; Google
 # and Outlook then fetch the feed themselves and keep it subscribed.
 # Google's "add by URL" prompt:
@@ -338,7 +343,7 @@ know it, and otherwise to the game's Ticketmaster listing.
 {affiliate_note}</p>
 <p class="privacy-note">{note}
 <a href="{PRIVACY_PATH}">Privacy: what this site measures and what it never does</a>.{choice}</p>
-<p class="privacy-note"><a href="{HELP_PATH}">Calendar help</a> &middot; <a href="{ACCESSIBILITY_PATH}">Accessibility statement</a> &middot; <a href="{TERMS_PATH}">Terms of use</a>.</p>{_removal_contact()}
+<p class="privacy-note"><a href="{ABOUT_PATH}">About</a> &middot; <a href="{HELP_PATH}">Calendar help</a> &middot; <a href="{ACCESSIBILITY_PATH}">Accessibility statement</a> &middot; <a href="{TERMS_PATH}">Terms of use</a>.</p>{_removal_contact()}
 </footer>
 """
 
@@ -1303,7 +1308,7 @@ def render_terms(*, base_url: str, ga4_id: str | None = None, paid_links: bool =
 feeds. By using them you accept these terms. They are short on purpose. If
 anything here is unclear, email {mail}.</p>
 <h2>Who runs this site</h2>
-<p>{SITE_NAME} is run by one person, Chelsea Kelly-Reif, in California. You
+<p>{SITE_NAME} is run by one person, {e(OPERATOR_NAME)}, in California. You
 can reach me at {mail}.</p>
 <h2>What this site is, and is not</h2>
 <p>{SITE_NAME} is a free calendar of home games for women&rsquo;s professional
@@ -1360,6 +1365,79 @@ something goes wrong, please email me first, and I will try to fix it.</p>
             "or late, and how its ticket links work."
         ),
         canonical_url=f"{base_url}{TERMS_PATH}",
+        base_url=base_url,
+        body=body,
+        ga4_id=ga4_id,
+        paid_links=paid_links,
+    )
+
+
+def render_about(*, base_url: str, ga4_id: str | None = None, paid_links: bool = False) -> str:
+    """dist/about/index.html, linked from every page's footer (DECISIONS
+    0043): what the site does, where its games come from, who makes it, how
+    it earns, and how to reach her. Every statement is built from what the
+    site already says elsewhere, so it cannot claim more than the build does:
+    the league list from config.LEAGUES, the source from the footer's own
+    links, the independence line from feeds.INDEPENDENCE_LINE, the earning
+    paragraph from the terms page's switch (``_any_paid``), the analytics
+    sentence from the GA4 ID, and the contact address from the one /terms/
+    and /help/ already print."""
+    leagues = config.LEAGUES
+    n_teams = sum(len(lg.teams) for lg in leagues)
+    league_items = "\n".join(
+        f'<li><a href="/{e(lg.slug)}/">{e(lg.name)}</a>: {len(lg.teams)} teams</li>' for lg in leagues
+    )
+    earning = TERMS_AFFILIATE_ACTIVE if _any_paid(paid_links) else TERMS_AFFILIATE_INACTIVE
+    # The address the footer, /terms/ and /help/ already publish, as /help/ reads it.
+    contact = REMOVAL_CONTACT_EMAIL or "chelsea@chelseakr.com"
+    mail = f'<a href="mailto:{e(contact)}">{e(contact)}</a>'
+    analytics = (
+        "The web pages use Google Analytics to count visits and clicks. " if measurement_id(ga4_id) is not None else ""
+    )
+    body = f"""<nav aria-label="breadcrumb"><a href="/">All leagues</a></nav>
+<h1>About {SITE_NAME}</h1>
+<p class="lede">{SITE_NAME} turns women&rsquo;s pro and college team schedules
+into calendars you subscribe to once. New games and time changes then reach
+your calendar on their own.</p>
+<h2>What it covers</h2>
+<p>{n_teams} teams in {len(leagues)} leagues. Every league and every team has
+its own page and its own calendar feed, and the whole site is rebuilt every
+night.</p>
+<ul>
+{league_items}
+</ul>
+<h2>Where the games come from</h2>
+<p>Game dates, times and venues are read from the
+<a href="https://developer.ticketmaster.com/products-and-docs/apis/discovery-api/v2/">Ticketmaster Discovery API</a>,
+under its
+<a href="https://developer.ticketmaster.com/support/terms-of-use/">Terms of Use</a>.
+No league&rsquo;s own schedule is used on this site; each league page says
+why. Listings can be wrong or late, so check a game with the team or the
+ticket seller before you travel or buy.</p>
+<p>This site does not sell tickets and does not show ticket prices. Each
+game&rsquo;s &ldquo;Buy tickets&rdquo; link goes to the home team&rsquo;s
+official ticket seller where we know it, and otherwise to the game&rsquo;s
+Ticketmaster listing.</p>
+<p>{e(feeds.INDEPENDENCE_LINE)}</p>
+<h2>Who makes it</h2>
+<p>{SITE_NAME} is made by one person, {e(OPERATOR_NAME)}. It is free to use,
+and there is nothing to sign up for.</p>
+<h2>How it earns money</h2>
+<p>{earning}</p>
+<p>{analytics}The <a href="{PRIVACY_PATH}">privacy page</a> says what this
+site measures and how to opt out.</p>
+<h2>Contact</h2>
+<p>Email {mail} to report a mistake, to ask for a game to be removed, or
+about anything else on the site.</p>
+<p>Updated {e(display_date(ABOUT_UPDATED))}.</p>
+"""
+    return _base(
+        title=f"About | {SITE_NAME}",
+        description=(
+            "Who makes Next Home Game, where its game listings come from, which leagues it covers, "
+            "how the site earns money, and how to reach its maker."
+        ),
+        canonical_url=f"{base_url}{ABOUT_PATH}",
         base_url=base_url,
         body=body,
         ga4_id=ga4_id,

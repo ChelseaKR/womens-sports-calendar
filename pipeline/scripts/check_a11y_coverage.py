@@ -42,6 +42,7 @@ def expected_paths() -> set[str]:
         "accessibility/index.html",
         "terms/index.html",
         "help/index.html",
+        "about/index.html",
         "404.html",
     }
     for league in LEAGUES:

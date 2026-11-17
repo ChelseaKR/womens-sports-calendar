@@ -214,6 +214,7 @@ def test_sitemap_lists_every_indexable_page_and_not_the_404(tmp_path: Path):
         site.ACCESSIBILITY_PATH: site.ACCESSIBILITY_UPDATED.isoformat(),
         site.TERMS_PATH: site.TERMS_UPDATED.isoformat(),
         site.HELP_PATH: site.HELP_UPDATED.isoformat(),
+        site.ABOUT_PATH: site.ABOUT_UPDATED.isoformat(),
     }
 
 

@@ -599,6 +599,11 @@ def _write_html(
     (help_dir / "index.html").write_text(
         site.render_help(base_url=base_url, ga4_id=ga4_id, paid_links=paid_links), encoding="utf-8"
     )
+    about_dir = out_dir / "about"
+    about_dir.mkdir(exist_ok=True)
+    (about_dir / "index.html").write_text(
+        site.render_about(base_url=base_url, ga4_id=ga4_id, paid_links=paid_links), encoding="utf-8"
+    )
 
     for lg in config.LEAGUES:
         games = games_by_league[lg.slug]
@@ -749,6 +754,7 @@ def _write_sitemap_and_robots(
         (site.ACCESSIBILITY_PATH, site.ACCESSIBILITY_UPDATED),
         (site.TERMS_PATH, site.TERMS_UPDATED),
         (site.HELP_PATH, site.HELP_UPDATED),
+        (site.ABOUT_PATH, site.ABOUT_UPDATED),
         (site.SCHEDULE_PATH, state[site.SCHEDULE_PATH].changed_at),
     ]
     for lg in config.LEAGUES:

@@ -62,6 +62,7 @@ def _expected_pages() -> set[str]:
         "accessibility/index.html",
         "terms/index.html",
         "help/index.html",
+        "about/index.html",
         "schedule/index.html",
     }
     for lg in LEAGUES:
