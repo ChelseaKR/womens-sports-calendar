@@ -45,6 +45,9 @@ class LeagueCoverage:
     # any reason other than a TBD date (a date TBD is games_date_tbd).
     games_all_day: int = 0
     games_other_excluded: int = 0
+    # Games whose ticket link Ticketmaster sent and this build left out
+    # because it is not an https address on a listed host (ticket_hosts.py).
+    ticket_links_left_out: int = 0
     teams_truncated: list[str] = field(default_factory=list)
     teams_with_mismatched_events: list[str] = field(default_factory=list)
     zone_fallbacks: list[ZoneFallback] = field(default_factory=list)
@@ -118,6 +121,7 @@ def compute_league_coverage(
         games_date_tbd=sum(1 for g in unique_games if g.date_tbd),
         games_all_day=sum(1 for _, s in starts if s is not None and not isinstance(s, datetime)),
         games_other_excluded=sum(1 for g, s in starts if s is None and not g.date_tbd),
+        ticket_links_left_out=sum(1 for g in unique_games if g.ticket_link_left_out),
         teams_truncated=sorted(truncated_team_slugs),
         teams_with_mismatched_events=sorted(mismatched_team_slugs or set()),
         zone_fallbacks=zone_fallbacks(unique_games),
@@ -180,6 +184,12 @@ def render_report(coverage: BuildCoverage) -> str:
             f"{lc.games_date_tbd}; time TBA (all-day in .ics): {lc.games_all_day}; "
             f"other games excluded from .ics: {lc.games_other_excluded}"
         )
+        if lc.ticket_links_left_out:
+            lines.append(
+                f"  NOTE: {lc.ticket_links_left_out} game(s) are listed with no ticket link: the link "
+                "Ticketmaster sent is not an https address on a host this site lists (ticket_hosts.py). "
+                "If Ticketmaster has started using a new site of its own, add it there."
+            )
         if lc.teams_truncated:
             lines.append(
                 f"  WARNING: possibly-incomplete (Discovery API reported "

@@ -45,9 +45,13 @@ FAKE_KEY = "k3y-SENTINEL-do-not-print-0123456789"
         "",
         None,
         42,
+        # Plain http, and a web address on a host that is not a ticket
+        # seller's (ticket_hosts.py; more in test_ticket_hosts.py).
+        "http://www.ticketmaster.com/event/EVT1",
+        "https://tickets.example.org/event/EVT1",
     ],
 )
-def test_a_ticket_url_that_is_not_http_is_dropped(url: object) -> None:
+def test_a_ticket_url_that_is_not_https_on_a_listed_host_is_dropped(url: object) -> None:
     assert safe_ticket_url(url) is None
 
 
@@ -56,10 +60,9 @@ def test_a_ticket_url_that_is_not_http_is_dropped(url: object) -> None:
     [
         "https://www.ticketmaster.com/event/EVT1",
         "HTTPS://www.ticketmaster.ca/event/EVT1?affiliate=1",
-        "http://www.ticketmaster.com/event/EVT1",
     ],
 )
-def test_an_http_ticket_url_is_kept_verbatim(url: str) -> None:
+def test_a_listed_https_ticket_url_is_kept_verbatim(url: str) -> None:
     assert safe_ticket_url(url) == url
 
 

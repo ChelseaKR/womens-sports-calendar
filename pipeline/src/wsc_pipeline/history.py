@@ -6,7 +6,9 @@ played, so "when did we play Iowa?" had no answer there. The site keeps no
 state of its own, so, like guard.py, this reads what the live site published
 last (guard.fetch_previous_publish keeps every feed's events) and:
 
-- **keeps played games.** An event the previous publish of a feed carried is
+- **keeps played games.** (The one thing checked again in a kept event is
+  its ticket link: see without_unlisted_ticket_link.) An event the previous
+  publish of a feed carried is
   written into the same feed again when Ticketmaster no longer lists the game
   at all, the game has started (an all-day game: its date is over), it started
   no more than KEEP_PLAYED_DAYS ago, and its event id is not one the
@@ -38,10 +40,11 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 
-from icalendar import Component, Event
+from icalendar import Component, Event, vText
 from icalendar.prop import vDDDTypes
 
-from .ics import FEED_STATUS, TIME_TBA_SUFFIX, UID_DOMAIN
+from . import ticket_hosts
+from .ics import BUY_LINE_PREFIX, FEED_STATUS, TIME_TBA_SUFFIX, UID_DOMAIN
 from .listings import EVENT_START_SUFFIX, name_says_not_a_game
 
 # How long a played game stays in the feeds after it starts. About a college
@@ -125,8 +128,32 @@ def kept_played(
             continue
         seen.add(event_id)
         copy["DTSTAMP"] = vDDDTypes(stamp)
+        without_unlisted_ticket_link(copy)
         kept.append(copy)
     return kept
+
+
+def without_unlisted_ticket_link(vevent: Component) -> None:
+    """Take the ticket link out of a kept event when it is not an https
+    address on a listed host (ticket_hosts.py, DECISIONS 0044): its URL, and
+    the "Buy:" line of its description. A kept event is a copy of what an
+    earlier build published, so this holds it to the rule today's games are
+    held to. Nothing else in the event changes, and a listed link is kept
+    as it is."""
+    url = vevent.get("url")
+    if url is not None and not ticket_hosts.is_listed_https(str(url)):
+        del vevent["URL"]
+    description = vevent.get("description")
+    if description is None:
+        return
+    lines = str(description).split("\n")
+    kept = [
+        line
+        for line in lines
+        if not line.startswith(BUY_LINE_PREFIX) or ticket_hosts.is_listed_https(line[len(BUY_LINE_PREFIX) :].strip())
+    ]
+    if kept != lines:
+        vevent["DESCRIPTION"] = vText("\n".join(kept))
 
 
 def listing_name(vevent: Component) -> str:

@@ -65,6 +65,10 @@ publish a broken or inconsistent feed:
    config.REMOVED_EVENTS; and its SUMMARY and DESCRIPTION carry the
    marker and note of any STATUS it has, so a game that was canceled stays
    marked canceled. Check 4 counts these games with the page's own.
+14. Every event's URL, and the address on the "Buy:" line of its
+   description, is an https address on a host this site lists
+   (ticket_hosts.py, DECISIONS 0044), for the games listed now and for the
+   played games a feed keeps.
 
 Usage: python -m wsc_pipeline.validate_ics <dist-dir>
 """
@@ -80,8 +84,16 @@ from typing import Any
 
 from icalendar import Calendar, Component
 
-from . import config, history
-from .ics import COMBINED_FEED_PATH, END_ESTIMATE_NOTE, FEED_STATUS, TIME_TBA_NOTE, TIME_TBA_SUFFIX, make_uid
+from . import config, history, ticket_hosts
+from .ics import (
+    BUY_LINE_PREFIX,
+    COMBINED_FEED_PATH,
+    END_ESTIMATE_NOTE,
+    FEED_STATUS,
+    TIME_TBA_NOTE,
+    TIME_TBA_SUFFIX,
+    make_uid,
+)
 from .impact import is_impact_link
 from .listings import EVENT_START_NOTE, EVENT_START_SUFFIX
 from .site_data import records_dir
@@ -345,6 +357,21 @@ def _check_no_affiliate_links(feed: Path, events: dict[str, Component]) -> None:
                 raise FeedError(f"{feed}: {uid} carries an affiliate tracking link ({url}); feeds never do")
 
 
+def _check_ticket_link_hosts(feed: Path, events: dict[str, Component]) -> None:
+    """Every event's URL and "Buy:" address is an https address on a listed
+    host; raises FeedError otherwise. The message names the event, not the
+    address."""
+    for uid, vevent in events.items():
+        links = [str(vevent["url"])] if vevent.get("url") is not None else []
+        links += [
+            line[len(BUY_LINE_PREFIX) :].strip()
+            for line in str(vevent.get("description", "")).split("\n")
+            if line.startswith(BUY_LINE_PREFIX)
+        ]
+        if not all(ticket_hosts.is_listed_https(link) for link in links):
+            raise FeedError(f"{feed}: {uid} carries a ticket link that is not an https address on a listed host")
+
+
 def validate_feed(feed: Path, data: Path, page_path: str) -> int:
     """Returns the number of VEVENTs; raises FeedError on any problem."""
     cal = _parse_calendar(feed)
@@ -361,6 +388,7 @@ def validate_feed(feed: Path, data: Path, page_path: str) -> int:
     _check_dtstamps(feed, events, page.get("fetched_at"))
     _check_end_times(feed, events)
     _check_no_affiliate_links(feed, events)
+    _check_ticket_link_hosts(feed, events)
     return len(events)
 
 

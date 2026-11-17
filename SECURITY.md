@@ -50,7 +50,8 @@ Keys are reviewed annually and rotated on any suspected exposure.
 | SAST: Semgrep registry packs + a repository rule against credentials in output | `security.yml` / `semgrep` |
 | Dependency advisories for `uv.lock` and `package-lock.json` (OSV) | `security.yml` / `osv-scanner`; waivers with expiry in `pipeline/osv-scanner.toml`, VEX in `pipeline/vex.cdx.json` |
 | Python dependency audit (pip-audit) | `make verify` |
-| Output encoding of Ticketmaster data; non-http(s) ticket URLs dropped | `pipeline/tests/test_security_hardening.py` |
+| Output encoding of Ticketmaster data | `pipeline/tests/test_security_hardening.py` |
+| A ticket link is shown only when it is an https address on a listed host (`ticket_hosts.py`, DECISIONS 0044) | `pipeline/tests/test_ticket_hosts.py`; `validate_ics` check 14 before deploy |
 | Actions pinned to commit SHAs, updated by Renovate with a 72-hour delay | `renovate.json` |
 
 Tool choices are recorded in `docs/adr/0002-security-scanning-on-a-private-repository.md`.

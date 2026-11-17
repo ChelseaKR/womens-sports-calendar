@@ -87,8 +87,10 @@ review is open (#5).
 1. **ASVS level:** L1, the floor. There is no authentication, authorization
    or ingress of ours. The site is static files on GitHub Pages. The L1
    concern that remains is output encoding of third-party data:
-   Ticketmaster fields are HTML-escaped and non-http(s) ticket URLs are
-   dropped. `pipeline/tests/test_security_hardening.py` checks both.
+   Ticketmaster fields are HTML-escaped, and a ticket URL is kept only
+   when it is an https address on a listed host (DECISIONS 0044).
+   `pipeline/tests/test_security_hardening.py` and
+   `pipeline/tests/test_ticket_hosts.py` check both.
 2. **Container scanning:** N/A. There is no Dockerfile.
 3. **SBOM + signing:** the site is release-producing, but no release is cut
    yet. SBOM, signing and provenance are open (#2, #7).
@@ -102,7 +104,8 @@ review is open (#5).
 
 | Threat | Vector | Mitigation | Residual |
 |---|---|---|---|
-| Tampering → XSS | Hostile Ticketmaster fields or ticket URLs | Escaping everywhere, http(s)-only URLs, tests | Low |
+| Tampering → XSS | Hostile Ticketmaster fields or ticket URLs | Escaping everywhere, https-only URLs on listed hosts, tests | Low |
+| Spoofing | A listing whose ticket link is not a ticket seller's | Links kept only on listed hosts (`ticket_hosts.py`); the feed validator refuses any other | Low |
 | Information disclosure | The API key in logs or history | Redaction, gitleaks (CI and pre-commit), weekly TruffleHog, secrets confined to one job | Low |
 | Tampering (supply chain) | A compromised action or dependency | SHA-pinned actions, Renovate with a 72 h delay, OSV-Scanner, pip-audit, zizmor, CODEOWNERS | Medium (standard) |
 | Tampering (third-party script) | Google's `gtag.js` is loaded on every page (owner decision, DECISIONS 0012) and cannot use SRI | Accepted by the owner; not loaded under GPC, DNT or opt-out | Medium, accepted |
