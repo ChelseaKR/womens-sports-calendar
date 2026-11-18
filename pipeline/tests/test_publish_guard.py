@@ -366,7 +366,8 @@ def test_a_site_that_stops_answering_is_given_up_on_after_a_few_requests():
         raise httpx.ConnectTimeout("slow")
 
     previous = _fetch_with(down)
-    assert len(calls) == guard._GIVE_UP_AFTER  # not 67 timeouts
+    # Not 67 timeouts: five feeds, plus the retries the run allows (DECISIONS 0045).
+    assert len(calls) == guard._GIVE_UP_AFTER + guard._RETRY_BUDGET
     assert len(previous.unreadable) == len(config.all_teams())
     assert previous.unreadable[("wnba", "seattle-storm")].startswith("not tried")
 
