@@ -46,6 +46,13 @@ good feeds, and the next run that can read them publishes. A feed that never
 existed (404) is new and has nothing to lose. A dated league override in
 PUBLISH_GUARD_OVERRIDES accepts the loss, as for the other rules. Until
 2026-11-05 an unreadable previous publish never blocked.
+
+Before a feed counts as unreadable, a request that timed out, could not
+connect, or got HTTP 429 or 5xx is tried again, up to three attempts with
+2 s and 4 s between them, and at most six retries in one build (DECISIONS
+0045). On 2026-11-18 one HTTP 503 refused the whole nightly publish
+(docs/incidents/2026-11-18-stale-listings-503.md). A 404 or any other
+status is never retried.
 """
 
 from __future__ import annotations
@@ -55,6 +62,7 @@ from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, time, timedelta
+from time import sleep
 
 import httpx
 from icalendar import Calendar, Component
@@ -72,6 +80,21 @@ _EXPECTED_TO_LEAVE = frozenset({"Cancelled", "Postponed"})
 # Consecutive requests that fail at the transport level before the rest of the
 # previous publish is not even tried (a site that is down is 67 timeouts).
 _GIVE_UP_AFTER = 5
+# Retrying a previous-feed read before it counts as unreadable (DECISIONS
+# 0045). A request that times out, cannot connect, or gets one of these
+# statuses is tried again, up to _ATTEMPTS times in all, waiting
+# _BACKOFF_SECONDS[n] before attempt n + 2. A 404 (a new feed) and every
+# other status are answers, not failures, and are never retried. The run-wide
+# budget bounds the added wall time when the site is down for good (18 s of
+# waiting at most); a consecutive transport failure still counts once per
+# feed, after its retries, toward _GIVE_UP_AFTER.
+_ATTEMPTS = 3
+_BACKOFF_SECONDS = (2.0, 4.0)
+_RETRY_BUDGET = 6
+_RETRY_STATUSES = frozenset({429, *range(500, 600)})
+_RETRY_ERRORS = (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError)
+# Looked up at call time, so the tests can run the retries without waiting.
+_sleep = sleep
 # How many games one report line names before it counts the rest.
 MAX_NAMED = 12
 
@@ -295,6 +318,7 @@ def fetch_previous_publish(base_url: str, *, client: httpx.Client | None = None)
     previous = PreviousPublish()
     owns_client = client is None
     http = client or httpx.Client(timeout=10.0, headers={"User-Agent": USER_AGENT}, follow_redirects=True)
+    reader = _FeedReader(http)
     transport_failures = 0
     fetched_times: list[str] = []
     try:
@@ -304,7 +328,7 @@ def fetch_previous_publish(base_url: str, *, client: httpx.Client | None = None)
                 previous.unreadable[key] = "not tried: the site did not answer the requests before it"
                 continue
             try:
-                response = _get_team_feed(http, base_url, league, team)
+                response = _get_team_feed(reader, base_url, league, team)
             except httpx.HTTPError as exc:
                 transport_failures += 1
                 previous.unreadable[key] = f"request failed ({type(exc).__name__})"
@@ -326,7 +350,7 @@ def fetch_previous_publish(base_url: str, *, client: httpx.Client | None = None)
             previous.feeds[f"ics/{league.slug}/{team.slug}.ics"] = _feed_events(response.content) or []
             if fetched_at:
                 fetched_times.append(fetched_at)
-        _fetch_league_feeds(http, base_url, previous, transport_failures)
+        _fetch_league_feeds(reader, base_url, previous, transport_failures)
     finally:
         if owns_client:
             http.close()
@@ -334,22 +358,72 @@ def fetch_previous_publish(base_url: str, *, client: httpx.Client | None = None)
     return previous
 
 
-def _get_team_feed(http: httpx.Client, base_url: str, league: config.League, team: config.Team) -> httpx.Response:
+class _FeedReader:
+    """GETs against the live site for the previous publish, each retried on
+    a transient failure (see _ATTEMPTS) while the run's budget lasts. Every
+    retry is logged to stderr, so the run log shows it."""
+
+    def __init__(self, http: httpx.Client) -> None:
+        self.http = http
+        self.retries_left = _RETRY_BUDGET
+        self.said_spent = False
+
+    def get(self, url: str) -> httpx.Response:
+        """The response, which may be a non-200 one once retrying stops; or
+        the last transport error, raised as before."""
+        attempt = 1
+        while True:
+            try:
+                response = self.http.get(url)
+            except _RETRY_ERRORS as exc:
+                if not self._retry(url, f"request failed ({type(exc).__name__})", attempt):
+                    raise
+            else:
+                if response.status_code not in _RETRY_STATUSES or not self._retry(
+                    url, f"HTTP {response.status_code}", attempt
+                ):
+                    return response
+            attempt += 1
+
+    def _retry(self, url: str, why: str, attempt: int) -> bool:
+        """Wait and say so when another attempt is allowed; False when not."""
+        if attempt >= _ATTEMPTS:
+            return False
+        if self.retries_left == 0:
+            if not self.said_spent:
+                print(
+                    f"publish guard: {url}: {why}; not retried: the {_RETRY_BUDGET} retries this build allows "
+                    "are spent",
+                    file=sys.stderr,
+                )
+                self.said_spent = True
+            return False
+        self.retries_left -= 1
+        wait = _BACKOFF_SECONDS[attempt - 1]
+        print(
+            f"publish guard: {url}: {why}; retrying in {wait:g} s (attempt {attempt + 1} of {_ATTEMPTS})",
+            file=sys.stderr,
+        )
+        _sleep(wait)
+        return True
+
+
+def _get_team_feed(reader: _FeedReader, base_url: str, league: config.League, team: config.Team) -> httpx.Response:
     """The live feed at the team's slug, or, when that is a 404 and the team
     has former slugs, the first former-slug feed that is not: the build that
     first publishes a moved team (DECISIONS 0017, 0033) then compares with,
     and keeps the played games of, the feed its subscribers already hold,
     instead of treating the team as new and dropping them. The two paths
     publish the same bytes from then on, so later builds read the new one."""
-    response = http.get(f"{base_url}/ics/{league.slug}/{team.slug}.ics")
+    response = reader.get(f"{base_url}/ics/{league.slug}/{team.slug}.ics")
     for former in team.former_slugs:
         if response.status_code != 404:
             break
-        response = http.get(f"{base_url}/ics/{league.slug}/{former}.ics")
+        response = reader.get(f"{base_url}/ics/{league.slug}/{former}.ics")
     return response
 
 
-def _fetch_league_feeds(http: httpx.Client, base_url: str, previous: PreviousPublish, transport_failures: int) -> None:
+def _fetch_league_feeds(reader: _FeedReader, base_url: str, previous: PreviousPublish, transport_failures: int) -> None:
     """Each league feed's events into previous.feeds, or why not into
     previous.unreadable_feeds, giving up as the team loop does."""
     for league in config.LEAGUES:
@@ -358,7 +432,7 @@ def _fetch_league_feeds(http: httpx.Client, base_url: str, previous: PreviousPub
             previous.unreadable_feeds[path] = "not tried: the site did not answer the requests before it"
             continue
         try:
-            response = http.get(f"{base_url}/{path}")
+            response = reader.get(f"{base_url}/{path}")
         except httpx.HTTPError as exc:
             transport_failures += 1
             previous.unreadable_feeds[path] = f"request failed ({type(exc).__name__})"

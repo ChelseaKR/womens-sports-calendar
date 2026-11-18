@@ -178,6 +178,16 @@ keep, so a previous team or league feed that existed but could not be read
 refuses the build for its league (`previous-unreadable`); a 404 is a new
 feed and does not. A dated league override accepts it.
 
+Amended 2026-11-18 (DECISIONS 0045): a feed counts as unreadable only after
+its read has been retried. A request that times out, cannot connect, or gets
+HTTP 429 or 5xx is tried up to three times in all, 2 s and then 4 s apart,
+and one build retries at most six times across every feed (at most 18 s of
+waiting). A 404 and every other status are never retried. Each retry is a
+line in the run log. Once retrying stops, the feed is unreadable exactly as
+above. This follows the 2026-11-18 incident
+(`docs/incidents/2026-11-18-stale-listings-503.md`), when one HTTP 503
+refused the whole nightly publish.
+
 ## Consequences
 
 - A broken team or league query stops the deploy the night it breaks instead
@@ -193,7 +203,8 @@ feed and does not. A dated league override accepts it.
 - The build makes one small request per team feed, plus one per league feed
   (DECISIONS 0027), to its own site before fetching from
   Ticketmaster (fewer if the site does not answer: it gives up after five
-  consecutive failures). It sends no secret.
+  consecutive failures; up to six more when some are retried, DECISIONS
+  0045). It sends no secret.
 - The check reads the live site, so like the freshness alarm it cannot run in
   a pull request against real data; its tests use fixture sites and mock
   transports.

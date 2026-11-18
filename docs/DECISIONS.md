@@ -2021,3 +2021,55 @@ changed (`http`, and a tracking link on a host that is not Impact's).
 
 Revisit when Ticketmaster's event links move to a host not listed (the
 coverage count), or when a second data source passes 0003.
+
+
+## 0045 — The publish guard retries a previous-feed read before counting it unreadable (2026-11-18)
+
+**Why:** the nightly publish of 2026-11-18 was refused because one request,
+re-reading the previous Minnesota Golden Gophers Big Ten feed from the live
+site, got HTTP 503 (`docs/incidents/2026-11-18-stale-listings-503.md`, #105).
+The guard was right to refuse a feed it could not read (ADR 0006: since 0027
+the live feeds are the only copy of the played games they keep), but nothing
+tried the request again, so one transient error froze every league for about
+13 hours until the run was re-run by hand. This is the postmortem's first
+action item.
+
+**Decision:** retry before refusing; the refusal itself is unchanged.
+
+- A previous-feed read (team feeds, former-slug feeds and league feeds,
+  `guard._FeedReader`) that times out, cannot connect, is cut off by the
+  server, or gets HTTP 429 or any 5xx is tried again: three attempts in all,
+  waiting 2 s before the second and 4 s before the third.
+- A 404 is a new feed and is never retried; nor is any other status (a 403
+  or 410 is an answer, not a blip), a 200 whose body is not a feed, or any
+  other request error (a redirect loop, say).
+- One build retries at most six times across all feeds (`_RETRY_BUDGET`),
+  so a site that is down for good adds at most 18 s of waiting and six
+  requests before the build refuses as it did. After that every feed gets a
+  single attempt, and the run log says so once.
+- Each retry is a line on stderr, so the run log shows the URL, what failed
+  and which attempt is next. Once retrying stops, the feed is recorded as
+  unreadable with the same reason as before (`HTTP 503`,
+  `request failed (ReadTimeout)`), and the guard refuses its league exactly
+  as before. Five consecutive transport failures still stop the reads; a feed
+  counts once, after its retries.
+- `Retry-After` is not read: GitHub Pages does not rate limit these reads in
+  practice, and a fixed backoff keeps the added time bounded.
+
+**Not changed:** what counts as a vanished game, the thresholds, the
+overrides, what a refusal does, or the Ticketmaster client's own retries.
+
+**Enforced by** `tests/test_guard_retry.py`: a 503 then a 200 reads the feed
+and publishes, after one 2 s wait; a feed that answers 503 every time is
+tried three times, waits 2 s and 4 s, and still refuses its league with
+`HTTP 503`; a 404 is one request and a new team; 400, 401, 403, 410 and 418
+are one request each and refuse; 429, 500, 502, 504, read and connect
+timeouts, connection and read errors and a dropped connection are each
+retried; a redirect loop is not; a league feed is retried too; and a site
+that answers 503 everywhere spends exactly six retries, 18 s in all, says
+so once, and refuses every league. `tests/test_publish_guard.py`'s
+give-up test now allows the six retries. Setting `_ATTEMPTS` to 1 fails 14
+of these.
+
+Revisit if a refusal for an unreadable feed happens again after its retries,
+or if the live site starts sending 429 with a `Retry-After` longer than 4 s.

@@ -69,6 +69,13 @@ def _no_live_site_reads(monkeypatch):
     monkeypatch.setattr(guard, "fetch_previous_publish", lambda base_url, **kwargs: guard.PreviousPublish())
 
 
+@pytest.fixture(autouse=True)
+def _no_retry_waits(monkeypatch):
+    """The previous-feed reader waits 2 s and 4 s between retries (DECISIONS
+    0045). No test waits: the ones that check the waits record them."""
+    monkeypatch.setattr(guard, "_sleep", lambda seconds: None)
+
+
 def make_raw_event(
     *,
     event_id: str = "EVT1",

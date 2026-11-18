@@ -30,6 +30,12 @@ archived and private.
 
 ### Fixed
 
+- One failed request while re-reading last night's calendar feeds no longer
+  stops the nightly update. A read that times out, cannot connect, or gets
+  HTTP 429 or 5xx is tried up to three times, 2 s and 4 s apart, before the
+  publish guard treats that feed as unreadable and refuses the build as
+  before; a 404 is never retried (DECISIONS 0045). On 2026-11-18 one HTTP
+  503 held every league's listings back for about 13 hours.
 - A postponed home game no longer leads a team page's "Next home game" box,
   opening sentence and search description while a later home game is
   listed: Ticketmaster may still show the date it was moved from. It leads
