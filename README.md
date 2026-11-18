@@ -1,4 +1,6 @@
-# womens-sports-calendar (working name)
+# Next Home Game
+
+(The repository keeps its working name, `womens-sports-calendar`.)
 
 Subscribable `.ics` calendar feeds per league and team for women's pro and
 college sports, built nightly from the Ticketmaster Discovery API, with one
@@ -12,8 +14,6 @@ footer's "Opt out of analytics", ads features off; `docs/DECISIONS.md` 0012),
 which counts page views and clicks, including clicks on calendar-subscribe
 links. The calendar feeds themselves carry no analytics, pixels or redirecting
 links, so a calendar app's re-fetches are not measured.
-
-[moved to private strategy notes]
 
 **Status: Production.** Live at https://nexthomegame.com and rebuilt every
 night. Public repository since 2026-09-18; see [License](#license).
