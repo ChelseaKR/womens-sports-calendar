@@ -45,4 +45,4 @@ within 7 days (SEV3: 14 days), blameless, with these sections:
 ## Related
 ```
 
-No incidents to date (2026-09-17).
+- 2026-11-18, SEV2: [live listings went past the 30-hour SLA after one feed read returned HTTP 503](2026-11-18-stale-listings-503.md) (#105).
