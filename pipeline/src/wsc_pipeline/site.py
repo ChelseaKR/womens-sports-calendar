@@ -75,7 +75,7 @@ _EMAIL_SHAPE = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$"
 # and their sitemap <lastmod>: one value each, so the two cannot disagree. Change it
 # whenever that page's text changes.
 PRIVACY_UPDATED = date(2026, 11, 5)
-ACCESSIBILITY_UPDATED = date(2026, 11, 5)
+ACCESSIBILITY_UPDATED = date(2026, 11, 20)
 TERMS_UPDATED = date(2026, 11, 3)
 HELP_UPDATED = date(2026, 11, 6)
 ABOUT_UPDATED = date(2026, 11, 17)
@@ -396,7 +396,7 @@ def _other_apps_block(*, ics_https_url: str) -> str:
 <a href="{e(ics_https_url)}">{e(ics_https_url)}</a></p>
 <ul class="subscribe-instructions">
 <li><strong>iPhone/iPad:</strong> Settings &rsaquo; Calendar &rsaquo; Accounts &rsaquo; Add Account &rsaquo; Other &rsaquo; Add Subscribed Calendar, then paste the address above.</li>
-<li><strong>Google Calendar:</strong> on the left, next to &ldquo;Other calendars,&rdquo; select the + icon &rsaquo; From URL, then paste the address above.</li>
+<li><strong>Google Calendar:</strong> on the left, next to &ldquo;Other calendars,&rdquo; select Add other calendars (+) &rsaquo; From URL, then paste the address above.</li>
 <li><strong>Outlook:</strong> Add calendar &rsaquo; Subscribe from web, then paste the address above.</li>
 </ul>
 <p><a href="{HELP_PATH}">Step-by-step help for each calendar app, and how to unsubscribe</a>.</p>
@@ -970,7 +970,9 @@ def render_index(
         row_class = "league-row league-row--live" if live else "league-row"
         league_rows.append(
             f'<li class="{row_class}"><a class="league-row-link" href="/{e(lg["slug"])}/">'
-            f'<span class="league-row-name">{e(lg["name"])}</span>'
+            # The space renders nothing between flex items, but keeps the
+            # link's accessible name "WNBA 8 upcoming games", not "WNBA8 ...".
+            f'<span class="league-row-name">{e(lg["name"])}</span> '
             f'<span class="league-row-count">{e(count_label)}</span>'
             "</a></li>"
         )
@@ -1246,8 +1248,9 @@ def render_accessibility(*, base_url: str, ga4_id: str | None = None, paid_links
 accepted:</p>
 <ul>
 <li>pa11y, to the WCAG 2 AA standard, with two independent rule engines.</li>
-<li>axe-core against WCAG 2.0, 2.1 and 2.2 A and AA rules, including color
-contrast, target size and the page language.</li>
+<li>axe-core against WCAG 2.0, 2.1 and 2.2 A and AA rules, in both the
+light and the dark color scheme, including color contrast, target size and
+the page language.</li>
 <li>A keyboard walk: the first Tab reaches &ldquo;Skip to main
 content&rdquo;, every link can be reached, and each one shows a visible focus
 outline that nothing covers.</li>
@@ -2730,6 +2733,10 @@ nav[aria-label="breadcrumb"] {
 .league-row-name {
   font-family: var(--display-font); font-weight: 800; font-size: 1.6rem;
   letter-spacing: 0.02em; text-transform: uppercase;
+  /* With WCAG 1.4.12 text spacing at 320 CSS px, "BASKETBALL" no longer fit
+     beside the unbreakable count and pushed the page sideways. A word breaks
+     only when it cannot fit, so the default layout is unchanged. */
+  min-width: 0; overflow-wrap: anywhere;
 }
 .league-row-count { font-family: var(--body-font); font-size: 0.9375rem; color: var(--muted); white-space: nowrap; }
 .league-row--live .league-row-count {
@@ -2789,7 +2796,7 @@ nav[aria-label="breadcrumb"] {
 /* The feed URL is one long unbroken token (".../ics/<league>/<team>.ics");
    without a break opportunity it pushed team pages to 350-430 CSS px wide at
    a 320 px viewport, failing WCAG 1.4.10 Reflow. */
-.subscribe p a, .other-apps p a, .moved-notice a { overflow-wrap: anywhere; }
+.subscribe p a, .other-apps p a, .moved-notice a, .all-games-feed p a { overflow-wrap: anywhere; }
 .subscribe-instructions { padding-left: 1.1rem; font-size: 0.9375rem; }
 .subscribe-instructions li { margin-bottom: 0.5rem; }
 .subscribe-cta {
