@@ -111,7 +111,7 @@ scholarly or civic-reuse intent.
 | Release & Versioning | Applies — gap tracked in #7 (the deployed site is the release; there is no release process yet) |
 | Observability | Applies — gap tracked in #4 (Tier B site, Tier C pipeline; no field Core Web Vitals) |
 | Performance | Applies — gap tracked in #12 (Lighthouse budgets with a committed baseline; k6 N/A: static files, no server route of ours) |
-| Accessibility | Applies — gap tracked in #5 (WCAG 2.2 AA target; axe, pa11y, keyboard, reflow and motion gates on every page; no human review yet; statement in `docs/a11y/STATEMENT.md`) |
+| Accessibility | Applies — gap tracked in #5 (WCAG 2.2 AA target; axe, pa11y, keyboard, reflow and motion gates on every page; no human review yet; statement in `docs/a11y/STATEMENT.md`; draft ACR in `docs/a11y/ACR.md`, pending the human walkthrough) |
 | Internationalization | Applies — gap tracked in #6 (English-only; a deferral is declared in `docs/I18N.md`, owner decision pending) |
 | AI Evaluation | N/A — no LLM, prompt, retrieval or model component (ADR 0004) |
 | Documentation | Applies — gap tracked in #10 (nothing yet checks the vendored standards against their tag) |

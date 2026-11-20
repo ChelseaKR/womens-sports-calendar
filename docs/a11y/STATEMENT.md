@@ -24,8 +24,10 @@ the build produces, plus two fixture pages with a populated games table:
 
 - pa11y-ci, WCAG2AA, with both the HTML_CodeSniffer and axe runners; zero
   errors.
-- axe-core with the wcag2a, wcag2aa, wcag21a, wcag21aa and wcag22aa tags;
-  any critical, serious or moderate violation fails. This covers color
+- axe-core with the wcag2a, wcag2aa, wcag21a, wcag21aa and wcag22aa tags,
+  once in the light color scheme and once with `prefers-color-scheme: dark`
+  (the stylesheet swaps every content color in dark mode); any critical,
+  serious or moderate violation in either fails. This covers color
   contrast (SC 1.4.3 / 1.4.11), target size (2.5.8) and the page language
   (3.1.1).
 - A keyboard walk: Tab from the top reaches every link, the first stop is
@@ -46,7 +48,7 @@ checked.
 | 2.4.11 Focus Not Obscured (Minimum) | Checked automatically on every page (keyboard walk). No sticky or fixed content exists to obscure focus. |
 | 2.5.7 Dragging Movements | Not applicable: nothing on the site is dragged. |
 | 2.5.8 Target Size (Minimum) | Checked by axe `target-size` on every page. |
-| 3.2.6 Consistent Help | Not applicable: the site offers no help mechanism (no contact form, chat or help page) on its pages. |
+| 3.2.6 Consistent Help | Every page has the header's "Help" link (the calendar help page) and the footer's contact lines (an email for a removal or a mistake, and the accessibility statement), from one shared template, so they sit in the same place and order on every page. Corrected 2026-11-20: this row said "not applicable" from before the help page and the footer contact existed. |
 | 3.3.7 Redundant Entry | Not applicable: the site has no forms. |
 | 3.3.8 Accessible Authentication (Minimum) | Not applicable: no accounts, no sign-in. |
 
@@ -54,8 +56,11 @@ checked.
 
 - **No human review.** A screen-reader walkthrough (NVDA with Firefox or
   Chrome; VoiceOver with Safari on macOS and iOS) and a human keyboard-only
-  pass have not been done (A11Y-11, A11Y-12, A11Y-18). There is no
-  Accessibility Conformance Report (A11Y-14).
+  pass have not been done (A11Y-11, A11Y-12, A11Y-18). A draft
+  Accessibility Conformance Report, `docs/a11y/ACR.md` (2026-11-20), rates
+  every WCAG 2.2 A and AA criterion; it is not issued as a formal ACR until
+  that walkthrough is done (A11Y-14 stays open), and its appendix lists the
+  steps.
 - **Calendar apps.** The `.ics` feeds are plain text read by each reader's
   own calendar app; their accessibility is that app's.
 - Pages that link out go to Ticketmaster and other ticket sellers, whose

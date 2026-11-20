@@ -77,8 +77,8 @@ as the pages.
 
 ## E. Accessibility
 
-See `docs/a11y/STATEMENT.md` and the ledger in `docs/ROADMAP.md`. Human
-review is open (#5).
+See `docs/a11y/STATEMENT.md`, the draft ACR in `docs/a11y/ACR.md`
+(2026-11-20) and the ledger in `docs/ROADMAP.md`. Human review is open (#5).
 
 ## F. Security
 

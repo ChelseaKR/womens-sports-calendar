@@ -12,12 +12,23 @@ archived and private.
 
 ### Added
 
+- A draft Accessibility Conformance Report, `docs/a11y/ACR.md`, based on the
+  VPAT 2.5 Rev WCAG edition: every WCAG 2.2 A and AA criterion, with the
+  evidence for each and the human screen-reader walkthrough still to do.
+- `make a11y` runs axe a second time in the dark color scheme on every page,
+  and checks WCAG 1.4.12 text spacing at 320 CSS px; each check first proves
+  it catches a planted defect.
+
 - An about page, `/about/`, linked from every page's footer: what the site
   covers, where its games come from, who makes it, how it earns money and
   how to reach her. Every statement on it comes from what the site already
   says elsewhere (DECISIONS 0043).
 
 ### Changed
+
+- Team and league pages' Google Calendar step names the control, "Add other
+  calendars (+)", instead of "the + icon" (WCAG 1.3.3), as the help page
+  already did. The accessibility page says axe runs in both color schemes.
 
 - An empty WNBA team page waiting for next season is now titled "<team>
   schedule 2027: in your calendar once listed" instead of "add it to your
@@ -39,6 +50,12 @@ archived and private.
   2026-11-17 already met the rule (DECISIONS 0044).
 
 ### Fixed
+
+- With WCAG 1.4.12 text spacing at 320 CSS px, the home page no longer
+  scrolls sideways: the all-games feed address and long league names wrap.
+  League rows have a space between the league and its game count in the
+  markup, so the link's name ("WNBA 8 upcoming games") no longer depends on
+  the browser adding one.
 
 - Each Atom feed's own `<updated>` is now the time the build read the
   listings, the `fetched_at` of `data/site.json`, not its newest game's
