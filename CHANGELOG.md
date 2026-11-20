@@ -17,6 +17,16 @@ archived and private.
   how to reach her. Every statement on it comes from what the site already
   says elsewhere (DECISIONS 0043).
 
+### Changed
+
+- An empty WNBA team page waiting for next season is now titled "<team>
+  schedule 2027: in your calendar once listed" instead of "add it to your
+  calendar" (DECISIONS 0046). Nine pages change; Washington Mystics and
+  Golden State Valkyries are too long for it and keep their titles.
+  Descriptions, pages with games and other leagues' empty pages are
+  unchanged. This ends the planned 28-day read of empty WNBA titles (0037)
+  early.
+
 ### Security
 
 - A game's ticket link is shown only when it is an https address on a

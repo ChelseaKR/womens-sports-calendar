@@ -1635,6 +1635,10 @@ is adopted under 0034.
 
 ## 0037 — Titles and descriptions follow the searched shape and claim only what the page has (2026-11-06)
 
+*Amended 2026-11-19 by 0046: an empty WNBA page waiting for a season is now
+"<team> schedule 2027: in your calendar once listed" when the name fits, and
+the 28-day read of empty WNBA titles below ended early.*
+
 **Why:** Search Console, the 28 days to 2026-11-06 (data starts 10-21;
 sc-domain:nexthomegame.com): 779 impressions and 8 clicks over 72 pages, 189
 of those impressions with a query Google reports. Almost every named query
@@ -2073,3 +2077,62 @@ of these.
 
 Revisit if a refusal for an unreadable feed happens again after its retries,
 or if the live site starts sending 429 with a `Retry-After` longer than 4 s.
+
+## 0046 — An empty WNBA page says its games arrive in your calendar once listed; the 0037 read ends early (2026-11-19)
+
+**Amends** 0037, which titled an empty WNBA page waiting for a season
+"<team> schedule 2027: add it to your calendar" and planned to judge that
+title after 28 days of Search Console data (about 2026-12-04).
+
+**Why:** Search Console, 2026-10-22 to 11-19 (sc-domain:nexthomegame.com).
+`/wnba/houston-comets/` had no impressions until 11-09 and 24 to 33 a day
+from 11-15. "houston comets schedule 2027" had 61 impressions at position
+7.2 with 1 click, "houston comets 2027 schedule" 40 at 6.0 with none, and
+Phoenix Mercury's two "2027" queries 49 at 8.4 with 1. That is 2 clicks
+from 150 impressions (1.3%) at about position 7, where Lake Notice gets
+4.8%. Houston and Phoenix are the only pages the 0037 read had data for,
+so they already answer it. "add it to your calendar" says what to do, not
+what the fan gets for it. The page itself was read live the same day: it
+says Ticketmaster lists no game yet, with the four calendar buttons right
+below, so the body is not the problem.
+
+**Decision (Chelsea, 2026-11-19):**
+
+- An empty WNBA page waiting for a season (`_awaited_season`) is titled
+  "<team> schedule 2027: in your calendar once listed". The claim is true
+  for every such page: only a team whose main seller is Ticketmaster waits
+  for a season, and the body already says each game appears in the
+  calendar once it is listed.
+- It is the first form in `_team_title`'s waiting branch; the earlier forms
+  stay behind it. A name of 16 characters or fewer fits the 60-character
+  title limit. Nine pages change on today's teams (Atlanta Dream, Chicago
+  Sky, Houston Comets, Indiana Fever, New York Liberty at exactly 60,
+  Phoenix Mercury, Portland Fire, Seattle Storm, Toronto Tempo). Washington
+  Mystics keeps "add it to your calendar" and Golden State Valkyries "add to
+  your calendar".
+- The description does not change.
+- The 0037 read of empty WNBA titles ends now. The 2026-12-07 read of the
+  women's basketball titles (0038) is on other pages and is untouched.
+
+**Not changed:** the other branch of `_team_title`. Empty pages of the other
+leagues, empty WNBA pages of teams that sell elsewhere (Aces, Lynx, Sparks,
+Wings) and unfetched builds keep "<team> schedule: calendar and official
+ticket page" or "<team> schedule: add it to your calendar"; they name no
+season and promise nothing about listings. 0029's year rules, every page
+with games, league pages and all descriptions are unchanged.
+
+**Enforced by** `tests/test_search_console_titles.py`: the exact Houston and
+Phoenix titles and the unchanged Houston description; every WNBA team's
+empty title within 60 characters, in the new form when it fits and an
+earlier form when it does not (Liberty at exactly 60, Mystics and
+Valkyries over); Houston's titles with games unchanged; no page outside the
+waiting branch says "once listed", in any of the seven scenarios; and a
+control that lowers the limit by one and moves Liberty back to the old
+form. `tests/test_empty_team_titles.py` and `tests/test_noindex_unlisted.py`
+take the new form.
+
+Revisit after 28 days of Search Console data on the new title (about
+2026-12-17): if the Houston and Phoenix "schedule 2027" queries have 300 or
+more impressions and a click-through rate below 1.3%, go back to "add it to
+your calendar". Also revisit when the 2027 WNBA schedule is listed; the
+pages then take the title with games on their own.

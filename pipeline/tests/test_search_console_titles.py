@@ -260,6 +260,90 @@ def test_control_the_old_suffix_pattern_is_caught(monkeypatch: pytest.MonkeyPatc
 
 
 # ---------------------------------------------------------------------------
+# DECISIONS 0046: an empty WNBA page says what subscribing gets the fan
+# ---------------------------------------------------------------------------
+
+ONCE_LISTED = ": in your calendar once listed"
+
+
+def test_an_empty_wnba_page_is_in_your_calendar_once_listed():
+    """Approved 2026-11-19: "houston comets schedule 2027" ranked about 7
+    with 1 click in 61 impressions. The description does not change."""
+    title, description, _, _ = _render(*_named("wnba", "houston-comets"), "none_off_season")
+    assert title == "Houston Comets schedule 2027: in your calendar once listed"
+    assert description == (
+        "Houston Comets schedule 2027. Ticketmaster has not listed the 2027 schedule yet, "
+        "so no next home game is listed; add it to your calendar and games appear."
+    )
+    title = _render(*_named("wnba", "phoenix-mercury"), "none_off_season")[0]
+    assert title == "Phoenix Mercury schedule 2027: in your calendar once listed"
+
+
+def test_every_waiting_wnba_title_fits_and_a_longer_name_keeps_the_old_form():
+    """The title rule is TITLE_MAX characters (validate_seo fails a build
+    over it). A name of 16 characters or fewer takes the new form; a longer
+    one falls back to the forms it had before."""
+    wnba = config.league_by_slug("wnba")
+    new_form = 0
+    for team in wnba.teams:
+        title, _, _, payload = _render(wnba, team, "none_off_season")
+        assert len(title) <= TITLE_MAX, title
+        if site._awaited_season(payload) is None:
+            assert ONCE_LISTED not in title, title  # sold elsewhere: never promised
+            continue
+        name = site.title_name_for("wnba", team.shown_name)
+        wanted = f"{name} schedule 2027{ONCE_LISTED}"
+        if len(wanted) <= TITLE_MAX:
+            assert title == wanted
+            new_form += 1
+        else:
+            assert title in (
+                f"{name} schedule 2027: add it to your calendar",
+                f"{name} schedule 2027: add to your calendar",
+            )
+    assert new_form >= 9
+    # The boundary, at exactly 60 characters, and the two names over it.
+    liberty = _render(*_named("wnba", "new-york-liberty"), "none_off_season")[0]
+    assert liberty == "New York Liberty schedule 2027: in your calendar once listed" and len(liberty) == TITLE_MAX
+    mystics = _render(*_named("wnba", "washington-mystics"), "none_off_season")[0]
+    assert mystics == "Washington Mystics schedule 2027: add it to your calendar"
+    valkyries = _render(*_named("wnba", "golden-state-valkyries"), "none_off_season")[0]
+    assert valkyries == "Golden State Valkyries schedule 2027: add to your calendar"
+
+
+def test_a_wnba_page_with_games_keeps_its_title():
+    league, comets = _named("wnba", "houston-comets")
+    titles = {scenario: _render(league, comets, scenario)[0] for scenario in ("home_long", "home_short", "away_only")}
+    assert titles == {
+        "home_long": "Houston Comets schedule 2026-27: next home game and tickets",
+        "home_short": "Houston Comets schedule 2026: next home game and tickets",
+        "away_only": "Houston Comets schedule 2026: dates and tickets",
+    }
+
+
+@pytest.mark.parametrize("scenario", list(SCENARIOS))
+def test_only_a_page_waiting_for_a_season_says_once_listed(scenario: str):
+    """Other leagues' empty pages, seller-table WNBA teams and unfetched
+    builds use the other template and keep their titles."""
+    for league, team in ALL_TEAMS:
+        title, _, _, payload = _render(league, team, scenario)
+        if ONCE_LISTED in title:
+            assert league.slug == "wnba" and site._awaited_season(payload) is not None, title
+    rutgers = _render(*_named("ncaaw-big-ten", "rutgers-scarlet-knights-womens-basketball"), "none_off_season")[0]
+    assert rutgers == "Rutgers women's basketball schedule: add it to your calendar"
+    sparks = _render(*_named("wnba", "los-angeles-sparks"), "none_off_season")[0]
+    assert sparks == "Los Angeles Sparks schedule: add it to your calendar"
+
+
+def test_control_a_shorter_title_limit_moves_the_boundary_name_to_the_old_form(monkeypatch: pytest.MonkeyPatch):
+    """The fallback is the length rule at work: one character less and the
+    60-character Liberty title no longer fits."""
+    monkeypatch.setattr(site, "TITLE_MAX", TITLE_MAX - 1)
+    liberty = _render(*_named("wnba", "new-york-liberty"), "none_off_season")[0]
+    assert liberty == "New York Liberty schedule 2027: add it to your calendar"  # falls back, never cut
+
+
+# ---------------------------------------------------------------------------
 # Controls: each sabotage is asserted to have applied, then to be caught
 # ---------------------------------------------------------------------------
 
