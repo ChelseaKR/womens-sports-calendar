@@ -3,13 +3,16 @@
 Everything is read back from a built fixture site with real parsers (an XML
 parser, html.parser, the llms.txt grammar), not substring checks. The
 fixture's fetch time is the wall clock, so two builds of the same data are
-built at different times: a feed that leaked the fetch time would differ.
+built at different times: the feed-level updated is that fetch time (RFC
+4287 4.2.15, the feed's last change), and nothing else in a feed may differ.
 """
 
 from __future__ import annotations
 
+import json
 import re
 import xml.etree.ElementTree as ET
+from datetime import UTC, datetime
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -27,6 +30,9 @@ RFC3339_Z = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$")
 # Storm (FX-AWAY) and the Mercury (FX-AT): every fetched event is matched
 # against every tracked team (build.attribute_games).
 EXPECTED = {"wnba": 4, "nwsl": 1, "pwhl": 1, "all": 6}
+# A fetch time before every fixture game (the first is 2026-09-18): the
+# newest entry's date is then in the future, as it is every night live.
+PINNED_FETCH = datetime(2026, 9, 1, 8, 30, 0, tzinfo=UTC)
 
 
 @pytest.fixture(scope="module")
@@ -35,6 +41,15 @@ def two_builds(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Path]:
     a, b = root / "a", root / "b"
     build_fixture_site(a)
     build_fixture_site(b)
+    return a, b
+
+
+@pytest.fixture(scope="module")
+def pinned_builds(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Path]:
+    root = tmp_path_factory.mktemp("feeds-pinned")
+    a, b = root / "a", root / "b"
+    build_fixture_site(a, now=PINNED_FETCH)
+    build_fixture_site(b, now=PINNED_FETCH)
     return a, b
 
 
@@ -63,8 +78,22 @@ def check_feed(root: ET.Element, *, base_url: str = BASE_URL) -> list[ET.Element
         assert e.findtext("a:summary", namespaces=NS)
         href = e.find("a:link[@rel='alternate']", NS).get("href")
         assert href.startswith(base_url + "/") and href.endswith("/")
-    assert updated == max(e.findtext("a:updated", namespaces=NS) for e in entries)
     return entries
+
+
+def site_fetched_at(built: Path) -> str:
+    """data/site.json's fetched_at, as an Atom (RFC 3339, Z) date."""
+    raw = json.loads((built / "data" / "site.json").read_text(encoding="utf-8"))["fetched_at"]
+    return datetime.fromisoformat(raw).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def feed_updated(text: str) -> str:
+    return parse_feed(text).findtext("a:updated", namespaces=NS)
+
+
+def without_feed_updated(text: str) -> str:
+    """The feed with its own updated (the first one, before any entry) blanked."""
+    return re.sub(r"<updated>[^<]*</updated>", "<updated />", text, count=1)
 
 
 def test_feeds_exist_for_leagues_with_home_games_only(two_builds):
@@ -101,11 +130,63 @@ def test_entries_are_home_games_with_exact_starts(two_builds):
 
 
 def test_ids_and_dates_are_stable_between_two_builds(two_builds):
+    """Two builds at different times differ only in the feed's own updated."""
     a, b = two_builds
     for key in EXPECTED:
         ta = (a / feeds.feed_path(key)).read_text(encoding="utf-8")
         tb = (b / feeds.feed_path(key)).read_text(encoding="utf-8")
-        assert ta == tb, key
+        assert without_feed_updated(ta) == without_feed_updated(tb), key
+
+
+def test_feed_updated_is_the_builds_fetch_time(pinned_builds):
+    """The feed-level updated is when the build read the listings, the same
+    time data/site.json gives, not the newest game's start: live, that was a
+    game months ahead (all.atom said 2027-04-14 on 2026-11-19)."""
+    built, _ = pinned_builds
+    fetched = site_fetched_at(built)
+    assert fetched == "2026-09-01T08:30:00Z"
+    for key in EXPECTED:
+        text = (built / feeds.feed_path(key)).read_text(encoding="utf-8")
+        entries = check_feed(parse_feed(text))
+        assert feed_updated(text) == fetched, key
+        # Every fixture game is after the fetch, so the old rule (the newest
+        # entry's date) gives a different, later date.
+        assert max(e.findtext("a:updated", namespaces=NS) for e in entries) > fetched, key
+
+
+def test_feed_updated_matches_each_wall_clock_build(two_builds):
+    for built in two_builds:
+        fetched = site_fetched_at(built)
+        for key in EXPECTED:
+            assert feed_updated((built / feeds.feed_path(key)).read_text(encoding="utf-8")) == fetched, key
+
+
+def test_entry_updated_is_still_the_games_start(pinned_builds):
+    built, _ = pinned_builds
+    root = parse_feed((built / feeds.feed_path("wnba")).read_text(encoding="utf-8"))
+    by_id = {e.findtext("a:id", namespaces=NS): e for e in root.findall("a:entry", NS)}
+    h2h = by_id[f"{BASE_URL}/wnba/las-vegas-aces/#game-FX-H2H"]
+    assert h2h.findtext("a:updated", namespaces=NS) == "2026-09-20T01:00:00Z"
+
+
+def test_two_builds_at_the_same_time_are_identical(pinned_builds):
+    a, b = pinned_builds
+    for key in EXPECTED:
+        ta = (a / feeds.feed_path(key)).read_text(encoding="utf-8")
+        assert ta == (b / feeds.feed_path(key)).read_text(encoding="utf-8"), key
+
+
+def test_negative_control_feed_updated_check_fires(pinned_builds):
+    """Sabotage: put the newest entry's date back as the feed's updated. The
+    fetch-time assertion then fails, and the blanking helper still hides only
+    the feed's own updated, never an entry's."""
+    built, _ = pinned_builds
+    text = (built / feeds.feed_path("wnba")).read_text(encoding="utf-8")
+    newest = max(e.findtext("a:updated", namespaces=NS) for e in parse_feed(text).findall("a:entry", NS))
+    sabotaged = text.replace(f"<updated>{site_fetched_at(built)}</updated>", f"<updated>{newest}</updated>", 1)
+    assert sabotaged != text
+    assert feed_updated(sabotaged) != site_fetched_at(built)
+    assert without_feed_updated(text).count("<updated>") == EXPECTED["wnba"]
 
 
 def test_negative_control_stability_check_detects_a_fetch_time_leak(two_builds):

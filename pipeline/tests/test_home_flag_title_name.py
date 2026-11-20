@@ -17,7 +17,7 @@ from wsc_pipeline import config, feeds, site_data
 from wsc_pipeline.config import league_by_slug
 from wsc_pipeline.normalize import Game, normalize_event, side_begins_with
 
-from .conftest import make_raw_event
+from .conftest import BUILD_TIME, make_raw_event
 
 LEAGUE = "ncaaw-big-ten"
 NEBRASKA_LIVE = "Nebraska Women's Basketball vs San Jose State - TIME SUBJECT TO CHANGE"
@@ -55,7 +55,7 @@ def test_it_is_in_the_home_game_feeds():
     nebraska = _team("nebraska-cornhuskers-womens-basketball")
     games = {lg.slug: [] for lg in config.LEAGUES}
     games[LEAGUE] = [_game(nebraska, NEBRASKA_LIVE)]
-    out = feeds.build_feeds(games, base_url="https://nexthomegame.com", fetched=True)
+    out = feeds.build_feeds(games, base_url="https://nexthomegame.com", fetched_at=BUILD_TIME)
     assert "Z7r9jZ1AAvg3e" in out[LEAGUE]
     assert "Z7r9jZ1AAvg3e" in out[feeds.ALL_KEY]
     payload = site_data.team_data(nebraska, league_by_slug(LEAGUE), games[LEAGUE])

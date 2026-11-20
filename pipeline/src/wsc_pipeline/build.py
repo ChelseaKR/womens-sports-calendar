@@ -332,7 +332,7 @@ def build(
     # as a paid link and turn the disclosure on (DECISIONS 0018). The feeds
     # and each page record's `ticket_url` carry the unwrapped address either way.
     paid_links = sellers.any_paid_buy_link(games)
-    atom_feeds = feeds.build_feeds(games_by_league, base_url=base_url, fetched=api_key_present)
+    atom_feeds = feeds.build_feeds(games_by_league, base_url=base_url, fetched_at=fetched_at)
     feeds_dir = tmp_dir / feeds.FEEDS_DIR
     feeds_dir.mkdir()
     for key, text in atom_feeds.items():

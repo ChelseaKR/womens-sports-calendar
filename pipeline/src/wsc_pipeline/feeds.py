@@ -1,17 +1,23 @@
 """Atom 1.0 (RFC 4287) feeds of upcoming home games: one per league and one
 for every league, under /feeds/.
 
-Every value comes from the Ticketmaster listings, never from the clock:
+Every value comes from the Ticketmaster listings or the build's fetch time,
+never from the clock read here:
 
 * an entry's ``id`` is the team page's permalink plus Ticketmaster's event
   id, so the same game keeps one id on every rebuild;
 * an entry's ``updated`` is the game's own scheduled start (UTC). The
   listings carry no "last changed" time, and the build's fetch time moves
-  every night (the .ics DTSTAMP does, and that is not repeated here), so the
-  only date that is both the data's and stable is the game's. Readers that
-  sort by it list games in play order. A game's later change (a cancellation)
-  changes its summary but not its ``updated``; the feed says so;
-* the feed's ``updated`` is its newest entry's.
+  every night, so the only date that is both the data's and stable per
+  entry is the game's. Readers that sort by it list games in play order, and
+  the feed's subtitle says the date is the game's start. A game's later
+  change (a cancellation) changes its summary but not its ``updated``; the
+  feed says so;
+* the feed's ``updated`` is the build's fetch time (the ``fetched_at`` of
+  data/site.json), passed in, as the .ics DTSTAMP is: RFC 4287 4.2.15 makes
+  it the feed's last change, and the newest entry's date was a game months
+  ahead, which some readers sort as a future post. A build pinned to one
+  fetch time writes the same bytes.
 
 Only a game that is a home game for a tracked team, with a published date and
 time and an exact start (normalize.local_start), is an entry. A feed with no
@@ -26,7 +32,7 @@ from __future__ import annotations
 # risk behind the rule cannot arise. defusedxml has no way to build elements.
 import xml.etree.ElementTree as ET  # nosemgrep: python.lang.security.use-defused-xml.use-defused-xml
 from collections.abc import Mapping
-from datetime import UTC
+from datetime import UTC, datetime
 from typing import Any
 
 from . import config, site_data, structured_data
@@ -74,13 +80,17 @@ def _entries(league: config.League, games: list[Game]) -> list[dict[str, Any]]:
                     "team": team,
                     "game": d,
                     "start": start,
-                    "updated": start.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "updated": _atom_date(start),
                 }
             )
     return sorted(out, key=lambda x: (x["updated"], x["game"]["event_id"]))
 
 
-def _render(*, entries: list[dict[str, Any]], base_url: str, path: str, title: str, page_url: str) -> str:
+def _atom_date(when: datetime) -> str:
+    return when.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _render(*, entries: list[dict[str, Any]], updated: str, base_url: str, path: str, title: str, page_url: str) -> str:
     feed = ET.Element(_q("feed"), {"{http://www.w3.org/XML/1998/namespace}lang": "en-US"})
     self_url = f"{base_url}/{path}"
     ET.SubElement(feed, _q("id")).text = self_url
@@ -89,7 +99,7 @@ def _render(*, entries: list[dict[str, Any]], base_url: str, path: str, title: s
         "Upcoming home games as Ticketmaster lists them, soonest first. Each entry's date is the "
         "game's own start time, not a publication time. Confirm a game before you go."
     )
-    ET.SubElement(feed, _q("updated")).text = max(e["updated"] for e in entries)
+    ET.SubElement(feed, _q("updated")).text = updated
     ET.SubElement(feed, _q("link"), {"rel": "self", "type": FEED_MEDIA_TYPE, "href": self_url})
     ET.SubElement(feed, _q("link"), {"rel": "alternate", "type": "text/html", "href": page_url})
     author = ET.SubElement(feed, _q("author"))
@@ -122,17 +132,22 @@ def _render(*, entries: list[dict[str, Any]], base_url: str, path: str, title: s
     return '<?xml version="1.0" encoding="utf-8"?>\n' + ET.tostring(feed, encoding="unicode") + "\n"
 
 
-def build_feeds(games_by_league: Mapping[str, list[Game]], *, base_url: str, fetched: bool) -> dict[str, str]:
+def build_feeds(
+    games_by_league: Mapping[str, list[Game]], *, base_url: str, fetched_at: datetime | None
+) -> dict[str, str]:
     """{feed key: Atom text} for each league with at least one eligible game,
-    plus ALL_KEY across them. Empty when the build did not fetch."""
-    if not fetched:
+    plus ALL_KEY across them. fetched_at is the build's fetch time and every
+    feed's own updated. Empty when the build did not fetch (fetched_at None)."""
+    if fetched_at is None:
         return {}
+    updated = _atom_date(fetched_at)
     per_league = {lg.slug: _entries(lg, games_by_league[lg.slug]) for lg in config.LEAGUES}
     out: dict[str, str] = {}
     for lg in config.LEAGUES:
         if per_league[lg.slug]:
             out[lg.slug] = _render(
                 entries=per_league[lg.slug],
+                updated=updated,
                 base_url=base_url,
                 path=feed_path(lg.slug),
                 title=f"Next Home Game: {lg.name} home games",
@@ -144,6 +159,7 @@ def build_feeds(games_by_league: Mapping[str, list[Game]], *, base_url: str, fet
     if everything:
         out[ALL_KEY] = _render(
             entries=everything,
+            updated=updated,
             base_url=base_url,
             path=feed_path(ALL_KEY),
             title="Next Home Game: home games in every league",

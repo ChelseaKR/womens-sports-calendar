@@ -40,6 +40,11 @@ archived and private.
 
 ### Fixed
 
+- Each Atom feed's own `<updated>` is now the time the build read the
+  listings, the `fetched_at` of `data/site.json`, not its newest game's
+  start: on 2026-11-19 `all.atom` said 2027-04-14, a date in the future that
+  some feed readers sort oddly. Each entry's `<updated>` is still its game's
+  start, as the feed's subtitle says.
 - One failed request while re-reading last night's calendar feeds no longer
   stops the nightly update. A read that times out, cannot connect, or gets
   HTTP 429 or 5xx is tried up to three times, 2 s and 4 s apart, before the
