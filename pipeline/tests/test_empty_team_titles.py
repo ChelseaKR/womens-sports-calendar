@@ -24,8 +24,9 @@ def _render(league, team, games, fetched_at: str | None = "2026-11-05T08:25:00+0
 
 def test_an_empty_wnba_page_names_the_next_season_and_says_it_is_not_listed() -> None:
     title, description, html = _render(WNBA, _team(WNBA, "phoenix-mercury"), [])
-    # "<team> schedule 2027": the order Search Console shows it typed (DECISIONS 0037).
-    assert title == "Phoenix Mercury schedule 2027: add it to your calendar"
+    # "<team> schedule 2027": the order Search Console shows it typed (DECISIONS 0037),
+    # then what subscribing gets the fan (DECISIONS 0046).
+    assert title == "Phoenix Mercury schedule 2027: in your calendar once listed"
     assert description.startswith("Phoenix Mercury schedule 2027. Ticketmaster has not listed the 2027 schedule yet")
     assert "No upcoming games found from Ticketmaster right now." in html  # the body still says so
     assert '"SportsEvent"' not in html

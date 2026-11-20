@@ -819,7 +819,9 @@ def _team_title(
     "tickets": it is "<team> schedule 2027" while it waits for that season
     (_awaited_season; "phoenix mercury schedule 2027" had 18 impressions to
     "phoenix mercury 2027 schedule"'s 7, 2026-10-09 to 11-06, so the year goes
-    after "schedule", as on a page with games), and otherwise "<team>
+    after "schedule", as on a page with games), ending "in your calendar once
+    listed" when the name fits (DECISIONS 0046: true for every page that waits,
+    because only a Ticketmaster-sold team waits), and otherwise "<team>
     schedule" with the two things every such page still has: the calendar to
     subscribe to and, when one was verified, the team's official ticket page
     (DECISIONS 0037)."""
@@ -827,6 +829,7 @@ def _team_title(
         if awaited_season:
             return _fit(
                 [
+                    f"{name} schedule {awaited_season}: in your calendar once listed",
                     f"{name} schedule {awaited_season}: add it to your calendar",
                     f"{name} schedule {awaited_season}: add to your calendar",
                     f"{name} schedule {awaited_season}",
