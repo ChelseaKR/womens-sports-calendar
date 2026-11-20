@@ -185,7 +185,7 @@ AA.
 | 1.4.5 Images of Text | Supports | No images of text on any page; the wordmark is styled text. |
 | 1.4.10 Reflow | Supports | At 320 CSS px no page scrolls sideways and no box inside one does (gated on every page). Games tables restack as one game per block below 45rem; long feed addresses wrap. |
 | 1.4.11 Non-text Contrast | Supports | Focus outline 3px: `#16131d` on white 18.34:1, on the light panel 16.35:1; lime `#d4f24a` on the dark page 15.26:1 and on black chrome 14.5:1. Subscribe buttons: black on the light panel 16.35:1; in dark mode their `#a29cb4` border 6.68:1 on `#1a1722`. Ticket button lime on black 14.5:1. Thin grey borders (table edge, "Away" pill, card edges in dark mode, 1.39 to 1.49:1) are decoration: no control or state depends on them. |
-| 1.4.12 Text Spacing | Supports | With the criterion's spacing applied, no text is clipped or overlaps on any template at 1280 or 320 CSS px. Before this branch the home page at 320 CSS px grew to 367 px wide (the all-games feed address and the long NCAA league names beside their game count); both now wrap, and the gate checks every page at 320 CSS px with this spacing. |
+| 1.4.12 Text Spacing | Supports | With the criterion's spacing applied, no text is clipped or overlaps on any template at 1280 or 320 CSS px. Before this branch the home page at 320 CSS px grew to 367 px wide (the all-games feed address, the long NCAA league names beside their game count, and a long run of names joined by slashes in the "not included" list); a word that cannot fit its line now breaks, and the gate checks every page at 320 CSS px with this spacing. |
 | 1.4.13 Content on Hover or Focus | Not Applicable | Nothing appears on hover or focus: no tooltips, menus or pop-ups. The only `title` attribute is on the `<link>` to the Atom feed in the page head. |
 | 2.4.5 Multiple Ways | Supports | The header links to the league list, the week ahead and help; the home page lists every league and every team; league pages list their teams; team pages list the other teams; breadcrumbs on league and team pages. |
 | 2.4.6 Headings and Labels | Supports | Headings name their sections ("Add the Las Vegas Aces schedule to your calendar", "Upcoming games", "Other calendar apps"). |
@@ -226,8 +226,10 @@ On branch `a11y/acr-2026-11`:
   catch first (1.4.3, 1.4.11).
 - The browser gate checks WCAG 1.4.12 text spacing at 320 CSS px on every
   page, with a planted clipped box it must catch first.
-- The home page's all-games feed address and league names wrap under text
-  spacing (1.4.12). No change at default settings.
+- A word that cannot fit its line now breaks instead of pushing the page
+  sideways (1.4.12); on the home page that is the all-games feed address,
+  the league names and the "not included" list. Screenshots at default
+  settings are unchanged.
 - League rows on the home page have a space between the league name and
   its game count in the markup (2.4.4, 4.1.2).
 - The Google Calendar step on team and league pages names the control,

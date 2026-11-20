@@ -47,11 +47,14 @@ def _rule(selector_fragment: str) -> str:
 def test_home_page_lines_can_wrap_under_wcag_text_spacing() -> None:
     """WCAG 1.4.12 at 320 CSS px: with the criterion's letter and word
     spacing, the home page's all-games feed address and the long NCAA league
-    names beside their unbreakable game count pushed the page to 367px. Both
-    may now break inside a word, which happens only when a word cannot fit.
+    names beside their unbreakable game count, and a run of names joined by
+    slashes in the not-included list pushed the page to 367px. Each may now
+    break inside a word, which happens only when a word cannot fit.
     The browser half is the text-spacing check in
     scripts/a11y_browser_checks.mjs, run by `make a11y`."""
     assert "overflow-wrap: anywhere" in _rule(".all-games-feed p a")
+    main_rules = [b for sel, b in re.findall(r"([^{}]+)\{([^{}]*)\}", site.STYLE_CSS) if sel.strip().endswith("main")]
+    assert any("overflow-wrap: break-word" in b for b in main_rules)
     name = _rule(".league-row-name")
     assert "overflow-wrap: anywhere" in name
     assert "min-width: 0" in name

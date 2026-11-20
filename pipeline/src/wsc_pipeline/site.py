@@ -2616,6 +2616,11 @@ body {
 }
 
 main { max-width: 64rem; margin: 0 auto; padding: 0 1.25rem 3rem; }
+/* A word longer than its line breaks instead of pushing the page sideways
+   (WCAG 1.4.12 text spacing at 320 CSS px, the home page's not-included
+   list). break-word, unlike anywhere, leaves min-content sizes alone, so a
+   page whose words already fit lays out exactly as before. */
+main { overflow-wrap: break-word; }
 /* Header/footer bands paint full-bleed (they're the brand chrome), but
    their content aligns to the same 64rem column as main -- so the
    wordmark and "Sources and terms" text line up with the H1 below them

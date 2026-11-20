@@ -52,7 +52,8 @@ archived and private.
 ### Fixed
 
 - With WCAG 1.4.12 text spacing at 320 CSS px, the home page no longer
-  scrolls sideways: the all-games feed address and long league names wrap.
+  scrolls sideways: a word that cannot fit its line (the all-games feed
+  address, a long league name, the "not included" list) now breaks.
   League rows have a space between the league and its game count in the
   markup, so the link's name ("WNBA 8 upcoming games") no longer depends on
   the browser adding one.
