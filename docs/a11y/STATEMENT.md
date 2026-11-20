@@ -34,6 +34,8 @@ the build produces, plus two fixture pages with a populated games table:
   the skip link, every stop shows a visible focus indicator, and no focused
   element is fully covered (2.1.1, 2.4.1, 2.4.7, 2.4.11).
 - Reflow at 320 CSS px: no horizontal scrolling (1.4.10).
+- Text spacing at 320 CSS px: with WCAG 1.4.12's line, letter, word and
+  paragraph spacing applied, no sideways scrolling and no clipped text.
 - Reduced motion: with `prefers-reduced-motion: reduce` nothing animates or
   transitions (2.3.3, as a courtesy; the site has no essential motion).
 
