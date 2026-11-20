@@ -28,3 +28,13 @@ def test_the_page_states_status_gaps_and_a_reporting_channel_without_claiming_co
 def test_every_page_footer_links_the_statement() -> None:
     html = site.render_privacy(base_url="https://nexthomegame.com")
     assert re.search(rf'<footer[^>]*>.*href="{re.escape(site.ACCESSIBILITY_PATH)}"', html, re.DOTALL)
+
+
+def test_the_page_says_axe_runs_in_both_color_schemes() -> None:
+    """scripts/a11y_browser_checks.mjs runs axe in the light and the dark
+    color scheme (the stylesheet swaps every content color in dark mode), and
+    the page says so, as docs/a11y/STATEMENT.md does."""
+    text = " ".join(site.render_accessibility(base_url="https://nexthomegame.com").split())
+    assert "in both the light and the dark color scheme" in text
+    committed = " ".join(STATEMENT.read_text(encoding="utf-8").split())
+    assert "prefers-color-scheme: dark" in committed

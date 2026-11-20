@@ -3,6 +3,7 @@
 | File | What it is |
 |---|---|
 | `STATEMENT.md` | The accessibility statement (A11Y-16). |
+| `ACR.md` | Accessibility Conformance Report, based on the VPAT® 2.5 Rev WCAG edition: every WCAG 2.2 A and AA criterion (A11Y-14). A draft until the human walkthrough in its Appendix A is done. |
 
 ## axe "needs review" results
 

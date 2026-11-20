@@ -42,7 +42,9 @@ thresholds. Only this repository's values are recorded here.
 | pa11y-ci, WCAG2AA, htmlcs + axe runners | 0 errors on every page | blocking |
 | Lighthouse accessibility | ≥ 0.90 | blocking (`make perf`) |
 | Keyboard walk, 320 px reflow, reduced motion | every page | blocking |
-| Screen-reader and keyboard walkthroughs, ACR | not done | REVIEW, open (#5) |
+| Screen-reader and keyboard walkthroughs | not done | REVIEW, open (#5) |
+| ACR | draft, `docs/a11y/ACR.md` (2026-11-20); issued after the walkthroughs | REVIEW, open (#5) |
+| axe in the dark color scheme, WCAG 1.4.12 text spacing at 320 px | every page | blocking (`make a11y`) |
 | Route list | every HTML page in `dist/` plus two populated-table fixtures | `scripts/check_a11y_coverage.py` |
 | Ignore list | empty | — |
 
