@@ -228,8 +228,10 @@ On branch `a11y/acr-2026-11`:
   page, with a planted clipped box it must catch first.
 - A word that cannot fit its line now breaks instead of pushing the page
   sideways (1.4.12); on the home page that is the all-games feed address,
-  the league names and the "not included" list. Screenshots at default
-  settings are unchanged.
+  the league names and the "not included" list. At default settings,
+  screenshots of the home, about and help pages are pixel-identical at 1280
+  CSS px; at 320 CSS px the one change is in the "not included" panel, where
+  a run of names joined by slashes that overhung its box by 2px now wraps.
 - League rows on the home page have a space between the league name and
   its game count in the markup (2.4.4, 4.1.2).
 - The Google Calendar step on team and league pages names the control,
