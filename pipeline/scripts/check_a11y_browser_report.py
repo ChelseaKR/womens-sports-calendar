@@ -2,7 +2,8 @@
 
 scripts/a11y_browser_checks.mjs writes a JSON report. This asserts that the
 report covers exactly the URLs it was handed, that every page ran a non-zero
-number of axe rules and walked a non-zero number of tab stops (a page that
+number of axe rules in both the light and the dark color scheme and walked
+a non-zero number of tab stops (a page that
 failed to load, or whose checks examined nothing, is not a pass), and that no
 page reported a problem. The URL list itself is checked against the pages the
 site config requires by scripts/check_a11y_coverage.py, in the same `make
@@ -37,6 +38,8 @@ def problems_in(report: dict[str, object], urls: list[str]) -> list[str]:
         url = r.get("url")
         if not r.get("axeRulesRun"):
             problems.append(f"{url}: axe ran no rules")
+        if not r.get("axeDarkRulesRun"):
+            problems.append(f"{url}: axe ran no rules in the dark color scheme")
         if not r.get("tabStops"):
             problems.append(f"{url}: no tab stops were walked")
         problems.extend(f"{url}: {p}" for p in r.get("problems") or [])

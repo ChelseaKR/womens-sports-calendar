@@ -8,6 +8,13 @@
 //   A11Y-01/05/06/26  axe-core, tags wcag2a/wcag2aa/wcag21a/wcag21aa/wcag22aa:
 //                     any critical, serious OR moderate violation fails
 //                     (includes color-contrast, target-size, html-has-lang).
+//                     Run twice: once in the light scheme and once with
+//                     prefers-color-scheme: dark, because style.css swaps
+//                     every content color in dark mode and a contrast
+//                     failure there was otherwise never checked (WCAG
+//                     1.4.3 / 1.4.11). Both schemes are set explicitly:
+//                     left alone, headless Chrome follows the host (light
+//                     on CI's runners, dark on a Mac set to dark).
 //   A11Y-07           keyboard: Tab from the top of the page reaches every
 //                     tabbable element, the first stop is the skip link,
 //                     every stop shows a visible focus indicator, and no
@@ -16,6 +23,11 @@
 //                     horizontally, and neither does any box in it (a
 //                     games table once fit only by scrolling its own box
 //                     sideways, which hid its ticket links on a phone).
+//   WCAG 1.4.12       text spacing: at 320 CSS px wide, with the spacing
+//                     the criterion names applied to every element (line
+//                     height 1.5, letter spacing 0.12em, word spacing
+//                     0.16em, paragraph spacing 2em), the page does not
+//                     scroll sideways and no box clips its own text.
 //   A11Y-08           reduced motion: with prefers-reduced-motion: reduce,
 //                     no element has a running animation or a non-zero
 //                     animation/transition duration.
@@ -59,6 +71,15 @@ const SABOTAGE = [
     apply: (html) => html.replace("</head>", "<style>main p { color: #b8b8b8 !important; background: #fff !important; }</style></head>"),
   },
   {
+    name: "low-contrast text in dark mode only",
+    expect: "axe dark serious color-contrast",
+    apply: (html) =>
+      html.replace(
+        "</head>",
+        "<style>@media (prefers-color-scheme: dark) { main p { color: #3a3646 !important; background: #0f0d14 !important; } }</style></head>",
+      ),
+  },
+  {
     name: "focus outline removed",
     expect: "keyboard: no visible focus indicator",
     apply: (html) => html.replace("</head>", "<style>*:focus, *:focus-visible { outline: none !important; box-shadow: none !important; }</style></head>"),
@@ -80,6 +101,15 @@ const SABOTAGE = [
       html.replace("</main>", '<div class="planted" style="overflow-x: auto"><div style="width: 900px">wide</div></div></main>'),
   },
   {
+    name: "text clipped once text spacing is increased",
+    expect: "text spacing:",
+    apply: (html) =>
+      html.replace(
+        "</main>",
+        '<p style="font-family: monospace; width: 11.5ch; overflow: hidden; white-space: nowrap">Tickets AXS</p></main>',
+      ),
+  },
+  {
     name: "transition outside reduced-motion",
     expect: "reduced motion:",
     apply: (html) => html.replace("</head>", "<style>a { transition: color 400ms linear !important; }</style></head>"),
@@ -91,7 +121,7 @@ function isLocal(url) {
   return protocol === "data:" || hostname === "127.0.0.1" || hostname === "localhost";
 }
 
-async function openPage(browser, url, viewport, reducedMotion = false) {
+async function openPage(browser, url, viewport, reducedMotion = false, colorScheme = "light") {
   const page = await browser.newPage();
   // Pages are checked several at a time in one browser, and only one tab has
   // real focus; without this, :focus-visible does not match in the others
@@ -105,9 +135,9 @@ async function openPage(browser, url, viewport, reducedMotion = false) {
     return isLocal(request.url()) ? request.continue() : request.abort();
   });
   await page.setViewport(viewport);
-  if (reducedMotion) {
-    await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]);
-  }
+  const media = [{ name: "prefers-color-scheme", value: colorScheme }];
+  if (reducedMotion) media.push({ name: "prefers-reduced-motion", value: "reduce" });
+  await page.emulateMediaFeatures(media);
   await page.goto(url, { waitUntil: "load", timeout: NAV_TIMEOUT_MS });
   await page.evaluate(() => document.fonts.ready);
   return page;
@@ -201,6 +231,16 @@ async function checkPage(browser, url) {
   if (axe.rulesRun === 0) problems.push("axe ran no rules");
   await desktop.close();
 
+  const dark = await openPage(browser, url, { width: 1280, height: 800 }, false, "dark");
+  const axeDark = await runAxe(dark);
+  for (const v of axeDark.violations) {
+    if (BLOCKING_IMPACTS.has(v.impact)) {
+      problems.push(`axe dark ${v.impact} ${v.id}: ${v.help} (${v.targets.join(", ")})`);
+    }
+  }
+  if (axeDark.rulesRun === 0) problems.push("axe (dark) ran no rules");
+  await dark.close();
+
   const keyboardPage = await openPage(browser, url, { width: 1280, height: 800 });
   const { expected, stops } = await walkTabOrder(keyboardPage);
   await keyboardPage.close();
@@ -240,6 +280,42 @@ async function checkPage(browser, url) {
     problems.push(`reflow: a box scrolls sideways at 320 CSS px: ${box}`);
   }
 
+  // WCAG 1.4.12's own values, on every element, as a user stylesheet would.
+  const spaced = await openPage(browser, url, { width: 320, height: 256 });
+  await spaced.addStyleTag({
+    content:
+      "* { line-height: 1.5 !important; letter-spacing: 0.12em !important; word-spacing: 0.16em !important; }" +
+      " p { margin-bottom: 2em !important; }",
+  });
+  const spacing = await spaced.evaluate(() => {
+    const clipped = [];
+    for (const el of document.body.querySelectorAll("*")) {
+      const style = getComputedStyle(el);
+      // Visually hidden text (.sr-only, the phone table's <thead>) is a 1px
+      // clipped box on purpose.
+      if (el.clientWidth <= 1 || el.clientHeight <= 1) continue;
+      const clips = ["hidden", "clip"].includes(style.overflowX) || ["hidden", "clip"].includes(style.overflowY);
+      const sideways = ["auto", "scroll"].includes(style.overflowX) && el.scrollWidth > el.clientWidth + 1;
+      if ((clips && (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1)) || sideways) {
+        clipped.push(`<${el.tagName.toLowerCase()} class="${el.className}">`);
+      }
+    }
+    return {
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+      clipped: clipped.slice(0, 5),
+    };
+  });
+  await spaced.close();
+  if (spacing.scrollWidth > spacing.clientWidth + 1) {
+    problems.push(
+      `text spacing: ${spacing.scrollWidth}px of content in a ${spacing.clientWidth}px viewport at 320 CSS px with WCAG 1.4.12 spacing`,
+    );
+  }
+  for (const box of spacing.clipped) {
+    problems.push(`text spacing: a box clips or scrolls its text with WCAG 1.4.12 spacing: ${box}`);
+  }
+
   const calm = await openPage(browser, url, { width: 1280, height: 800 }, true);
   const moving = await calm.evaluate(() => {
     const seconds = (value) => Math.max(...value.split(",").map((part) => parseFloat(part) || 0));
@@ -259,7 +335,7 @@ async function checkPage(browser, url) {
     );
   }
 
-  return { url, axeRulesRun: axe.rulesRun, tabStops: stops.length, tabbable: expected, problems };
+  return { url, axeRulesRun: axe.rulesRun, axeDarkRulesRun: axeDark.rulesRun, tabStops: stops.length, tabbable: expected, problems };
 }
 
 // Prove each check can fail: fetch a real page, plant one defect per case,
@@ -333,7 +409,7 @@ async function main() {
   }
   console.log(
     `a11y browser checks: ${results.length - failing.length}/${results.length} pages pass ` +
-      "(axe wcag2a..wcag22aa at moderate+, keyboard, 320px reflow, reduced motion)",
+      "(axe wcag2a..wcag22aa at moderate+ in light and dark, keyboard, 320px reflow, text spacing, reduced motion)",
   );
   process.exit(failing.length > 0 ? 1 : 0);
 }
