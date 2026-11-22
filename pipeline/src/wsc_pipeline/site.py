@@ -105,32 +105,32 @@ SITE_NAME = "Next Home Game"
 # the rendering pipeline and the checked contrast ratios of everything
 # drawn into it.
 DEFAULT_OG_IMAGE = "og-image.png"
-# Raw Unicode curly quotes, not &lsquo;/&rsquo; entities: this string is
+# Raw Unicode curly quotes, not &ldquo;/&rdquo; entities: this string is
 # passed through html.escape() in _base() below, which would mangle a
-# literal "&lsquo;" into "&amp;lsquo;" (escaping its leading "&"). A raw
-# U+2018/U+2019 character isn't one of html.escape()'s special characters,
+# literal "&ldquo;" into "&amp;ldquo;" (escaping its leading "&"). A raw
+# U+201C/U+201D character isn't one of html.escape()'s special characters,
 # so it passes through untouched and renders correctly under this page's
 # declared UTF-8 charset.
 DEFAULT_OG_IMAGE_ALT = (
     "A calendar with three highlighted game days, each marked with a "
     "small ball or puck icon for WNBA, NWSL, and PWHL, next to the text "
-    "‘Your next home game.’"
+    "“Your next home game.”"
 )
 LEAGUE_OG_IMAGES: dict[str, tuple[str, str]] = {
     "wnba": (
         "og-image-wnba.png",
         "A calendar with one highlighted game day marked by a basketball "
-        "icon, next to the text ‘Your next WNBA home game.’",
+        "icon, next to the text “Your next WNBA home game.”",
     ),
     "nwsl": (
         "og-image-nwsl.png",
         "A calendar with one highlighted game day marked by a soccer-ball "
-        "icon, next to the text ‘Your next NWSL home game.’",
+        "icon, next to the text “Your next NWSL home game.”",
     ),
     "pwhl": (
         "og-image-pwhl.png",
         "A calendar with one highlighted game day marked by a hockey-puck "
-        "icon, next to the text ‘Your next PWHL home game.’",
+        "icon, next to the text “Your next PWHL home game.”",
     ),
 }
 

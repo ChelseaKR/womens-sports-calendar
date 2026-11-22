@@ -26,6 +26,10 @@ archived and private.
 
 ### Changed
 
+- The four share-image alt texts (og:image:alt and twitter:image:alt) quote
+  the image's words in American double quotes, “Your next home game.”,
+  instead of single quotes.
+
 - Team and league pages' Google Calendar step names the control, "Add other
   calendars (+)", instead of "the + icon" (WCAG 1.3.3), as the help page
   already did. The accessibility page says axe runs in both color schemes.
